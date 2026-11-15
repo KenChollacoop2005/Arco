@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Arco</title>
+  <meta name="description" content="Generate brutalist buildings on a plinth, check that they stand and print, and export interlocking STLs.">
+  <meta name="theme-color" content="#f2f0eb">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="vendor/three/three.module.min.js">
+  <link rel="modulepreload" href="vendor/three/three.core.min.js">
+  <link rel="stylesheet" href="css/arco.css">
+</head>
+<body data-mode="generate">
+  <div class="stage" id="stage">
+    <canvas id="scene" aria-label="Arco model view"></canvas>
+    <svg class="overlay" id="overlay" aria-hidden="true"></svg>
+  </div>
+
+  <header class="topbar">
+    <h1 class="wordmark" data-copy="wordmark">Arco</h1>
+    <nav class="tabs" role="tablist" aria-label="Modes">
+      <button role="tab" data-mode="generate" aria-selected="true" data-copy="tabGenerate"></button>
+      <button role="tab" data-mode="collection" aria-selected="false" data-copy="tabCollection"></button>
+      <button role="tab" data-mode="build" aria-selected="false" data-copy="tabBuild"></button>
+      <button role="tab" data-mode="drawing" aria-selected="false" data-copy="tabDrawing"></button>
+    </nav>
+    <details class="menu" id="viewMenu">
+      <summary data-copy="viewMenu"></summary>
+      <div class="menu-body">
+        <label class="check"><input type="radio" name="projection" value="ortho" checked><span data-copy="viewOrtho"></span></label>
+        <label class="check"><input type="radio" name="projection" value="persp"><span data-copy="viewPersp"></span></label>
+        <hr>
+        <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
+        <button class="plain" id="resetView" data-copy="viewReset"></button>
+      </div>
+    </details>
+  </header>
+
+  <details class="panel panel-left" id="leftPanel" open>
+    <summary class="panel-title"><span id="leftTitle" data-copy="generateTitle"></span></summary>
+
+    <form class="mode-pane" data-pane="generate" id="generateForm">
+      <fieldset class="seg wide">
+        <legend data-copy="scale"></legend>
+        <label><input type="radio" name="scale" value="unit"><span data-copy="scaleUnit"></span></label>
+        <label><input type="radio" name="scale" value="block" checked><span data-copy="scaleBlock"></span></label>
+        <label><input type="radio" name="scale" value="mega"><span data-copy="scaleMega"></span></label>
+      </fieldset>
+      <fieldset class="seg">
+        <legend data-copy="density"></legend>
+        <label><input type="radio" name="density" value="0"><span data-copy="low"></span></label>
+        <label><input type="radio" name="density" value="1" checked><span data-copy="mid"></span></label>
+        <label><input type="radio" name="density" value="2"><span data-copy="high"></span></label>
+      </fieldset>
+      <fieldset class="seg">
+        <legend data-copy="height"></legend>
+        <label><input type="radio" name="height" value="0"><span data-copy="low"></span></label>
+        <label><input type="radio" name="height" value="1" checked><span data-copy="mid"></span></label>
+        <label><input type="radio" name="height" value="2"><span data-copy="high"></span></label>
+      </fieldset>
+      <fieldset class="seg">
+        <legend data-copy="daring"></legend>
+        <label><input type="radio" name="daring" value="0"><span data-copy="low"></span></label>
+        <label><input type="radio" name="daring" value="1" checked><span data-copy="mid"></span></label>
+        <label><input type="radio" name="daring" value="2"><span data-copy="high"></span></label>
+      </fieldset>
+      <fieldset class="seg">
+        <legend data-copy="themeMix"></legend>
+        <label><input type="radio" name="theme" value="0"><span data-copy="low"></span></label>
+        <label><input type="radio" name="theme" value="1" checked><span data-copy="mid"></span></label>
+        <label><input type="radio" name="theme" value="2"><span data-copy="high"></span></label>
+      </fieldset>
+      <div class="field">
+        <label for="seedInput" data-copy="seed"></label>
+        <div class="field-row">
+          <input id="seedInput" name="seed" type="text" maxlength="24" autocomplete="off" spellcheck="false">
+          <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
+      <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
+      <p class="status" id="generateStatus" role="status"></p>
+    </form>
+
+    <div class="mode-pane" data-pane="collection">
+      <p class="empty" id="collectionEmpty" data-copy="collectionEmpty"></p>
+      <ul class="cards" id="collectionList"></ul>
+      <div class="button-row">
+        <button class="plain" id="collectionExport" data-copy="collectionExport"></button>
+        <button class="plain" id="collectionImport" data-copy="collectionImport"></button>
+        <input type="file" id="collectionFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+
+    <div class="mode-pane" data-pane="build">
+      <p class="hint" data-copy="buildHint"></p>
+      <p class="empty" id="buildEmpty" data-copy="buildEmpty"></p>
+      <ul class="cards" id="buildPalette"></ul>
+      <div class="button-grid">
+        <button class="plain" id="buildRotate" data-copy="rotate"></button>
+        <button class="plain" id="buildDelete" data-copy="remove"></button>
+        <button class="plain" id="buildUndo" data-copy="undo"></button>
+        <button class="plain" id="buildRedo" data-copy="redo"></button>
+        <button class="plain" id="buildGrow" data-copy="grow"></button>
+        <button class="plain" id="buildClear" data-copy="clear"></button>
+      </div>
+      <button class="primary" id="buildPlace" data-copy="place" hidden></button>
+      <p class="status" id="buildStatus" role="status"></p>
+    </div>
+
+    <div class="mode-pane" data-pane="drawing">
+      <fieldset class="seg wide">
+        <legend data-copy="viewMenu"></legend>
+        <label><input type="radio" name="drawingView" value="axon" checked><span data-copy="viewAxon"></span></label>
+        <label><input type="radio" name="drawingView" value="plan"><span data-copy="viewPlan"></span></label>
+        <label><input type="radio" name="drawingView" value="elevation"><span data-copy="viewElevation"></span></label>
+      </fieldset>
+      <label class="check"><input type="checkbox" id="showLoads" checked><span data-copy="showLoads"></span></label>
+      <label class="check"><input type="checkbox" id="showCenters" checked><span data-copy="showCenters"></span></label>
+      <label class="check"><input type="checkbox" id="showConnectors" checked><span data-copy="showConnectors"></span></label>
+      <ul class="key">
+        <li class="key-pass" data-copy="keyPass"></li>
+        <li class="key-warn" data-copy="keyWarn"></li>
+        <li class="key-fail" data-copy="keyFail"></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="panel panel-right" id="inspector" open>
+    <summary class="panel-title"><span data-copy="inspectorTitle"></span></summary>
+    <div id="inspectorBody"></div>
+  </details>
+
+  <div class="assembly" id="assemblyBar" hidden>
+    <button class="plain" id="assemblyPrev" data-copy="assemblyPrev"></button>
+    <span class="assembly-count" id="assemblyCount"></span>
+    <button class="plain" id="assemblyNext" data-copy="assemblyNext"></button>
+    <button class="plain" id="assemblyClose" data-copy="assemblyClose"></button>
+  </div>
+
+  <div class="title-block" id="titleBlock" aria-hidden="true"></div>
+
+  <footer class="bottombar">
+    <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
+    <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>
+    <div class="section-controls" id="sectionControls">
+      <fieldset class="seg tight">
+        <label><input type="radio" name="sectionAxis" value="h" checked><span data-copy="sectionHorizontal"></span></label>
+        <label><input type="radio" name="sectionAxis" value="v"><span data-copy="sectionVertical"></span></label>
+      </fieldset>
+      <input type="range" id="sectionPosition" min="0" max="1000" value="500" aria-label="Section position">
+    </div>
+    <label class="toggle"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
+    <button class="primary" id="exportButton" data-copy="exportButton"></button>
+  </footer>
+
+  <section class="panel export-panel" id="exportPanel" hidden>
+    <h2 class="panel-title" data-copy="exportTitle"></h2>
+    <div class="field">
+      <label for="clearanceInput" data-copy="clearance"></label>
+      <input id="clearanceInput" type="number" min="0.05" max="0.5" step="0.05" value="0.2">
+    </div>
+    <button class="plain" id="exportSelected" data-copy="exportSelected"></button>
+    <button class="plain" id="exportAll" data-copy="exportAll"></button>
+    <button class="plain" id="exportCoupon" data-copy="exportCoupon"></button>
+    <button class="plain" id="assemblyOpen" data-copy="assembly"></button>
+    <p class="hint" data-copy="exportNote"></p>
+    <p class="status" id="exportStatus" role="status"></p>
+  </section>
+
+  <details class="legend" id="legend" open>
+    <summary data-copy="legendTitle"></summary>
+    <dl>
+      <dt data-copy="legendOrbit"></dt><dd data-copy="legendOrbitKeys"></dd>
+      <dt data-copy="legendZoom"></dt><dd data-copy="legendZoomKeys"></dd>
+      <dt data-copy="legendPan"></dt><dd data-copy="legendPanKeys"></dd>
+      <dt data-copy="legendSelect"></dt><dd data-copy="legendSelectKeys"></dd>
+      <dt data-copy="legendMulti"></dt><dd data-copy="legendMultiKeys"></dd>
+      <dt data-copy="legendFrame"></dt><dd data-copy="legendFrameKeys"></dd>
+      <dt data-copy="legendReset"></dt><dd data-copy="legendResetKeys"></dd>
+      <dt class="build-only" data-copy="legendRotate"></dt><dd class="build-only" data-copy="legendRotateKeys"></dd>
+      <dt class="build-only" data-copy="legendUndo"></dt><dd class="build-only" data-copy="legendUndoKeys"></dd>
+      <dt class="build-only" data-copy="legendDelete"></dt><dd class="build-only" data-copy="legendDeleteKeys"></dd>
+    </dl>
+  </details>
+
+  <p class="toast" id="toast" role="status" hidden></p>
+
+  <script type="module" src="js/arco.js"></script>
+</body>
+</html>
