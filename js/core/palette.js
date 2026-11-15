@@ -21,6 +21,7 @@ export const GROUPS = {
   plantLight: [0x86a44b, KIND_DETAIL, true],
   wood: [0x8c6c4a, KIND_DETAIL, true],
   water: [0x6c94a6, KIND_DETAIL, true],
+  pane: [0xa6c7c1, KIND_DETAIL, true],
   tarpTerracotta: [0xb86040, KIND_SWAY, true],
   tarpMustard: [0xc8982c, KIND_SWAY, true],
   tarpTeal: [0x4b8985, KIND_SWAY, true],
