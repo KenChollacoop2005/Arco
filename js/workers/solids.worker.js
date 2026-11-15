@@ -12,9 +12,9 @@ self.onmessage = async (event) => {
   try {
     const solids = await ready;
     for (const variant of variants) {
-      const built = solids.buildVariant(variant, { clearance });
+      const built = solids.buildVariant(variant, { clearance, connectors: true });
       const print = checkPrintability(built.solid, { pieces: built.parts });
-      const part = { id, key: variantKey(variant), render: built.render, edges: built.edges, anchors: built.anchors, print };
+      const part = { id, key: variantKey(variant), render: built.render, edges: built.edges, anchors: built.anchors, print, sockets: built.sockets };
       self.postMessage(part, [
         built.render.positions.buffer,
         built.render.colors.buffer,

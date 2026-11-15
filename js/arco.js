@@ -1,4 +1,4 @@
-import { CLEARANCE_MIN_MM, CLEARANCE_MAX_MM, CLEARANCE_STEP_MM, CONNECTOR_CLEARANCE_MM, STORY_MM } from './config.js';
+import { CONNECTOR_CLEARANCE_MM, STORY_MM } from './config.js';
 import { COPY } from './ui/copy.js';
 import { setupLegend } from './ui/legend.js';
 import { setupGenerate } from './ui/generate.js';
@@ -9,6 +9,7 @@ import { createDrawing } from './render/drawing.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
+import { setupExport } from './ui/exportpanel.js';
 import { variantKey } from './core/grid.js';
 import { createWorkerClient } from './workers/client.js';
 
@@ -55,6 +56,7 @@ export const app = {
   structure: null,
   checks: null,
   selection: [],
+  fit: null,
   modeListeners: [],
   structureListeners: [],
 };
@@ -63,15 +65,20 @@ const printOf = (instance) => {
   const part = modules.partOf(variantKey(instance));
   return part ? part.print : null;
 };
+const socketsOf = (instance) => {
+  const part = modules.partOf(variantKey(instance));
+  return part ? part.sockets : null;
+};
 
 function showInspector() {
   const lastId = app.selection[app.selection.length - 1];
   const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
-  inspector.render({ structure: app.structure, checks: app.checks, printOf }, selected);
+  inspector.render({ structure: app.structure, checks: app.checks, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]) }, selected);
 }
 
 // Click selects, shift click adds or removes
 function select(id, extend) {
+  exporter.closeSteps();
   const keep = extend ? app.selection.filter((selectedId) => selectedId !== id) : [];
   const next = id && !(extend && app.selection.includes(id)) ? [...keep, id] : keep;
   for (const selectedId of app.selection) {
@@ -165,10 +172,10 @@ for (const input of document.querySelectorAll('input[name="projection"]')) {
 }
 query('#resetView').addEventListener('click', () => rig.home(false));
 
-const clearanceInput = query('#clearanceInput');
-clearanceInput.min = CLEARANCE_MIN_MM;
-clearanceInput.max = CLEARANCE_MAX_MM;
-clearanceInput.step = CLEARANCE_STEP_MM;
-clearanceInput.value = CONNECTOR_CLEARANCE_MM;
+const exportWorker = createWorkerClient(new URL('./workers/export.worker.js', import.meta.url));
+const exporter = setupExport(app, exportWorker, (fit) => {
+  app.fit = fit;
+  showInspector();
+});
 
 setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);

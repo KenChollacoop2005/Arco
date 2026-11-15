@@ -1,4 +1,5 @@
 import { CELL_MM, STORY_MM, MAX_OVERHANG_DEG, MAX_BRIDGE_MM, MIN_WALL_MM, BED_MM } from '../config.js';
+import { fitStatus } from '../core/checks.js';
 import { footprintSize } from '../core/grid.js';
 import { FAMILIES } from '../core/catalog.js';
 import { placementOf } from '../core/placement.js';
@@ -69,7 +70,7 @@ export function createInspector(body) {
     body.append(list);
   }
 
-  function moduleView({ checks, printOf }, instance) {
+  function moduleView({ checks, printOf, socketsOf, fit, onExport }, instance) {
     const family = FAMILIES[instance.family];
     const [sizeX, sizeY] = footprintSize(instance.fp, instance.rot);
     body.append(node('p', 'inspector-name', family.label), node('p', 'inspector-sub', family.group));
@@ -93,7 +94,15 @@ export function createInspector(body) {
       list.append(checkLine(COPY.placementRules, entry.placement.status, COPY[entry.placement.status], entry.placement.reason));
     }
     list.append(printLine(printOf(instance)));
+    const sockets = socketsOf(instance);
+    const pegged = sockets && sockets.top.length + sockets.bottom.length > 0;
+    if (!family.rails && !pegged) list.append(checkLine(COPY.connectorFit, '', COPY.none, COPY.fitLoose));
+    else if (!fit) list.append(checkLine(COPY.connectorFit, '', COPY.checking));
+    else list.append(checkLine(COPY.connectorFit, fitStatus(fit.gap, fit.clearance), `${fit.gap.toFixed(2)} mm`, `${COPY.fitMeasured} ${fit.clearance.toFixed(2)} mm`));
     body.append(list);
+    const button = node('button', 'plain', COPY.exportStl);
+    button.addEventListener('click', () => onExport(instance.id));
+    body.append(button);
   }
 
   return {

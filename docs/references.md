@@ -22,4 +22,7 @@ One line per source or library, with its license.
 
 - Block stacking (book stacking) overhang, (1/2)(1 + 1/2 + ... + 1/n) block lengths, used as the textbook answer for the stability tests. Paterson and Zwick, "Overhang", American Mathematical Monthly 116 (2009), section 1 covers the classic harmonic stack.
 - Rigid block equilibrium with compression-only contacts, solved as a linear program. Livesley, "Limit analysis of structures formed from rigid blocks", International Journal for Numerical Methods in Engineering 12 (1978).
+- Binary STL layout (80 byte header, triangle count, 50 bytes per triangle, little endian). 3D Systems, "StereoLithography Interface Specification" (1989).
+- Zip container with stored (uncompressed) entries. PKWARE, "APPNOTE.TXT, .ZIP File Format Specification", sections 4.3.7, 4.3.12 and 4.3.16.
+- CRC-32 for zip entries, checked against the standard value 0xCBF43926 for "123456789". Williams, "A Painless Guide to CRC Error Detection Algorithms" (1993).
 - Simplex method, phase one feasibility with Bland's rule against cycling. Chvatal, "Linear Programming" (1983), chapters 2 and 3.

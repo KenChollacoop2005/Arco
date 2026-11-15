@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CELL_MM, STORY_MM, STABILITY_MARGIN } from '../js/config.js';
-import { runChecks, marginStatus } from '../js/core/checks.js';
+import { runChecks, marginStatus, fitStatus } from '../js/core/checks.js';
 import { centerMarks, loadPaths, connectorMarks, edgeLines } from '../js/core/drafting.js';
 import { generate } from '../js/core/generator.js';
 
@@ -91,4 +91,11 @@ test('edge lines follow the module pose', () => {
   const instance = part(1, 'housing', '1x2', 1, 2, 1, 3, { rot: 1 });
   const lines = edgeLines([instance], () => new Float32Array([0, 0, 0, 50, 0, 0]));
   assert.deepEqual(lines, [75, 25, 75, 75, 75, 75]);
+});
+
+test('connector fit passes only within 0.01 mm of the setting', () => {
+  assert.equal(fitStatus(0.2, 0.2), 'pass');
+  assert.equal(fitStatus(0.205, 0.2), 'pass');
+  assert.equal(fitStatus(0.22, 0.2), 'fail');
+  assert.equal(fitStatus(0.1, 0.2), 'fail');
 });

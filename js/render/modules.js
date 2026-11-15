@@ -105,7 +105,7 @@ export function createModuleView(view, requestGeometry) {
     }
     if (missing.length === 0) return;
     await requestGeometry(missing, (part) => {
-      if (!cache.has(part.key)) cache.set(part.key, { geometry: toGeometry(part.render), edges: part.edges, anchors: part.anchors, print: part.print });
+      if (!cache.has(part.key)) cache.set(part.key, { geometry: toGeometry(part.render), edges: part.edges, anchors: part.anchors, print: part.print, sockets: part.sockets });
       if (token === generation && byKey.has(part.key) && !batches.has(part.key)) addBatch(part.key, byKey.get(part.key), animate);
     });
   }
