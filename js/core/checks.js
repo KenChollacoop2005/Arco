@@ -3,11 +3,12 @@ import { toBody, worldFromModules } from './grid.js';
 import { validateStructure } from './placement.js';
 import { checkStability } from './stability.js';
 
+const MARGIN_EPS_MM = 1e-6; // rounding slack on margins
 const finite = (value) => (Number.isFinite(value) ? value : null);
 
 export function marginStatus(margin) {
-  if (margin < 0) return 'fail';
-  return margin < STABILITY_MARGIN ? 'warn' : 'pass';
+  if (margin < -MARGIN_EPS_MM) return 'fail';
+  return margin < STABILITY_MARGIN - MARGIN_EPS_MM ? 'warn' : 'pass';
 }
 
 // Stability and placement for a module list, plain data out

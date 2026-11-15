@@ -240,7 +240,7 @@ const RECIPES = {
     mass(kit);
     const style = makeStyle(kit.styleRng, kit.styleRng.pick(['strip', 'loggia', 'grid', 'oct']));
     if (kit.stories === 2) style.group = 2;
-    applyFacades(kit, style);
+    applyFacades(kit, style, 0, kit.roof ? kit.H - SAW_DROP_MM - THIN_MM : kit.H);
     if (!kit.roof) return;
     const teeth = Math.round((kit.W - kit.inset * 2) / SAW_PITCH_MM);
     const pitch = (kit.W - kit.inset * 2) / teeth;

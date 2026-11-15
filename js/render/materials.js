@@ -34,6 +34,7 @@ const SWAY_WAVE_Y = 0.3; // tarp ripple along y
 const MODULE_ROUGHNESS = 0.92; // concrete roughness
 const PLINTH_ROUGHNESS = 0.95; // plinth roughness
 const PLINTH_COLOR = 0xb3b2ae; // plinth grey
+const EDGE_OFFSET = 1; // faces pushed back behind drawn edges
 const glsl = (value) => value.toFixed(3);
 
 // Instance states
@@ -140,7 +141,6 @@ diffuseColor.rgb *= 1.0 - ring * ${glsl(RING_DARKEN)};
 vec2 cellCoord = vLocal.xy / ARCO_CELL;
 vec2 cellLine = abs(fract(cellCoord - 0.5) - 0.5) / fwidth(cellCoord);
 float gridLine = (1.0 - min(min(cellLine.x, cellLine.y), 1.0)) * step(ringRadius, ARCO_RING - ${glsl(RIM_INNER_MM)}) * step(0.5, arcoNormal.z);
-diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, gridLine * ${glsl(GRID_STRENGTH)} * uGrid);
 #endif
 if (vState > 0.5 && vState < 1.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, ${glsl(SELECT_MIX)});
 if (vState > 2.5 && vState < 3.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${RED}, ${glsl(INVALID_MIX)});
@@ -149,6 +149,9 @@ if (uDrawing > 0.5) {
   float keep = step(0.5, vState);
   diffuseColor.rgb = mix(${PAPER}, diffuseColor.rgb, keep * ${glsl(DRAWING_KEEP)});
 }
+#ifdef ARCO_PLINTH
+diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, gridLine * ${glsl(GRID_STRENGTH)} * uGrid);
+#endif
 `;
 
 function patch(material, defines) {
@@ -174,7 +177,15 @@ function patch(material, defines) {
 
 export function createModuleMaterials() {
   const lit = patch(
-    new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: MODULE_ROUGHNESS, metalness: 0 }),
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      flatShading: true,
+      roughness: MODULE_ROUGHNESS,
+      metalness: 0,
+      polygonOffset: true,
+      polygonOffsetFactor: EDGE_OFFSET,
+      polygonOffsetUnits: EDGE_OFFSET,
+    }),
     { ARCO_INSTANCED: '' }
   );
   const depth = patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), { ARCO_INSTANCED: '' });

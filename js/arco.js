@@ -5,6 +5,11 @@ import { setupGenerate } from './ui/generate.js';
 import { createScene } from './render/scene.js';
 import { createCameraRig } from './render/camera.js';
 import { createModuleView } from './render/modules.js';
+import { createDrawing } from './render/drawing.js';
+import { createPicker } from './render/picking.js';
+import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
+import { createInspector } from './ui/inspector.js';
+import { variantKey } from './core/grid.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -37,6 +42,10 @@ const modules = createModuleView(view, (variants, onPart) =>
   solids.call({ variants, clearance: CONNECTOR_CLEARANCE_MM }, onPart)
 );
 
+const checker = createWorkerClient(new URL('./workers/checks.worker.js', import.meta.url));
+const inspector = createInspector(query('#inspectorBody'));
+const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
+
 export const app = {
   view,
   rig,
@@ -44,9 +53,75 @@ export const app = {
   mode: 'generate',
   reducedMotion,
   structure: null,
+  checks: null,
+  selection: [],
   modeListeners: [],
   structureListeners: [],
 };
+
+const printOf = (instance) => {
+  const part = modules.partOf(variantKey(instance));
+  return part ? part.print : null;
+};
+
+function showInspector() {
+  const lastId = app.selection[app.selection.length - 1];
+  const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
+  inspector.render({ structure: app.structure, checks: app.checks, printOf }, selected);
+}
+
+// Click selects, shift click adds or removes
+function select(id, extend) {
+  const keep = extend ? app.selection.filter((selectedId) => selectedId !== id) : [];
+  const next = id && !(extend && app.selection.includes(id)) ? [...keep, id] : keep;
+  for (const selectedId of app.selection) {
+    if (!next.includes(selectedId)) modules.setState(selectedId, STATE_NORMAL);
+  }
+  for (const selectedId of next) modules.setState(selectedId, STATE_SELECTED);
+  app.selection = next;
+  showInspector();
+}
+
+createPicker(canvas, rig, modules, {
+  onPick: select,
+  onDouble(id) {
+    const box = id ? modules.boxOf(id) : null;
+    if (box) rig.frame(box);
+    else rig.home(false);
+  },
+});
+
+app.structureListeners.push(async (result, phase) => {
+  if (phase === 'ready') {
+    showInspector();
+    drawing.update(app.structure, app.checks);
+    return;
+  }
+  app.checks = null;
+  app.selection = [];
+  showInspector();
+  drawing.update(result, null);
+  const checks = await checker.call({ modules: result.modules });
+  if (app.structure !== result) return;
+  app.checks = checks;
+  showInspector();
+  drawing.update(result, checks);
+});
+
+app.modeListeners.push((mode) => {
+  drawing.setActive(mode === 'drawing');
+  if (mode !== 'drawing' && !query('input[name="drawingView"][value="axon"]').checked) {
+    query('input[name="drawingView"][value="axon"]').checked = true;
+    rig.setView('axon');
+  }
+});
+
+for (const input of document.querySelectorAll('input[name="drawingView"]')) {
+  input.addEventListener('change', () => rig.setView(input.value));
+}
+for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'], ['#showConnectors', 'connectors']]) {
+  query(id).addEventListener('change', (event) => drawing.setLayer(layer, event.target.checked));
+}
 
 let generateToken = 0;
 
@@ -89,7 +164,6 @@ for (const input of document.querySelectorAll('input[name="projection"]')) {
   });
 }
 query('#resetView').addEventListener('click', () => rig.home(false));
-canvas.addEventListener('dblclick', () => rig.home(false));
 
 const clearanceInput = query('#clearanceInput');
 clearanceInput.min = CLEARANCE_MIN_MM;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { box, prismY } from '../js/core/kit.js';
 import { variantKey } from '../js/core/grid.js';
 import { checkPrintability } from '../js/core/printability.js';
+import { generate, openingOptions } from '../js/core/generator.js';
 import { getSolids, sampleVariants } from './helpers.js';
 
 const add = (shape) => ({ group: 'concrete', cut: false, shape });
@@ -79,15 +80,34 @@ test('two loose pieces fail the solid rule', async () => {
   assert.equal(result.rules.solid.status, 'fail');
 });
 
-test('every catalog module passes printability', async () => {
+async function printFailures(variants) {
   const solids = await getSolids();
   const failures = [];
-  for (const variant of sampleVariants()) {
+  const seen = new Set();
+  for (const variant of variants) {
+    const key = variantKey(variant);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const built = solids.buildVariant(variant, { render: false, edges: false });
     const result = checkPrintability(built.solid, { pieces: built.parts });
     if (result.status === 'pass') continue;
     const broken = Object.entries(result.rules).filter(([, rule]) => rule.status !== 'pass').map(([name, rule]) => `${name}=${JSON.stringify(rule.value)}`);
-    failures.push(`${variantKey(variant)} ${broken.join(' ')}`);
+    failures.push(`${key} ${broken.join(' ')}`);
   }
-  assert.deepEqual(failures, []);
+  return failures;
+}
+
+test('every catalog module passes printability', async () => {
+  assert.deepEqual(await printFailures(sampleVariants()), []);
+});
+
+test('every module in generated structures passes printability', async () => {
+  const structures = [
+    generate({ seed: 'habitat', scale: 'block', daring: 2, theme: 2 }),
+    generate({ seed: 'nakagin', scale: 'block', density: 2, height: 2 }),
+    generate({ seed: 'arco', scale: 'mega', theme: 2 }),
+    generate(openingOptions('k7m2qp')),
+    ...['trellick', 'barbican', 'x9', 'blacksburg'].map((seed) => generate({ seed, scale: 'unit' })),
+  ];
+  assert.deepEqual(await printFailures(structures.flatMap((structure) => structure.modules)), []);
 });

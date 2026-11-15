@@ -22,7 +22,11 @@ export function sampleVariants() {
       }
     }
     const fp = family.footprints[0];
-    if (family.roofable) variants.push(normalizeVariant({ family: id, fp, h: family.maxStories, seed: seed++, mask: 15, roof: true }));
+    if (family.roofable) {
+      for (const roofed of family.footprints) {
+        for (const h of heights) variants.push(normalizeVariant({ family: id, fp: roofed, h, seed: seed++, mask: 15, roof: true }));
+      }
+    }
     if (family.rails) {
       variants.push(normalizeVariant({ family: id, fp, h: family.minStories, seed: seed++, mask: 0, roof: false }));
       variants.push(normalizeVariant({ family: id, fp: family.footprints[family.footprints.length - 1], h: family.maxStories, seed: seed++, mask: 5, roof: false }));
