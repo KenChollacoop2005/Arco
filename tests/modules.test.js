@@ -99,3 +99,25 @@ test('render meshes carry colors and kinds for every vertex', async () => {
   assert.ok(Math.max(...built.render.index) < count);
   assert.ok(built.anchors.spin);
 });
+
+const PANE_FRONT_MM = 0.25; // pane thickness in front of the wall
+const PANE_THICK_MM = 0.45; // whole pane thickness
+const PANE_TOL_MM3 = 0.05; // volume rounding allowance
+
+test('window panes stay inside their openings', async () => {
+  const solids = await getSolids();
+  const volumeOf = (ops) => meshStats(solids.buildOps(ops)).volume;
+  let checked = 0;
+  for (const variant of sampleVariants()) {
+    const ops = buildRecipe(variant, CONNECTOR_CLEARANCE_MM).ops;
+    const panes = ops.filter((op) => op.group === 'glass');
+    if (panes.length === 0) continue;
+    checked++;
+    const concrete = ops.filter((op) => op.group === 'concrete');
+    const exposed = volumeOf([...concrete, ...panes]) - volumeOf(concrete);
+    const paneTotal = panes.reduce((sum, pane) => sum + volumeOf([pane]), 0);
+    const allowed = (paneTotal * PANE_FRONT_MM) / PANE_THICK_MM + PANE_TOL_MM3;
+    assert.ok(exposed <= allowed, `${variantKey(variant)} glass outside the wall: ${exposed.toFixed(2)} of ${allowed.toFixed(2)} mm3`);
+  }
+  assert.ok(checked > 100, 'variants with panes');
+});

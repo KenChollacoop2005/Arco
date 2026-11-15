@@ -82,8 +82,9 @@ export function recess(run, u0, u1, v0, v1, depth) {
 }
 
 export function glassPane(kit, run, u0, u1, v0, v1, depth) {
-  const low = Math.max(u0, GLASS_EDGE_MM);
-  const high = Math.min(u1, run.length - GLASS_EDGE_MM);
+  // Open corners: stop at the side wall's recess
+  const low = Math.max(u0, run.lo < 0 ? depth : GLASS_EDGE_MM);
+  const high = Math.min(u1, run.length - (run.hi > run.length ? depth : GLASS_EDGE_MM));
   if (high - low < GLASS_MIN_MM || v1 - depth - v0 < GLASS_MIN_MM) return;
   kit.add('glass', run.box(low, high, v0, v1 - depth, depth - GLASS_FRONT_MM, depth + GLASS_BACK_MM));
 }
@@ -272,8 +273,8 @@ function octStyle(kit, run, style, low, high) {
   const total = style.depth + style.window;
   for (const [base, top] of storyGroups(low, high, style.group)) {
     for (const [bayStart, bayEnd] of bays(run, 1)) {
-      const zoneStart = Math.max(bayStart + style.pier / 2, run.lo, OCT_EDGE_MM);
-      const zoneEnd = Math.min(bayEnd - style.pier / 2, run.hi, run.length - OCT_EDGE_MM);
+      const zoneStart = Math.max(bayStart + style.pier / 2, run.lo, OCT_EDGE_MM, total);
+      const zoneEnd = Math.min(bayEnd - style.pier / 2, run.hi, run.length - Math.max(OCT_EDGE_MM, total));
       const apothem = Math.min(zoneEnd - zoneStart, top - base - style.sill - style.head) / 2 - OCT_SHRINK_MM;
       if (apothem < OCT_MIN_MM || kit.rng.chance(style.blank)) continue;
       const shape = octagon((zoneStart + zoneEnd) / 2, (base + style.sill + top - style.head) / 2, apothem);
