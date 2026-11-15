@@ -101,6 +101,8 @@ function makeRun(cells, has, side, first, last, inset, mask, railed) {
     shift: start - rawStart,
     lo: startOpen ? -OVERSHOOT_MM : END_MARGIN_MM,
     hi: endOpen ? length + OVERSHOOT_MM : length - END_MARGIN_MM,
+    inLo: END_MARGIN_MM,
+    inHi: length - END_MARGIN_MM,
     origin,
     normal,
     tangent,

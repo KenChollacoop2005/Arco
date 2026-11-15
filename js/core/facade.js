@@ -310,8 +310,18 @@ const STYLES = {
   blank: blankStyle,
 };
 
+const WRAP_STYLES = ['fins', 'loggia']; // styles that may wrap open corners
+
+// Wall run with openings kept off both corners
+function inner(run) {
+  const kept = Object.create(run);
+  kept.lo = run.inLo;
+  kept.hi = run.inHi;
+  return kept;
+}
+
 export function applyFacade(kit, run, style, low = 0, high = kit.H) {
-  STYLES[style.type](kit, run, style, low, high);
+  STYLES[style.type](kit, WRAP_STYLES.includes(style.type) ? run : inner(run), style, low, high);
   if (style.grooves && style.type !== 'blank' && style.type !== 'fins') {
     for (let line = low + STORY_MM; line < high - 1; line += STORY_MM * style.group) groove(kit, run, line);
   }

@@ -107,7 +107,7 @@ const GLASS_WALL_MM = 7; // greenhouse wall height
 const GLASS_PITCH = 0.5; // greenhouse roof rise per half span
 const FRAME_MM = 1.4; // greenhouse frame width
 const FRAME_PITCH_MM = 7.4; // greenhouse frame spacing
-const STALL_MM = [2, 7, 15, 19, 0.8]; // floor, counter, eave, ridge, tarp edge
+const STALL_MM = [2, 7, 12, 1.8, 19]; // floor, counter, eave, tarp thickness, post spacing
 const TIER_MM = [7, 11]; // planted terrace tier half width and top
 const IVY_MM = [0.8, 5]; // ivy thickness and drop
 
@@ -242,8 +242,13 @@ const RECIPES = {
     if (kit.stories === 2) style.group = 2;
     applyFacades(kit, style);
     if (!kit.roof) return;
-    for (let start = -SINK_MM; start < kit.W; start += SAW_PITCH_MM) {
-      kit.cut(prismY([[start, kit.H + 1], [start + SAW_PITCH_MM, kit.H + 1], [start + SAW_PITCH_MM, kit.H - SAW_DROP_MM], [start, kit.H]], -1, kit.D + 1));
+    const teeth = Math.round((kit.W - kit.inset * 2) / SAW_PITCH_MM);
+    const pitch = (kit.W - kit.inset * 2) / teeth;
+    for (let tooth = 0; tooth < teeth; tooth++) {
+      const start = kit.inset + tooth * pitch;
+      const end = start + pitch;
+      const past = tooth === teeth - 1 ? end + 1 : end;
+      kit.cut(prismY([[start, kit.H + 1], [past, kit.H + 1], [past, kit.H - SAW_DROP_MM], [end, kit.H - SAW_DROP_MM], [start, kit.H]], -1, kit.D + 1));
     }
   },
 
@@ -471,13 +476,13 @@ const RECIPES = {
     const pattern = kit.styleRng.pick(['ribs', 'tiles', 'bands']);
     for (const run of kit.facades) {
       if (pattern === 'ribs') {
-        for (let at = run.lo + RIB_PITCH_MM; at < run.hi - RIB_PITCH_MM / 2; at += RIB_PITCH_MM) {
+        for (let at = run.inLo; at <= run.inHi; at += RIB_PITCH_MM) {
           kit.cut(run.prismV([[at - RIB_MM, -SINK_MM], [at + RIB_MM, -SINK_MM], [at, RIB_MM]], -1, kit.H + 1));
         }
       } else if (pattern === 'tiles') {
         const [size, depth] = TILE_MM;
         for (let low = 3, row = 0; low + size < kit.H - 2; low += size + 2, row++) {
-          for (let at = Math.max(run.lo, 0) + 3 + (row % 2) * (size / 2); at + size < run.hi - 1; at += size + 2) {
+          for (let at = run.inLo + (row % 2) * (size / 2); at + size < run.inHi; at += size + 2) {
             if (kit.rng.chance(0.75)) kit.cut(recess(run, at, at + size, low, low + size, depth));
           }
         }
@@ -706,7 +711,7 @@ const RECIPES = {
   market(kit) {
     const { alongX, length, width } = axes(kit);
     const clear = kit.clear;
-    const [floor, counter, eave, ridge, edge] = STALL_MM;
+    const [floor, counter, eave, thick, postGap] = STALL_MM;
     kit.slab('concrete', clear, 0, floor);
     const near = clear + 0.5;
     const far = width - clear - 0.5;
@@ -716,13 +721,17 @@ const RECIPES = {
     for (let at = start + 3; at + 3 < end - 2; at += 4.5) {
       kit.add(kit.rng.pick([...PLANT_GROUPS, ...TARP_GROUPS]), span(alongX, at, at + 3, near + 3, near + 6.5, counter, counter + kit.rng.range(1, 2.4)));
     }
-    for (const along of [start, end - THIN_MM]) {
+    const posts = Math.ceil((end - start - THIN_MM) / postGap) + 1;
+    for (let post = 0; post < posts; post++) {
+      const along = start + (post * (end - start - THIN_MM)) / (posts - 1);
       for (const across of [near, far - THIN_MM]) {
-        kit.add('steel', span(alongX, along, along + THIN_MM, across, across + THIN_MM, floor, eave));
+        kit.add('steel', span(alongX, along, along + THIN_MM, across, across + THIN_MM, floor, eave + SINK_MM));
       }
     }
     const middle = width / 2;
-    kit.add(kit.rng.pick(TARP_GROUPS), sweep(alongX, [[near, eave], [far, eave], [far, eave + edge], [middle, ridge], [near, eave + edge]], start, end));
+    const half = (far - near) / 2;
+    const tent = [[near, eave], [near + thick, eave], [middle, eave + half - thick], [far - thick, eave], [far, eave], [middle, eave + half]];
+    kit.add(kit.rng.pick(TARP_GROUPS), sweep(alongX, tent, start, end));
   },
 
   planted(kit) {
@@ -740,7 +749,7 @@ const RECIPES = {
       kit.cut(box(centerX - half + THIN_MM, centerY - half + THIN_MM, top - 2, centerX + half - THIN_MM, centerY + half - THIN_MM, top + 1));
       kit.add('soil', box(centerX - half + THIN_MM, centerY - half + THIN_MM, top - 2, centerX + half - THIN_MM, centerY + half - THIN_MM, top - 0.8));
       bush(kit, centerX, centerY, top - 0.8, BUSH_MM[1], kit.rng.pick(PLANT_GROUPS));
-      kit.add('plantDark', box(centerX - half + 2, centerY - half - ivyThick, top - ivyDrop, centerX + half - 2, centerY - half + SINK_MM, top + 0.4));
+      kit.add('plantDark', box(centerX - half + 2, centerY - half - ivyThick, top - ivyDrop, centerX + half - 2, centerY - half + SINK_MM, top));
     });
   },
 };
