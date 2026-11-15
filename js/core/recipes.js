@@ -16,6 +16,7 @@ const HATCH_HALF_MM = 4; // roof hatch half width
 const ROOF_DEPTH_MM = 2.5; // sunken roof depth
 const PILOTIS_SLAB_MM = 6; // slab over pilotis columns
 const COLUMN_HALF_MM = [5.5, 7]; // pilotis column half width range
+const ROUND_COLUMN_EXTRA_MM = 2.5; // round column radius over the half width
 const TRANSFER_LINE_MM = 6; // transfer slab pour line height
 const TRANSFER_BAND_MM = 8; // transfer slab beam band start
 const BUTTRESS_HALF_MM = 5.5; // buttress half thickness
@@ -199,10 +200,12 @@ const RECIPES = {
     const half = CELL_MM / 2 - kit.inset;
     const column = kit.rng.range(COLUMN_HALF_MM[0], COLUMN_HALF_MM[1]);
     const capBase = slabBase - (half - column);
+    const radius = column + ROUND_COLUMN_EXTRA_MM;
+    kit.railBase = slabBase;
     for (const [centerX, centerY] of kit.cellCenters()) {
       if (round) {
-        kit.add('concrete', cyl(centerX, centerY, 0, capBase + SINK_MM, column));
-        kit.add('concrete', cyl(centerX, centerY, capBase, slabBase, column, half));
+        kit.add('concrete', cyl(centerX, centerY, 0, capBase + SINK_MM, radius));
+        kit.add('concrete', cyl(centerX, centerY, capBase, slabBase, radius, half));
       } else {
         kit.add('concrete', box(centerX - column, centerY - column, 0, centerX + column, centerY + column, capBase + SINK_MM));
         kit.add('concrete', pyramid(centerX, centerY, capBase, slabBase, column, half));
@@ -326,7 +329,7 @@ const RECIPES = {
         );
         for (let post = 1; post < run.cells * 2; post++) {
           const at = run.bayStart(0) + (post * CELL_MM) / 2;
-          kit.add('concrete', run.box(at - POST_HALF_MM, at + POST_HALF_MM, floor - SINK_MM, head, 0, GALLERY_DEPTH_MM + SINK_MM));
+          kit.add('concrete', run.box(at - POST_HALF_MM, at + POST_HALF_MM, floor - SINK_MM, head + SINK_MM, 0, GALLERY_DEPTH_MM + SINK_MM));
         }
       }
     }

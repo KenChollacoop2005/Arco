@@ -1,9 +1,12 @@
 import { CONNECTOR_CLEARANCE_MM } from '../config.js';
 import { GROUPS, KIND_SPIN, KIND_SWAY } from './palette.js';
 import { buildRecipe } from './recipes.js';
-import { creaseEdges } from './meshtools.js';
+import { creaseEdges, meshStats, weldMesh } from './meshtools.js';
+import { connectorPlan, connectorOps, socketProbe } from './connectors.js';
 
 const CREASE_DEG = 28; // edge angle drawn as a line
+const PROBE_TOL_MM3 = 0.05; // volume slack for the socket test
+const MESH_TOL_MM = 0.001; // features smaller than this are merged
 
 export async function loadManifold(factory, options = {}) {
   const wasm = await factory(options);
@@ -102,6 +105,15 @@ export function createSolids(wasm) {
     return { positions, index: new Uint32Array(mesh.triVerts) };
   }
 
+  // Print mesh with slivers merged away
+  function printMesh(solid, bin) {
+    const tidy = solid.setTolerance(MESH_TOL_MM);
+    bin.add(tidy);
+    const simple = tidy.simplify(MESH_TOL_MM);
+    bin.add(simple);
+    return weldMesh(toMesh(simple));
+  }
+
   function groupSolids(ops, bin) {
     const byGroup = new Map();
     for (const op of ops) {
@@ -170,11 +182,20 @@ export function createSolids(wasm) {
     return merged;
   }
 
+  // True when the body fills the whole box
+  function solidAt(body, shape, bin) {
+    const shared = Manifold.intersection(body, shapeSolid(shape, bin));
+    bin.add(shared);
+    if (shared.isEmpty()) return false;
+    const full = (shape.max[0] - shape.min[0]) * (shape.max[1] - shape.min[1]) * (shape.max[2] - shape.min[2]);
+    return meshStats(toMesh(shared)).volume >= full - PROBE_TOL_MM3;
+  }
+
   function release(bin) {
     for (const solid of bin) solid.delete();
   }
 
-  // Options: clearance, extra ops for connectors, want render
+  // Options: clearance, connectors, render, edges
   function buildVariant(variant, options = {}) {
     const clearance = options.clearance === undefined ? CONNECTOR_CLEARANCE_MM : options.clearance;
     const recipe = buildRecipe(variant, clearance);
@@ -184,11 +205,17 @@ export function createSolids(wasm) {
       const result = { anchors: recipe.anchors };
       if (options.render !== false) result.render = mergeRender(solids, recipe.anchors);
       let body = printedUnion(solids, bin);
-      if (body && options.connectorOps) {
-        body = fold(options.connectorOps, bin, body) || body;
+      if (body && options.connectors) {
+        const plan = connectorPlan(variant, recipe.kit.railBase || 0);
+        const fits = (site, onTop) =>
+          solidAt(body, socketProbe(site.center[0], site.center[1], onTop ? plan.height : 0, onTop, clearance), bin);
+        const top = plan.top.filter((site) => fits(site, true));
+        const bottom = plan.bottom.filter((site) => fits(site, false));
+        body = fold(connectorOps(plan, clearance, top, bottom), bin, body) || body;
+        result.sockets = { top: top.map((site) => site.cell), bottom: bottom.map((site) => site.cell) };
       }
       if (body) {
-        result.solid = toMesh(body);
+        result.solid = printMesh(body, bin);
         result.parts = body.decompose().map((piece) => {
           piece.delete();
           return 1;
@@ -206,7 +233,7 @@ export function createSolids(wasm) {
     const bin = new Set();
     try {
       const solid = fold(ops, bin);
-      return solid ? toMesh(solid) : null;
+      return solid ? printMesh(solid, bin) : null;
     } finally {
       release(bin);
     }

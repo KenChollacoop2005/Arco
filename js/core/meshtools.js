@@ -110,6 +110,83 @@ export function creaseEdges(mesh, angleDeg) {
   return new Float32Array(segments);
 }
 
+const QUARTER_TURNS = [[1, 0], [0, 1], [-1, 0], [0, -1]]; // cos and sin per turn
+
+// Quarter turns about z, then a shift
+export function moveMesh(mesh, turns, shiftX, shiftY, shiftZ) {
+  const [cos, sin] = QUARTER_TURNS[turns & 3];
+  const positions = new Float32Array(mesh.positions.length);
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const localX = mesh.positions[offset];
+    const localY = mesh.positions[offset + 1];
+    positions[offset] = shiftX + localX * cos - localY * sin;
+    positions[offset + 1] = shiftY + localX * sin + localY * cos;
+    positions[offset + 2] = shiftZ + mesh.positions[offset + 2];
+  }
+  return { positions, index: mesh.index };
+}
+
+export function mergeMeshes(meshes) {
+  let vertexTotal = 0;
+  let indexTotal = 0;
+  for (const mesh of meshes) {
+    vertexTotal += mesh.positions.length / 3;
+    indexTotal += mesh.index.length;
+  }
+  const positions = new Float32Array(vertexTotal * 3);
+  const index = new Uint32Array(indexTotal);
+  let vertexOffset = 0;
+  let indexOffset = 0;
+  for (const mesh of meshes) {
+    positions.set(mesh.positions, vertexOffset * 3);
+    for (let corner = 0; corner < mesh.index.length; corner++) index[indexOffset + corner] = mesh.index[corner] + vertexOffset;
+    vertexOffset += mesh.positions.length / 3;
+    indexOffset += mesh.index.length;
+  }
+  return { positions, index };
+}
+
+// Joins vertices at the same spot, drops collapsed triangles
+export function weldMesh(mesh) {
+  const bits = new Uint32Array(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.length);
+  const lookup = new Map();
+  const remap = new Uint32Array(mesh.positions.length / 3);
+  const kept = [];
+  for (let vertex = 0; vertex < remap.length; vertex++) {
+    // Adding zero folds minus zero into zero
+    const key = (mesh.positions[vertex * 3] + 0 === 0 ? 0 : bits[vertex * 3]) + ':' +
+      (mesh.positions[vertex * 3 + 1] + 0 === 0 ? 0 : bits[vertex * 3 + 1]) + ':' +
+      (mesh.positions[vertex * 3 + 2] + 0 === 0 ? 0 : bits[vertex * 3 + 2]);
+    let target = lookup.get(key);
+    if (target === undefined) {
+      target = kept.length / 3;
+      lookup.set(key, target);
+      kept.push(mesh.positions[vertex * 3], mesh.positions[vertex * 3 + 1], mesh.positions[vertex * 3 + 2]);
+    }
+    remap[vertex] = target;
+  }
+  const faces = [];
+  const facing = new Map();
+  for (let face = 0; face < mesh.index.length; face += 3) {
+    const a = remap[mesh.index[face]];
+    const b = remap[mesh.index[face + 1]];
+    const c = remap[mesh.index[face + 2]];
+    if (a === b || b === c || a === c) continue;
+    // Rotate so the lowest vertex leads
+    const turned = a < b && a < c ? [a, b, c] : b < c ? [b, c, a] : [c, a, b];
+    const mirror = facing.get(turned[0] + ':' + turned[2] + ':' + turned[1]);
+    if (mirror !== undefined && faces[mirror]) {
+      // Two faces back to back enclose nothing
+      faces[mirror] = null;
+      continue;
+    }
+    facing.set(turned.join(':'), faces.length);
+    faces.push(turned);
+  }
+  const index = faces.filter(Boolean).flat();
+  return { positions: new Float32Array(kept), index: new Uint32Array(index) };
+}
+
 // Smallest gap between two meshes, vertex to face
 export function meshGap(meshA, meshB) {
   return Math.min(vertexToMesh(meshA, meshB), vertexToMesh(meshB, meshA));

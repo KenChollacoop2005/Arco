@@ -38,6 +38,9 @@ export const PEG_SIZE_MM = 8; // peg square width
 export const PEG_LENGTH_MM = 8; // peg length
 export const SOCKET_CHAMFER_MM = 0.4; // socket mouth chamfer
 export const SIDE_CLEAR_MM = 3; // setback for parts without rails
+export const COUPON_DEPTH_MM = 16; // fit test block depth
+export const COUPON_HEIGHT_MM = 12; // fit test block height
+export const COUPON_SOCKET_BACK_MM = 6; // coupon socket center from the back
 
 // Export plates
 export const PLATE_GAP_MM = 4; // spacing between packed parts

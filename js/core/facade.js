@@ -241,7 +241,7 @@ function finsStyle(kit, run, style, low, high) {
   for (let fin = 0; fin <= count; fin++) {
     const at = (last * fin) / count;
     if ((fin === 0 && run.lo > 0) || (fin === count && run.hi < run.length)) continue;
-    kit.add('concrete', run.box(at, at + style.finWidth, panelLow - BURY_MM, panelHigh, 0, depth + BURY_MM));
+    kit.add('concrete', run.box(at, at + style.finWidth, panelLow - BURY_MM, panelHigh + BURY_MM, 0, depth + BURY_MM));
   }
 }
 

@@ -187,15 +187,19 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
         maxY * CELL_MM - margin,
       ]);
     },
+    // Footprint as one solid, so L shapes have no shared faces
+    block(margin, fromZ, toZ) {
+      const rects = kit.rects(margin);
+      if (rects.length === 1) return box(rects[0][0], rects[0][1], fromZ, rects[0][2], rects[0][3], toZ);
+      const [long, tall] = rects;
+      const outline = [[long[0], long[1]], [long[2], long[1]], [long[2], long[3]], [tall[2], long[3]], [tall[2], tall[3]], [tall[0], tall[3]]];
+      return prismZ(outline, fromZ, toZ);
+    },
     slab(group, margin, fromZ, toZ) {
-      for (const [minX, minY, maxX, maxY] of kit.rects(margin)) {
-        kit.add(group, box(minX, minY, fromZ, maxX, maxY, toZ));
-      }
+      kit.add(group, kit.block(margin, fromZ, toZ));
     },
     carve(margin, fromZ, toZ, group = 'concrete') {
-      for (const [minX, minY, maxX, maxY] of kit.rects(margin)) {
-        kit.cut(box(minX, minY, fromZ, maxX, maxY, toZ), group);
-      }
+      kit.cut(kit.block(margin, fromZ, toZ), group);
     },
     // One cell, overlapping its neighbours inside the body
     cellBox(index, margin = inset) {
