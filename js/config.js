@@ -28,6 +28,7 @@ export const MIN_BED_CONTACT_MM2 = 60; // smallest flat base area
 export const CONNECTOR_CLEARANCE_MM = 0.2; // gap between mating faces
 export const CLEARANCE_MIN_MM = 0.05; // lowest clearance setting
 export const CLEARANCE_MAX_MM = 0.5; // highest clearance setting
+export const CLEARANCE_STEP_MM = 0.05; // clearance setting step
 export const RAIL_OFFSET_MM = 6.25; // rail center from face center
 export const RAIL_NECK_MM = 4; // dovetail width at face
 export const RAIL_DEPTH_MM = 2.5; // dovetail depth

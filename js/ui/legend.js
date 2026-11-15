@@ -22,6 +22,8 @@ export function writeSetting(key, value) {
 export function setupLegend(legend, leftPanel) {
   const narrow = window.innerWidth <= NARROW_PX;
   legend.open = readSetting(STORAGE_KEY, narrow ? 'closed' : 'open') === 'open';
-  legend.addEventListener('toggle', () => writeSetting(STORAGE_KEY, legend.open ? 'open' : 'closed'));
+  legend.querySelector('summary').addEventListener('click', () => {
+    writeSetting(STORAGE_KEY, legend.open ? 'closed' : 'open');
+  });
   if (narrow) leftPanel.open = false;
 }

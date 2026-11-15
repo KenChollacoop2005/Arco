@@ -1,3 +1,4 @@
+import { CLEARANCE_MIN_MM, CLEARANCE_MAX_MM, CLEARANCE_STEP_MM, CONNECTOR_CLEARANCE_MM } from './config.js';
 import { COPY } from './ui/copy.js';
 import { setupLegend } from './ui/legend.js';
 import { createScene } from './render/scene.js';
@@ -51,3 +52,10 @@ for (const input of document.querySelectorAll('input[name="projection"]')) {
   });
 }
 query('#resetView').addEventListener('click', () => rig.home(false));
+canvas.addEventListener('dblclick', () => rig.home(false));
+
+const clearanceInput = query('#clearanceInput');
+clearanceInput.min = CLEARANCE_MIN_MM;
+clearanceInput.max = CLEARANCE_MAX_MM;
+clearanceInput.step = CLEARANCE_STEP_MM;
+clearanceInput.value = CONNECTOR_CLEARANCE_MM;

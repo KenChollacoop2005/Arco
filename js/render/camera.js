@@ -12,21 +12,33 @@ import { PLINTH_RADIUS_MM } from './scene.js';
 
 const PERSPECTIVE_FOV = 30; // perspective field of view
 const ORTHO_DISTANCE = 2400; // orthographic camera standoff
+const INITIAL_SPAN_MM = 600; // view height before first fit
+const DAMPING = 0.12; // orbit easing
 const WIDE_LAYOUT_PX = 760; // panels sit beside the model
 const SIDE_INSET_PX = 284; // space taken by each side panel
 const TOP_INSET_PX = 60; // space taken by the top bar
 const BOTTOM_INSET_PX = 78; // space taken by the bottom bar
+const MIN_FREE_PX = 160; // smallest usable view area
+const TALL_PAD_MM = 30; // extra height around the model
+const ACROSS_PAD_MM = 12; // extra width around the plinth
 const MAX_POLAR = 1.6; // lowest camera angle
 const VIEW_TWEEN_S = 0.45; // view change time
 const FRAME_FILL = 0.42; // module share of view when framed
+const MIN_FRAME_SIZE_MM = 20; // smallest size used for framing
 const TARGET_HEIGHT_SHARE = 0.5; // target height along the model
+const TARGET_DROP_MM = 6; // target sits a little low
+const PAN_SLACK_MM = 10; // pan range past the model
 const MIN_FIT_HEIGHT_MM = 60; // fit never tighter than this
+const RISE_DONE_MM = 0.25; // rise stops within this
+const PLAN_DIRECTION = [0.0005, -0.001, 1]; // near vertical, avoids gimbal lock
+const ELEVATION_TILT_DEG = 0.01; // near level side view
 
 const radians = (degrees) => (degrees * Math.PI) / 180;
+const clampZoom = (zoom) => Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, zoom));
 
 export function createCameraRig(canvas, reducedMotion) {
-  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 12000);
-  const persp = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, 1, 20, 20000);
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, ORTHO_DISTANCE * 5);
+  const persp = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, 1, 20, ORTHO_DISTANCE * 8);
   ortho.up.set(0, 0, 1);
   persp.up.set(0, 0, 1);
   let active = ortho;
@@ -35,14 +47,14 @@ export function createCameraRig(canvas, reducedMotion) {
   let fitHeight = MIN_FIT_HEIGHT_MM;
   let goalHeight = MIN_FIT_HEIGHT_MM;
   let following = true;
-  let span = 600;
+  let span = INITIAL_SPAN_MM;
   let tween = null;
   const axis = new THREE.Vector2(0, 0);
   const changeCallbacks = [];
 
   const controls = new OrbitControls(active, canvas);
   controls.enableDamping = !reducedMotion;
-  controls.dampingFactor = 0.12;
+  controls.dampingFactor = DAMPING;
   controls.screenSpacePanning = true;
   controls.maxPolarAngle = MAX_POLAR;
   controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
@@ -59,13 +71,18 @@ export function createCameraRig(canvas, reducedMotion) {
     );
   }
 
+  const baseDistance = () => span / 2 / Math.tan(radians(PERSPECTIVE_FOV) / 2);
+  const targetHeight = () => Math.max(MIN_FIT_HEIGHT_MM, fitHeight) * TARGET_HEIGHT_SHARE - TARGET_DROP_MM;
+  const currentDirection = () => active.position.clone().sub(controls.target).normalize();
+  const currentDistance = () => active.position.distanceTo(controls.target);
+
   function computeSpan(modelHeight) {
     const elevation = radians(CAMERA_ELEVATION_DEG);
     const wide = width > WIDE_LAYOUT_PX;
-    const freeWidth = Math.max(160, width - (wide ? SIDE_INSET_PX * 2 : 0));
-    const freeHeight = Math.max(160, height - TOP_INSET_PX - BOTTOM_INSET_PX * (wide ? 1 : 2));
-    const tall = modelHeight * Math.cos(elevation) + 2 * PLINTH_RADIUS_MM * Math.sin(elevation) + 30;
-    const across = 2 * PLINTH_RADIUS_MM + 12;
+    const freeWidth = Math.max(MIN_FREE_PX, width - (wide ? SIDE_INSET_PX * 2 : 0));
+    const freeHeight = Math.max(MIN_FREE_PX, height - TOP_INSET_PX - BOTTOM_INSET_PX * (wide ? 1 : 2));
+    const tall = modelHeight * Math.cos(elevation) + 2 * PLINTH_RADIUS_MM * Math.sin(elevation) + TALL_PAD_MM;
+    const across = 2 * PLINTH_RADIUS_MM + ACROSS_PAD_MM;
     return Math.max((tall * height) / freeHeight, (across * height) / freeWidth) * CAMERA_FIT_PADDING;
   }
 
@@ -78,12 +95,10 @@ export function createCameraRig(canvas, reducedMotion) {
     ortho.updateProjectionMatrix();
     persp.aspect = aspect;
     persp.updateProjectionMatrix();
-    const baseDistance = span / 2 / Math.tan(radians(PERSPECTIVE_FOV) / 2);
     controls.minZoom = CAMERA_ZOOM_MIN;
     controls.maxZoom = CAMERA_ZOOM_MAX;
-    controls.minDistance = active === persp ? baseDistance / CAMERA_ZOOM_MAX : 0;
-    controls.maxDistance = active === persp ? baseDistance / CAMERA_ZOOM_MIN : Infinity;
-    return baseDistance;
+    controls.minDistance = active === persp ? baseDistance() / CAMERA_ZOOM_MAX : 0;
+    controls.maxDistance = active === persp ? baseDistance() / CAMERA_ZOOM_MIN : Infinity;
   }
 
   function place(direction, distance) {
@@ -91,41 +106,35 @@ export function createCameraRig(canvas, reducedMotion) {
     active.lookAt(controls.target);
   }
 
-  function currentDirection() {
-    return active.position.clone().sub(controls.target).normalize();
-  }
-
-  function setHeightNow(modelHeight) {
-    const previousSpan = span;
+  // New view size, camera angle and zoom kept
+  function refit(modelHeight) {
+    const direction = currentDirection();
+    const zoom = currentZoom();
     fitHeight = modelHeight;
     span = computeSpan(Math.max(MIN_FIT_HEIGHT_MM, modelHeight));
-    const baseDistance = applyProjection();
-    const direction = currentDirection();
-    const targetZ = Math.max(MIN_FIT_HEIGHT_MM, modelHeight) * TARGET_HEIGHT_SHARE - 6;
-    controls.target.set(axis.x, axis.y, targetZ);
-    if (active === persp) {
-      const distance = active.position.distanceTo(controls.target) || baseDistance;
-      place(direction, previousSpan > 0 ? (distance * span) / previousSpan : baseDistance);
-    } else {
-      place(direction, ORTHO_DISTANCE);
-    }
+    applyProjection();
+    place(direction, active === ortho ? ORTHO_DISTANCE : baseDistance() / zoom);
   }
 
-  function home(immediate) {
-    axis.set(0, 0);
-    following = true;
-    const direction = viewDirection(CAMERA_AZIMUTH_DEG, CAMERA_ELEVATION_DEG);
-    if (immediate || reducedMotion) {
-      controls.target.set(0, 0, 0);
-      active.position.copy(direction.multiplyScalar(ORTHO_DISTANCE));
-      ortho.zoom = 1;
-      setHeightNow(goalHeight);
-      if (active === persp) place(currentDirection(), applyProjection());
+  function retarget() {
+    const direction = currentDirection();
+    const distance = currentDistance();
+    controls.target.set(axis.x, axis.y, targetHeight());
+    place(direction, distance);
+  }
+
+  function currentZoom() {
+    if (active === ortho) return ortho.zoom;
+    return baseDistance() / (currentDistance() || baseDistance());
+  }
+
+  function setZoom(zoom) {
+    if (active === ortho) {
+      ortho.zoom = clampZoom(zoom);
+      ortho.updateProjectionMatrix();
     } else {
-      startTween(direction, 1, new THREE.Vector3(0, 0, Math.max(MIN_FIT_HEIGHT_MM, goalHeight) * TARGET_HEIGHT_SHARE - 6));
+      place(currentDirection(), baseDistance() / clampZoom(zoom));
     }
-    controls.update();
-    notify();
   }
 
   function startTween(direction, zoom, target) {
@@ -140,20 +149,17 @@ export function createCameraRig(canvas, reducedMotion) {
     };
   }
 
-  function currentZoom() {
-    if (active === ortho) return ortho.zoom;
-    const baseDistance = span / 2 / Math.tan(radians(PERSPECTIVE_FOV) / 2);
-    return baseDistance / active.position.distanceTo(controls.target);
-  }
-
-  function setZoom(zoom) {
-    const clamped = Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, zoom));
-    if (active === ortho) {
-      ortho.zoom = clamped;
-      ortho.updateProjectionMatrix();
+  // Jump or glide to a direction, zoom and target
+  function moveTo(direction, zoom, target, immediate) {
+    if (immediate || reducedMotion) {
+      controls.target.copy(target);
+      axis.set(target.x, target.y);
+      place(direction.clone().normalize(), active === ortho ? ORTHO_DISTANCE : baseDistance());
+      setZoom(zoom);
+      controls.update();
+      notify();
     } else {
-      const baseDistance = span / 2 / Math.tan(radians(PERSPECTIVE_FOV) / 2);
-      place(currentDirection(), baseDistance / clamped);
+      startTween(direction, zoom, target);
     }
   }
 
@@ -161,17 +167,30 @@ export function createCameraRig(canvas, reducedMotion) {
     for (const callback of changeCallbacks) callback();
   }
 
+  function home(immediate) {
+    following = true;
+    fitHeight = goalHeight;
+    span = computeSpan(Math.max(MIN_FIT_HEIGHT_MM, fitHeight));
+    applyProjection();
+    moveTo(
+      viewDirection(CAMERA_AZIMUTH_DEG, CAMERA_ELEVATION_DEG),
+      1,
+      new THREE.Vector3(0, 0, targetHeight()),
+      immediate
+    );
+  }
+
   controls.addEventListener('change', () => {
     const driftX = controls.target.x - axis.x;
     const driftY = controls.target.y - axis.y;
-    if (!tween && (Math.abs(driftX) > 1e-6 || Math.abs(driftY) > 1e-6)) {
+    if (!tween && (driftX !== 0 || driftY !== 0)) {
       controls.target.x = axis.x;
       controls.target.y = axis.y;
       active.position.x -= driftX;
       active.position.y -= driftY;
     }
-    const low = -10;
-    const high = Math.max(MIN_FIT_HEIGHT_MM, fitHeight) + 10;
+    const low = -PAN_SLACK_MM;
+    const high = Math.max(MIN_FIT_HEIGHT_MM, fitHeight) + PAN_SLACK_MM;
     const clampedZ = Math.min(high, Math.max(low, controls.target.z));
     if (clampedZ !== controls.target.z) {
       active.position.z += clampedZ - controls.target.z;
@@ -187,11 +206,16 @@ export function createCameraRig(canvas, reducedMotion) {
   canvas.addEventListener('pointerdown', (event) => {
     if (event.button === 2) stopFollowing();
   });
-  canvas.addEventListener('touchstart', (event) => {
-    if (event.touches.length > 1) stopFollowing();
-  }, { passive: true });
+  canvas.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.touches.length > 1) stopFollowing();
+    },
+    { passive: true }
+  );
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
+  active.position.copy(viewDirection(CAMERA_AZIMUTH_DEG, CAMERA_ELEVATION_DEG).multiplyScalar(ORTHO_DISTANCE));
   home(true);
 
   return {
@@ -205,14 +229,17 @@ export function createCameraRig(canvas, reducedMotion) {
     resize(newWidth, newHeight) {
       width = newWidth;
       height = newHeight;
-      setHeightNow(fitHeight);
+      refit(fitHeight);
       controls.update();
+      notify();
     },
     setModelHeight(modelHeight, immediate) {
       goalHeight = modelHeight;
-      if (immediate || reducedMotion) {
-        if (following) setHeightNow(modelHeight);
-        else fitHeight = modelHeight;
+      if (!following) {
+        fitHeight = modelHeight;
+      } else if (immediate || reducedMotion) {
+        refit(modelHeight);
+        retarget();
       }
     },
     follow() {
@@ -227,13 +254,8 @@ export function createCameraRig(canvas, reducedMotion) {
       active = next;
       controls.object = active;
       applyProjection();
-      if (active === ortho) {
-        place(direction, ORTHO_DISTANCE);
-        ortho.zoom = Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, zoom));
-        ortho.updateProjectionMatrix();
-      } else {
-        place(direction, span / 2 / Math.tan(radians(PERSPECTIVE_FOV) / 2) / zoom);
-      }
+      place(direction, active === ortho ? ORTHO_DISTANCE : baseDistance());
+      setZoom(zoom);
       controls.update();
       notify();
     },
@@ -241,38 +263,17 @@ export function createCameraRig(canvas, reducedMotion) {
       following = name === 'axon';
       const direction =
         name === 'plan'
-          ? new THREE.Vector3(0.0005, -0.001, 1)
+          ? new THREE.Vector3(...PLAN_DIRECTION)
           : name === 'elevation'
-            ? viewDirection(0, 0.01)
+            ? viewDirection(0, ELEVATION_TILT_DEG)
             : viewDirection(CAMERA_AZIMUTH_DEG, CAMERA_ELEVATION_DEG);
-      axis.set(0, 0);
-      const target = new THREE.Vector3(0, 0, Math.max(MIN_FIT_HEIGHT_MM, fitHeight) * TARGET_HEIGHT_SHARE - 6);
-      if (reducedMotion) {
-        controls.target.copy(target);
-        place(direction.normalize(), active === ortho ? ORTHO_DISTANCE : applyProjection());
-        setZoom(1);
-        controls.update();
-        notify();
-      } else {
-        startTween(direction, 1, target);
-      }
+      moveTo(direction, 1, new THREE.Vector3(0, 0, targetHeight()), false);
     },
     frame(box) {
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3()).length();
+      const size = Math.max(MIN_FRAME_SIZE_MM, box.getSize(new THREE.Vector3()).length());
       following = false;
-      axis.set(center.x, center.y);
-      const zoom = (span * FRAME_FILL) / Math.max(20, size);
-      if (reducedMotion) {
-        const direction = currentDirection();
-        controls.target.copy(center);
-        place(direction, active.position.length());
-        setZoom(zoom);
-        controls.update();
-        notify();
-      } else {
-        startTween(currentDirection(), Math.min(CAMERA_ZOOM_MAX, Math.max(1, zoom)), center);
-      }
+      moveTo(currentDirection(), clampZoom(Math.max(1, (span * FRAME_FILL) / size)), center, false);
     },
     update(delta) {
       let moving = false;
@@ -281,17 +282,17 @@ export function createCameraRig(canvas, reducedMotion) {
         const eased = tween.time * tween.time * (3 - 2 * tween.time);
         const direction = tween.fromDirection.clone().lerp(tween.toDirection, eased).normalize();
         controls.target.lerpVectors(tween.fromTarget, tween.toTarget, eased);
-        const distance = active === ortho ? ORTHO_DISTANCE : active.position.distanceTo(controls.target);
-        place(direction, distance);
+        place(direction, active === ortho ? ORTHO_DISTANCE : baseDistance());
         setZoom(tween.fromZoom + (tween.toZoom - tween.fromZoom) * eased);
         if (tween.time >= 1) {
           axis.set(tween.toTarget.x, tween.toTarget.y);
           tween = null;
         }
         moving = true;
-      } else if (following && Math.abs(goalHeight - fitHeight) > 0.25) {
+      } else if (following && Math.abs(goalHeight - fitHeight) > RISE_DONE_MM) {
         const step = 1 - Math.exp(-CAMERA_RISE_RATE * delta);
-        setHeightNow(fitHeight + (goalHeight - fitHeight) * step);
+        refit(fitHeight + (goalHeight - fitHeight) * step);
+        retarget();
         moving = true;
       }
       const changed = controls.update();

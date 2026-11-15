@@ -4,6 +4,11 @@ import { solveFeasible } from './simplex.js';
 
 const AREA_EPS = 1e-6; // smallest contact area
 const INSIDE_EPS = 1e-7; // hull boundary tolerance
+const LENGTH_EPS = 1e-6; // shortest contact edge
+const SINGULAR_EPS = 1e-9; // collinear support points
+const PULL_TOL = 1e-9; // tension allowed as rounding
+const POINT_EPS = 1e-9; // same support point
+const FORCE_EPS = 1e-12; // force treated as zero
 const LP_MAX_VARIABLES = 6000; // global solve size limit
 const levelKey = (height) => Math.round(height * 1000);
 
@@ -47,7 +52,7 @@ function findContacts(bodies) {
             const minY = Math.max(upperRect[1], lowerRect[1]);
             const maxX = Math.min(upperRect[2], lowerRect[2]);
             const maxY = Math.min(upperRect[3], lowerRect[3]);
-            if (maxX - minX > 1e-6 && maxY - minY > 1e-6 && (maxX - minX) * (maxY - minY) > AREA_EPS) {
+            if (maxX - minX > LENGTH_EPS && maxY - minY > LENGTH_EPS && (maxX - minX) * (maxY - minY) > AREA_EPS) {
               patches.push({ lower: lower.id, rect: [minX, minY, maxX, maxY] });
             }
           }
@@ -115,13 +120,13 @@ function spreadLoad(points, total, loadX, loadY) {
       count * (sumXX * sumYY - sumXY * sumXY) -
       sumX * (sumX * sumYY - sumXY * sumY) +
       sumY * (sumX * sumXY - sumXX * sumY);
-    if (Math.abs(determinant) < 1e-9) break;
+    if (Math.abs(determinant) < SINGULAR_EPS) break;
     const base = (total * (sumXX * sumYY - sumXY * sumXY)) / determinant;
     const slopeX = (-total * (sumX * sumYY - sumXY * sumY)) / determinant;
     const slopeY = (total * (sumX * sumXY - sumXX * sumY)) / determinant;
     const forces = new Float64Array(points.length);
     let worst = -1;
-    let worstForce = -1e-9 * total;
+    let worstForce = -PULL_TOL * total;
     for (const index of active) {
       const force = base + slopeX * (points[index].x - loadX) + slopeY * (points[index].y - loadY);
       forces[index] = force;
@@ -144,7 +149,7 @@ function cornerLoad(points, total, loadX, loadY) {
   const hull = convexHull(points.map((point) => [point.x, point.y]));
   const forces = new Float64Array(points.length);
   const indexOf = (corner) =>
-    points.findIndex((point) => Math.abs(point.x - corner[0]) < 1e-9 && Math.abs(point.y - corner[1]) < 1e-9);
+    points.findIndex((point) => Math.abs(point.x - corner[0]) < POINT_EPS && Math.abs(point.y - corner[1]) < POINT_EPS);
   if (hull.length === 1) {
     forces[indexOf(hull[0])] = total;
     return forces;
@@ -270,7 +275,7 @@ function globalSolve(bodies, contacts, grounded, masses, margin) {
   const merged = new Map();
   variables.forEach((variable, index) => {
     const force = solution[index] * weightScale;
-    if (force <= 1e-12) return;
+    if (force <= FORCE_EPS) return;
     const key = variable.upper + ':' + variable.lower;
     let entry = merged.get(key);
     if (!entry) merged.set(key, (entry = { upper: variable.upper, lower: variable.lower, force: 0, x: 0, y: 0, z: variable.z }));

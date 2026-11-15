@@ -10,6 +10,31 @@ const SKETCH_END = 0.4; // sketch share of build
 const POUR_MID = 0.55; // second pour step
 const SET_START = 0.7; // curing start
 const DETAIL_START = 0.85; // details appear
+const JOINT_EDGE = 0.09; // board joint width share
+const TOP_JOINT_SHARE = 0.45; // joint strength on flat faces
+const GRAIN_PER_MM = 3; // grain cells per mm
+const SHARPEN = 1.6; // texture fade with distance
+const INSTANCE_TONE = 0.06; // tone change between modules
+const DETAIL_FLASH = 0.3; // brightness when details pop
+const RING_WIDTH_MM = 1.2; // plinth rim line width
+const RING_DARKEN = 0.22; // plinth rim line strength
+const RIM_INNER_MM = 2; // grid stops inside the rim
+const GRID_STRENGTH = 0.35; // plinth grid line strength
+const SELECT_MIX = 0.3; // selection tint amount
+const INVALID_MIX = 0.75; // bad placement tint amount
+const HIGHLIGHT_MIX = 0.6; // assembly step tint amount
+const DRAWING_KEEP = 0.6; // tint kept in drawing mode
+const BLUE = 'vec3(0.14, 0.27, 0.78)'; // drafting blue
+const RED = 'vec3(0.8, 0.16, 0.16)'; // fail red
+const ORANGE = 'vec3(0.91, 0.35, 0.05)'; // signal orange
+const PAPER = 'vec3(0.965, 0.957, 0.937)'; // drawing paper
+const SWAY_SPEED = 1.9; // tarp sway rate
+const SWAY_WAVE_X = 0.45; // tarp ripple along x
+const SWAY_WAVE_Y = 0.3; // tarp ripple along y
+const MODULE_ROUGHNESS = 0.92; // concrete roughness
+const PLINTH_ROUGHNESS = 0.95; // plinth roughness
+const PLINTH_COLOR = 0xb3b2ae; // plinth grey
+const glsl = (value) => value.toFixed(3);
 
 // Instance states
 export const STATE_NORMAL = 0;
@@ -66,7 +91,7 @@ if (uEffects > 0.5 && aMeta.x > 3.5) {
   vec2 arm = transformed.xy - aMeta.yz;
   transformed.xy = aMeta.yz + vec2(arm.x * cos(angle) - arm.y * sin(angle), arm.x * sin(angle) + arm.y * cos(angle));
 } else if (uEffects > 0.5 && aMeta.x > 2.5) {
-  transformed.z += sin(uTime * 1.9 + position.x * 0.45 + position.y * 0.3) * uSway * aMeta.y;
+  transformed.z += sin(uTime * ${glsl(SWAY_SPEED)} + position.x * ${glsl(SWAY_WAVE_X)} + position.y * ${glsl(SWAY_WAVE_Y)}) * uSway * aMeta.y;
 }
 `;
 
@@ -99,30 +124,30 @@ if (vKind < 0.5) {
   float upright = 1.0 - step(0.5, abs(arcoNormal.z));
   float boardCoord = mix(vLocal.x, vLocal.z, upright) / ${BOARD_MM.toFixed(1)};
   float board = fract(boardCoord);
-  float sharp = clamp(1.0 - fwidth(boardCoord) * 1.6, 0.0, 1.0);
-  float joint = (1.0 - smoothstep(0.0, 0.09, board) * (1.0 - smoothstep(0.91, 1.0, board))) * sharp;
+  float sharp = clamp(1.0 - fwidth(boardCoord) * ${glsl(SHARPEN)}, 0.0, 1.0);
+  float joint = (1.0 - smoothstep(0.0, ${glsl(JOINT_EDGE)}, board) * (1.0 - smoothstep(${glsl(1 - JOINT_EDGE)}, 1.0, board))) * sharp;
   float tone = (arcoHash(vec3(floor(boardCoord), vTone * 91.0, upright)) - 0.5) * ${BOARD_TONE.toFixed(3)} * sharp;
-  float grain = (arcoHash(floor(vLocal * 3.0)) - 0.5) * ${GRAIN.toFixed(3)} * sharp;
-  diffuseColor.rgb *= 1.0 - joint * ${BOARD_LINE_DARKEN.toFixed(2)} * mix(0.45, 1.0, upright) + tone + grain + (vTone - 0.5) * 0.06;
+  float grain = (arcoHash(floor(vLocal * ${glsl(GRAIN_PER_MM)})) - 0.5) * ${GRAIN.toFixed(3)} * sharp;
+  diffuseColor.rgb *= 1.0 - joint * ${BOARD_LINE_DARKEN.toFixed(2)} * mix(${glsl(TOP_JOINT_SHARE)}, 1.0, upright) + tone + grain + (vTone - 0.5) * ${glsl(INSTANCE_TONE)};
   diffuseColor.rgb *= mix(1.0, ${WET_DARKEN.toFixed(2)}, arcoWet);
 } else {
-  diffuseColor.rgb += (1.0 - smoothstep(${DETAIL_START.toFixed(2)}, 1.0, vPhase)) * 0.3;
+  diffuseColor.rgb += (1.0 - smoothstep(${DETAIL_START.toFixed(2)}, 1.0, vPhase)) * ${glsl(DETAIL_FLASH)};
 }
 #ifdef ARCO_PLINTH
 float ringRadius = length(vLocal.xy);
-float ring = smoothstep(1.2, 0.0, abs(ringRadius - ARCO_RING)) * step(0.5, abs(arcoNormal.z));
-diffuseColor.rgb *= 1.0 - ring * 0.22;
+float ring = (1.0 - smoothstep(0.0, ${glsl(RING_WIDTH_MM)}, abs(ringRadius - ARCO_RING))) * step(0.5, abs(arcoNormal.z));
+diffuseColor.rgb *= 1.0 - ring * ${glsl(RING_DARKEN)};
 vec2 cellCoord = vLocal.xy / ARCO_CELL;
 vec2 cellLine = abs(fract(cellCoord - 0.5) - 0.5) / fwidth(cellCoord);
-float gridLine = (1.0 - min(min(cellLine.x, cellLine.y), 1.0)) * step(ringRadius, ARCO_RING - 2.0) * step(0.5, arcoNormal.z);
-diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.14, 0.27, 0.78), gridLine * 0.35 * uGrid);
+float gridLine = (1.0 - min(min(cellLine.x, cellLine.y), 1.0)) * step(ringRadius, ARCO_RING - ${glsl(RIM_INNER_MM)}) * step(0.5, arcoNormal.z);
+diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, gridLine * ${glsl(GRID_STRENGTH)} * uGrid);
 #endif
-if (vState > 0.5 && vState < 1.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.14, 0.27, 0.78), 0.3);
-if (vState > 2.5 && vState < 3.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.16, 0.16), 0.75);
-if (vState > 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.91, 0.35, 0.05), 0.6);
+if (vState > 0.5 && vState < 1.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, ${glsl(SELECT_MIX)});
+if (vState > 2.5 && vState < 3.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${RED}, ${glsl(INVALID_MIX)});
+if (vState > 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${ORANGE}, ${glsl(HIGHLIGHT_MIX)});
 if (uDrawing > 0.5) {
   float keep = step(0.5, vState);
-  diffuseColor.rgb = mix(vec3(0.965, 0.957, 0.937), diffuseColor.rgb, keep * 0.6);
+  diffuseColor.rgb = mix(${PAPER}, diffuseColor.rgb, keep * ${glsl(DRAWING_KEEP)});
 }
 `;
 
@@ -149,7 +174,7 @@ function patch(material, defines) {
 
 export function createModuleMaterials() {
   const lit = patch(
-    new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
+    new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: MODULE_ROUGHNESS, metalness: 0 }),
     { ARCO_INSTANCED: '' }
   );
   const depth = patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), { ARCO_INSTANCED: '' });
@@ -158,7 +183,7 @@ export function createModuleMaterials() {
 
 export function createPlinthMaterial(ringRadius, cellSize) {
   return patch(
-    new THREE.MeshStandardMaterial({ color: 0xb3b2ae, flatShading: true, roughness: 0.95, metalness: 0 }),
+    new THREE.MeshStandardMaterial({ color: PLINTH_COLOR, flatShading: true, roughness: PLINTH_ROUGHNESS, metalness: 0 }),
     { ARCO_PLINTH: '', ARCO_RING: ringRadius.toFixed(1), ARCO_CELL: cellSize.toFixed(1) }
   );
 }

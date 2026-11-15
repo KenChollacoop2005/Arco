@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { checkStability, quickStable } from '../js/core/stability.js';
 import { STABILITY_MARGIN } from '../js/config.js';
 
-const BLOCK_LENGTH = 100;
-const BLOCK_WIDTH = 40;
-const BLOCK_HEIGHT = 10;
+const BLOCK_LENGTH = 100; // block length in mm
+const BLOCK_WIDTH = 40; // block width in mm
+const BLOCK_HEIGHT = 10; // block height in mm
 
-// Table plus n blocks, block k from the top overhangs by scale * L / (2k)
+// Table plus n blocks at harmonic offsets
 function bookStack(count, scale) {
   const bodies = [{ id: 1, rects: [[-400, 0, 0, BLOCK_WIDTH]], z0: 0, z1: BLOCK_HEIGHT }];
   let right = 0;

@@ -19,7 +19,7 @@ const SMALL = ['1x1', '1x2'];
 const MID = ['1x1', '1x2', '2x2', 'L3'];
 const BOXY = ['1x1', '1x2', '2x2', '2x3'];
 
-// Fields: group, label, theme, footprints, heights, stack, ground, spanning, rails, roofable
+// Columns match the destructuring below
 const TABLE = [
   ['core', 'Structure', 'Core', 'neutral', MID, [1, 4], 1, 0, 0, 1, 1],
   ['pilotis', 'Structure', 'Pilotis', 'neutral', ANY, [1, 2], 1, 0, 0, 1, 0],

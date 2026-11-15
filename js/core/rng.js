@@ -1,3 +1,5 @@
+const SEED_LENGTH = 6; // characters in a new seed
+
 export function hashString(text) {
   let hash = 2166136261;
   for (let index = 0; index < text.length; index++) {
@@ -51,7 +53,7 @@ export function makeRng(seed) {
 export function randomSeedText() {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
   let text = '';
-  for (let index = 0; index < 6; index++) {
+  for (let index = 0; index < SEED_LENGTH; index++) {
     text += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
   return text;

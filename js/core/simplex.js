@@ -2,8 +2,12 @@ const PIVOT_EPS = 1e-9; // smallest usable pivot
 const COST_EPS = 1e-9; // reduced cost tolerance
 const FEASIBLE_TOL = 1e-7; // leftover infeasibility allowed
 const STALL_LIMIT = 40; // stalls before Bland's rule
+const STALL_EPS = 1e-12; // objective change counted as none
+const RATIO_TIE = 1e-12; // equal ratios in the ratio test
+const ITERATIONS_PER_SIZE = 60; // pivot budget per row and column
+const ITERATIONS_BASE = 200; // pivot budget floor
 
-// Finds x >= 0 with rows * x = rhs, or null
+// Feasible x for rows * x = rhs
 export function solveFeasible(rows, rhs, variableCount) {
   const rowCount = rows.length;
   const width = variableCount + 1;
@@ -20,7 +24,7 @@ export function solveFeasible(rows, rhs, variableCount) {
     for (let column = 0; column < width; column++) table[costBase + column] -= table[base + column];
   }
   const basis = new Int32Array(rowCount).fill(-1);
-  const iterationLimit = 60 * (rowCount + variableCount) + 200;
+  const iterationLimit = ITERATIONS_PER_SIZE * (rowCount + variableCount) + ITERATIONS_BASE;
   let stalls = 0;
   let lastObjective = table[costBase + variableCount];
   for (let iteration = 0; iteration < iterationLimit; iteration++) {
@@ -48,7 +52,7 @@ export function solveFeasible(rows, rhs, variableCount) {
       const pivot = table[row * width + entering];
       if (pivot > PIVOT_EPS) {
         const ratio = table[row * width + variableCount] / pivot;
-        if (ratio < bestRatio - 1e-12 || (ratio < bestRatio + 1e-12 && leaving >= 0 && basis[row] < basis[leaving])) {
+        if (ratio < bestRatio - RATIO_TIE || (ratio < bestRatio + RATIO_TIE && leaving >= 0 && basis[row] < basis[leaving])) {
           bestRatio = ratio;
           leaving = row;
         }
@@ -69,7 +73,7 @@ export function solveFeasible(rows, rhs, variableCount) {
     }
     basis[leaving] = entering;
     const objective = table[costBase + variableCount];
-    if (Math.abs(objective - lastObjective) < 1e-12) stalls++;
+    if (Math.abs(objective - lastObjective) < STALL_EPS) stalls++;
     else stalls = 0;
     lastObjective = objective;
   }

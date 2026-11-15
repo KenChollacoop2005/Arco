@@ -18,13 +18,13 @@ const TYPES = {
 };
 
 createServer(async (request, response) => {
-  const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-  const relative = normalize(path.endsWith('/') ? path + 'index.html' : path).replace(/^([/\\])+/, '');
-  if (relative.startsWith('..')) {
-    response.writeHead(403).end();
-    return;
-  }
   try {
+    const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+    const relative = normalize(path.endsWith('/') ? path + 'index.html' : path).replace(/^([/\\])+/, '');
+    if (relative.startsWith('..')) {
+      response.writeHead(403).end();
+      return;
+    }
     const body = await readFile(join(ROOT, relative));
     response.writeHead(200, {
       'Content-Type': TYPES[extname(relative)] || 'application/octet-stream',

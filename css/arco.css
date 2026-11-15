@@ -370,19 +370,18 @@ body[data-mode='drawing'] .title-block { display: grid; }
   :root { --gap: 8px; --bar-height: 46px; }
   .topbar { gap: 10px; }
   .wordmark { font-size: 24px; }
-  .tabs button { padding: 8px 8px 6px; }
+  .tabs button { padding: 8px 6px 6px; font-size: 12px; }
   .panel-left { right: var(--gap); width: auto; max-height: 46%; }
   .panel-right {
     display: none;
     top: auto;
     left: var(--gap);
-    bottom: calc(var(--gap) + 104px);
+    bottom: calc(var(--gap) + 150px);
     width: auto;
-    max-height: 36%;
+    max-height: 34%;
   }
   body.has-selection .panel-right { display: block; }
-  body.has-selection .legend { display: none; }
-  .legend { left: var(--gap); right: auto; bottom: calc(var(--gap) + 104px); width: 210px; }
+  .legend { left: var(--gap); right: auto; bottom: calc(var(--gap) + 104px); width: 210px; z-index: 4; }
   .bottombar { left: var(--gap); right: var(--gap); transform: none; max-width: none; }
   .toggle span { padding: 8px; }
   .export-panel { left: var(--gap); right: var(--gap); width: auto; transform: none; bottom: calc(var(--gap) + 104px); }
