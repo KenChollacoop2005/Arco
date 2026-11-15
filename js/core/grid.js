@@ -136,6 +136,33 @@ export function toBody(instance) {
   };
 }
 
+const TURN_COS_SIN = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
+// Where a module's local mesh sits, in mm
+export function instancePose(instance) {
+  const [sizeX, sizeY] = footprintSize(instance.fp, 0);
+  const width = sizeX * CELL_MM;
+  const depth = sizeY * CELL_MM;
+  const turns = instance.rot & 3;
+  const shift = [[0, 0], [depth, 0], [width, depth], [0, width]][turns];
+  return { turns, x: instance.x * CELL_MM + shift[0], y: instance.y * CELL_MM + shift[1], z: instance.z * STORY_MM };
+}
+
+export function poseApply(pose, localX, localY, localZ) {
+  const [cos, sin] = TURN_COS_SIN[pose.turns];
+  return [pose.x + localX * cos - localY * sin, pose.y + localX * sin + localY * cos, pose.z + localZ];
+}
+
+// Footprint outline corners in local mm
+export function footprintOutline(footprintId) {
+  const [sizeX, sizeY] = footprintSize(footprintId, 0);
+  const corners =
+    FOOTPRINTS[footprintId].length === sizeX * sizeY
+      ? [[0, 0], [sizeX, 0], [sizeX, sizeY], [0, sizeY]]
+      : [[0, 0], [sizeX, 0], [sizeX, 1], [1, 1], [1, sizeY], [0, sizeY]];
+  return corners.map(([cornerX, cornerY]) => [cornerX * CELL_MM, cornerY * CELL_MM]);
+}
+
 export function variantKey(variant) {
   return [
     variant.family,

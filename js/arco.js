@@ -1,8 +1,11 @@
-import { CLEARANCE_MIN_MM, CLEARANCE_MAX_MM, CLEARANCE_STEP_MM, CONNECTOR_CLEARANCE_MM } from './config.js';
+import { CLEARANCE_MIN_MM, CLEARANCE_MAX_MM, CLEARANCE_STEP_MM, CONNECTOR_CLEARANCE_MM, STORY_MM } from './config.js';
 import { COPY } from './ui/copy.js';
 import { setupLegend } from './ui/legend.js';
+import { setupGenerate } from './ui/generate.js';
 import { createScene } from './render/scene.js';
 import { createCameraRig } from './render/camera.js';
+import { createModuleView } from './render/modules.js';
+import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -28,7 +31,41 @@ const PANE_TITLES = {
   drawing: COPY.drawingTitle,
 };
 
-export const app = { view, rig, mode: 'generate', reducedMotion, modeListeners: [] };
+const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
+const solids = createWorkerClient(new URL('./workers/solids.worker.js', import.meta.url));
+const modules = createModuleView(view, (variants, onPart) =>
+  solids.call({ variants, clearance: CONNECTOR_CLEARANCE_MM }, onPart)
+);
+
+export const app = {
+  view,
+  rig,
+  modules,
+  mode: 'generate',
+  reducedMotion,
+  structure: null,
+  modeListeners: [],
+  structureListeners: [],
+};
+
+let generateToken = 0;
+
+// Runs the generator and shows the result
+async function generateStructure(options) {
+  const token = ++generateToken;
+  const result = await generator.call({ options });
+  if (token !== generateToken) return null;
+  app.structure = result;
+  const heightMm = Math.max(0, ...result.modules.map((instance) => instance.z + instance.h)) * STORY_MM;
+  rig.follow();
+  rig.setModelHeight(heightMm, false);
+  view.fitLight(heightMm);
+  for (const listener of app.structureListeners) listener(result, 'start');
+  await modules.setStructure(result.modules, { animate: !reducedMotion && !query('#skipAnimation').checked });
+  if (token !== generateToken) return null;
+  for (const listener of app.structureListeners) listener(result, 'ready');
+  return result;
+}
 
 export function setMode(mode) {
   app.mode = mode;
@@ -59,3 +96,5 @@ clearanceInput.min = CLEARANCE_MIN_MM;
 clearanceInput.max = CLEARANCE_MAX_MM;
 clearanceInput.step = CLEARANCE_STEP_MM;
 clearanceInput.value = CONNECTOR_CLEARANCE_MM;
+
+setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
