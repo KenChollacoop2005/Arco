@@ -12,13 +12,14 @@ import {
   worldHeight,
   columnTop,
   toBody,
+  claimedCells,
   structureHash,
 } from './grid.js';
 import { FAMILIES, FAMILY_IDS, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
-import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, cleanProfiles, packProfiles } from './profiles.js';
+import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, cleanProfiles, packProfiles, profileAt } from './profiles.js';
 
 export const SCALES = ['unit', 'block', 'mega'];
 
@@ -69,21 +70,32 @@ const SIDE_KINDS = [[FLUSH, 3], [INSET, 2], [INSET_BALCONY, 2.5], [INSET_BALCONY
 // Kind used when a side has no open air
 const INSIDE_KIND = { [INSET_BALCONY_OUT]: INSET_BALCONY, [BULGE]: INSET, [BULGE_BALCONY]: INSET_BALCONY, [WRAP]: INSET_BALCONY };
 
-const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5]];
+// Penthouse balconies, picked per side
+const PENTHOUSE_KINDS = [[INSET_BALCONY_OUT, 2], [BULGE_BALCONY, 2], [WRAP, 1.5]];
+const PROP_KINDS = [BULGE, BULGE_BALCONY]; // profiles a strut may stand under
+const PROP_CHANCE = 0.6; // chance a bulge gets a strut
+const PROP_SEED = 0x57a17; // keeps strut rolls apart from layout rolls
+const SPAN_TRIES = [1, 2, 3]; // gap bridges by density
+const PENTHOUSE_CHANCE = 0.7; // chance a tower top gets a penthouse
+const PENTHOUSE_CAP_CHANCE = 0.5; // share of those that end the tower
+const SPAN_MEGA = 3; // gap bridge multiplier for megastructures
+
+const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8]];
 const UPPER_MASS = [
   ['housing', 5], ['studio', 2], ['hall', 1.5], ['deck', 1.5], ['brise', 1.2], ['fins', 1.2],
   ['panel', 1.2], ['transfer', 0.8], ['spout', 0.4], ['pilotis', 0.7], ['stair', 0.3],
+  ['shacks', 1.5], ['flared', 1.2],
 ];
 const CANTILEVER_FAMILIES = ['housing', 'studio', 'deck', 'brise', 'fins', 'hall'];
 const CANTILEVER_SHAPES = ['2x3', 'L4', 'L3', '2x2'];
-const SETBACK_CAPS = [['balcony', 2], ['terrace', 3], ['walkway', 1.5], ['skylight', 0.6], ['garden', 1]];
-const ROOF_CAPS = [['tank', 2], ['plant', 2], ['vent', 2], ['skylight', 1.5], ['antenna', 1.2], ['terrace', 1]];
-const ROOF_INDUSTRIAL = [['smokestack', 3], ['pipes', 2], ['tankfarm', 2], ['chimney', 2], ['cooling', 2], ['gantry', 1]];
+const SETBACK_CAPS = [['balcony', 2], ['terrace', 3], ['skylight', 0.6], ['garden', 1]];
+const ROOF_CAPS = [['tank', 2], ['plant', 2], ['vent', 2], ['skylight', 1.5], ['antenna', 1.2], ['terrace', 1], ['penthouse', 1.5]];
+const ROOF_INDUSTRIAL = [['smokestack', 3], ['pipes', 2], ['tankfarm', 2], ['chimney', 2], ['cooling', 2]];
 const ROOF_ECO = [['solar', 3], ['turbine', 2], ['farm', 2], ['greenhouse', 2], ['market', 1], ['planted', 2], ['garden', 2]];
 const GROUND_CAPS = [['steps', 2], ['planter', 2], ['patio', 2], ['ramp', 1], ['buttress', 1.5]];
 const GROUND_INDUSTRIAL = [['pipes', 2], ['tankfarm', 2], ['cooling', 1.5], ['smokestack', 1], ['chimney', 1]];
 const GROUND_ECO = [['planter', 2], ['market', 2], ['farm', 2], ['greenhouse', 1.5], ['patio', 1], ['garden', 1.5]];
-const UNIT_SKIP = ['bridge', 'gantry']; // need two supports
+const UNIT_SKIP = ['bridge', 'gantry', 'walkway']; // need two supports
 
 const cellKey = (cellX, cellY) => (cellX + 64) * 256 + (cellY + 64);
 const area = (footprintId) => FOOTPRINTS[footprintId].length;
@@ -415,6 +427,48 @@ function cantilevers(ctx) {
   }
 }
 
+// Penthouse on a tower top: a cap, or a floor that carries more
+function penthouses(ctx) {
+  const { rng, world } = ctx;
+  const family = FAMILIES.penthouse;
+  for (const tower of ctx.towers) {
+    if (tower.cells.length === 0 || !rng.chance(PENTHOUSE_CHANCE)) continue;
+    const cell = rng.pick(tower.cells);
+    const level = columnTop(world, cell[0], cell[1], worldHeight(world));
+    const cellOk = (cellX, cellY) =>
+      ctx.inSite.has(cellKey(cellX, cellY)) && columnTop(world, cellX, cellY, worldHeight(world)) === level && supportedAt(world, cellX, cellY, level);
+    for (const footprintId of shapeOrder(ctx, family.footprints)) {
+      const fit = fits(ctx, footprintId, cell, cellOk);
+      if (!fit) continue;
+      const stories = rng.int(family.minStories, family.maxStories);
+      const roof = rng.chance(PENTHOUSE_CAP_CHANCE);
+      if (place(ctx, { family: family.id, fp: fit.fp, h: stories, seed: tower.seed, roof, x: fit.x, y: fit.y, z: level, rot: fit.rot })) break;
+    }
+  }
+}
+
+// Walkways and gantries over one cell gaps
+function spans(ctx) {
+  const { rng, opts, world } = ctx;
+  let left = SPAN_TRIES[opts.density] * (opts.scale === 'mega' ? SPAN_MEGA : 1);
+  const topOf = (cellX, cellY) => columnTop(world, cellX, cellY, worldHeight(world));
+  for (const [cellX, cellY] of rng.shuffle(ctx.site)) {
+    if (left === 0) return;
+    for (const rot of rng.shuffle([0, 1])) {
+      const [stepX, stepY] = SIDES[rot];
+      const ends = [[cellX - stepX, cellY - stepY], [cellX + stepX, cellY + stepY]];
+      if (!ends.every((end) => ctx.inSite.has(cellKey(end[0], end[1])))) continue;
+      const level = topOf(ends[0][0], ends[0][1]);
+      if (level === 0 || topOf(ends[1][0], ends[1][1]) !== level || topOf(cellX, cellY) >= level) continue;
+      if (!ends.every((end) => supportedAt(world, end[0], end[1], level))) continue;
+      const family = themed(ctx, cellX, cellY, 'walkway', 'gantry', 'walkway');
+      if (!place(ctx, { family, fp: '1x3', h: 1, seed: rng.int(1, CAP_SEEDS), x: ends[0][0], y: ends[0][1], z: level, rot })) continue;
+      left--;
+      break;
+    }
+  }
+}
+
 function freeAbove(world, instance) {
   const top = worldHeight(world);
   return instanceCells(instance).every(([cellX, cellY]) => emptyAt(world, cellX, cellY, instance.z + instance.h, top - instance.z - instance.h + 1));
@@ -444,7 +498,7 @@ function capCell(ctx, cell, level, table) {
   for (const footprintId of shapeOrder(ctx, family.footprints)) {
     const fit = fits(ctx, footprintId, cell, cellOk);
     if (!fit) continue;
-    const placed = place(ctx, { family: family.id, fp: fit.fp, h: stories, seed: rng.int(1, CAP_SEEDS), x: fit.x, y: fit.y, z: level, rot: fit.rot });
+    const placed = place(ctx, { family: family.id, fp: fit.fp, h: stories, seed: rng.int(1, CAP_SEEDS), roof: family.roofable, x: fit.x, y: fit.y, z: level, rot: fit.rot });
     if (placed) return placed;
   }
   return null;
@@ -542,8 +596,11 @@ function setProfiles(ctx) {
   for (const instance of world.modules.values()) {
     const family = FAMILIES[instance.family];
     if (ctx.locked.has(instance.id) || !family.profiles || !PROFILE_FOOTPRINTS[instance.fp]) continue;
-    if ((instance.mask & 15) === 0 || !rng.chance(PROFILED_CHANCE)) continue;
+    const penthouse = instance.family === 'penthouse';
+    if ((instance.mask & 15) === 0 || (!penthouse && !rng.chance(PROFILED_CHANCE))) continue;
     const kinds = [FLUSH, FLUSH, FLUSH, FLUSH];
+    // A penthouse keeps one side without a balcony
+    const bare = penthouse && (instance.mask & 15) === 15 ? rng.int(0, 3) : -1;
     const legal = () => {
       const prof = cleanProfiles(packProfiles(kinds), instance.mask, instance.fp, true);
       if (prof) instance.prof = prof;
@@ -551,8 +608,12 @@ function setProfiles(ctx) {
       return checkPlacement(world, instance).ok;
     };
     for (const side of rng.shuffle([0, 1, 2, 3])) {
-      if (((instance.mask >> side) & 1) === 0) continue;
-      const kind = rng.weighted(SIDE_KINDS);
+      if (((instance.mask >> side) & 1) === 0 || side === bare) continue;
+      // The side after a wrap already carries its arm
+      if (penthouse && kinds[(side + 3) & 3] === WRAP) continue;
+      let kind = rng.weighted(penthouse ? PENTHOUSE_KINDS : SIDE_KINDS);
+      const next = (side + 1) & 3;
+      if (penthouse && kind === WRAP && (next === bare || ((instance.mask >> next) & 1) === 0 || kinds[next] === WRAP)) kind = INSET_BALCONY_OUT;
       kinds[side] = kind;
       if (legal()) continue;
       kinds[side] = INSIDE_KIND[kind] || FLUSH;
@@ -570,6 +631,27 @@ function setProfiles(ctx) {
     for (const instance of weak) delete instance.prof;
   }
   if (checkStability(bodiesOf(world)).status !== 'pass') for (const instance of changed) delete instance.prof;
+}
+
+// Struts in the open cell under a bulge
+function props(ctx) {
+  const { world, opts } = ctx;
+  const rng = makeRng(mixSeed(hashString(opts.seed), PROP_SEED));
+  const struts = [];
+  for (const instance of [...world.modules.values()]) {
+    if (!instance.prof || instance.z === 0) continue;
+    for (const claim of claimedCells(instance)) {
+      if (claim.side < 0 || !PROP_KINDS.includes(profileAt(instance.prof, (claim.side - instance.rot + 4) & 3))) continue;
+      if (!rng.chance(PROP_CHANCE)) continue;
+      const base = columnTop(world, claim.x, claim.y, instance.z - 1);
+      const stories = instance.z - base;
+      if (stories < 1 || stories > FAMILIES.strut.maxStories || !supportedAt(world, claim.x, claim.y, base)) continue;
+      const strut = place(ctx, { family: 'strut', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: claim.x, y: claim.y, z: base, rot: claim.side });
+      if (strut) struts.push(strut);
+    }
+  }
+  if (opts.unstable || struts.length === 0 || checkStability(bodiesOf(world)).status === 'pass') return;
+  for (const strut of struts) removeModule(world, strut.id);
 }
 
 function unit(ctx) {
@@ -654,6 +736,8 @@ export function generate(options) {
     planHeights(ctx);
     massing(ctx);
     cantilevers(ctx);
+    penthouses(ctx);
+    spans(ctx);
     roofs(ctx);
     dressTops(ctx, CAP_CHANCE[opts.density]);
     dressGround(ctx, GROUND_CHANCE[opts.density]);
@@ -665,6 +749,7 @@ export function generate(options) {
   }
   setMasks(world, ctx.locked);
   setProfiles(ctx);
+  if (opts.scale !== 'unit') props(ctx);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );

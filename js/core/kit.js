@@ -15,6 +15,7 @@ const MIN_LOBE_MM = 1.2; // narrowest outline step worth keeping
 const RECTS = {
   '1x1': [[0, 0, 1, 1]],
   '1x2': [[0, 0, 2, 1]],
+  '1x3': [[0, 0, 3, 1]],
   '2x2': [[0, 0, 2, 2]],
   '2x3': [[0, 0, 3, 2]],
   L3: [[0, 0, 2, 1], [0, 0, 1, 2]],

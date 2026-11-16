@@ -1,7 +1,7 @@
 import { CELL_MM, STORY_MM } from '../config.js';
 import { canSupport } from './catalog.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
-import { voxelKey } from './grid.js';
+import { voxelKey, claimedCells } from './grid.js';
 import { FACE_TOP } from './analysis.js';
 
 const EDGE_KEEP_MM = 6; // decor stays this far inside a cell
@@ -16,8 +16,15 @@ export function decorItems(analysis, modules, seedText) {
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
   const base = hashString(String(seedText));
   const items = [];
+  // Space a bulge or balcony reaches into stays empty
+  const claimed = new Set();
+  for (const instance of modules) {
+    for (const claim of claimedCells(instance)) {
+      for (let level = instance.z; level < instance.z + instance.h; level++) claimed.add(voxelKey(claim.x, claim.y, level));
+    }
+  }
   for (const face of analysis.faces) {
-    if (face.dir !== FACE_TOP || !face.sky) continue;
+    if (face.dir !== FACE_TOP || !face.sky || claimed.has(voxelKey(face.x, face.y, face.level + 1))) continue;
     const instance = byId.get(face.module);
     if (!instance || !canSupport(instance)) continue;
     const rng = makeRng(mixSeed(mixSeed(base, face.module), voxelKey(face.x, face.y, face.level)));

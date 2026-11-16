@@ -11,6 +11,7 @@ export const PORT_TYPES = {
   hook: { label: 'Cable hook', capacity: 2 },
   balcony: { label: 'Balcony slot', capacity: 1 },
   infill: { label: 'Infill slot', capacity: 1 },
+  seat: { label: 'Bearing seat', capacity: 1 },
 };
 
 export const PORT_FACES = ['top', 'bottom', 'facade', 'connector', 'side'];
@@ -23,6 +24,18 @@ export const FAMILY_PORTS = {
     { type: 'balcony', face: 'facade', each: 'story', at: [0.5, 0.3] },
     { type: 'infill', face: 'facade', each: 'story', at: [0.5, 0.5] },
   ],
+  penthouse: [
+    { type: 'balcony', face: 'facade', each: 'story', at: [0.5, 0.1] },
+    { type: 'wire', face: 'facade', each: 'cell', at: [0.5, 0.85] },
+  ],
+  shacks: [
+    { type: 'hook', face: 'facade', each: 'story', at: [0.5, 0.9] },
+    { type: 'wire', face: 'facade', each: 'cell', at: [0.5, 0.85] },
+  ],
+  flared: [{ type: 'wire', face: 'facade', each: 'cell', at: [0.5, 0.85] }],
+  strut: [{ type: 'seat', face: 'top', each: 'module', at: [0.5, 0.5] }],
+  walkway: [{ type: 'seat', face: 'bottom', each: 'cell', at: [0.5, 0.5] }],
+  gantry: [{ type: 'seat', face: 'bottom', each: 'cell', at: [0.5, 0.5] }],
   tank: [
     { type: 'inlet', face: 'top', each: 'module', at: [0.5, 0.5] },
     { type: 'outlet', face: 'side', each: 'module', at: [0.5, 0.15] },

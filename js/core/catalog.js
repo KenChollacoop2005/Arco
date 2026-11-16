@@ -1,4 +1,3 @@
-import { FOOTPRINT_IDS } from './grid.js';
 import { cleanProfiles } from './profiles.js';
 
 export const ROLE_GROUPS = [
@@ -15,7 +14,8 @@ export const ROLE_GROUPS = [
 
 export const PLACEMENTS = ['Facade', 'Interior', 'Filler', 'Cap', 'Base', 'Spanning'];
 
-const ANY = FOOTPRINT_IDS;
+const ANY = ['1x1', '1x2', '2x2', '2x3', 'L3', 'L4'];
+const SPAN = ['1x3', '2x3']; // two ends and one cell between
 const SMALL = ['1x1', '1x2'];
 const MID = ['1x1', '1x2', '2x2', 'L3'];
 const BOXY = ['1x1', '1x2', '2x2', '2x3'];
@@ -25,12 +25,16 @@ const TABLE = [
   ['core', 'Structure', 'Core', 'neutral', MID, [1, 4], 1, 0, 0, 1, 1],
   ['pilotis', 'Structure', 'Pilotis', 'neutral', ANY, [1, 2], 1, 0, 0, 1, 0],
   ['transfer', 'Structure', 'Transfer slab', 'neutral', ANY, [1, 1], 1, 0, 0, 1, 0],
+  ['strut', 'Structure', 'Strut', 'neutral', ['1x1'], [1, 3], 1, 0, 0, 0, 0],
   ['buttress', 'Structure', 'Buttress', 'neutral', SMALL, [1, 4], 0, 1, 0, 0, 0],
   ['housing', 'Living', 'Housing unit', 'neutral', ANY, [1, 4], 1, 0, 0, 1, 1],
   ['studio', 'Living', 'Studio', 'neutral', MID, [1, 2], 1, 0, 0, 1, 1],
   ['hall', 'Living', 'Communal hall', 'neutral', ['1x2', '2x2', '2x3', 'L3', 'L4'], [2, 3], 1, 0, 0, 1, 1],
+  ['penthouse', 'Living', 'Penthouse', 'neutral', ['1x2', '2x2', '2x3'], [1, 2], 1, 0, 0, 1, 1],
+  ['shacks', 'Living', 'Stacked shacks', 'neutral', ['1x1', '1x2', '2x2'], [1, 3], 1, 0, 0, 1, 0],
+  ['flared', 'Living', 'Flared housing', 'neutral', BOXY, [1, 3], 1, 0, 0, 1, 1],
   ['shop', 'Living', 'Shop', 'neutral', ANY, [1, 2], 1, 1, 0, 1, 0],
-  ['walkway', 'Circulation', 'Walkway', 'neutral', BOXY, [1, 1], 0, 0, 0, 0, 0],
+  ['walkway', 'Circulation', 'Walkway', 'neutral', SPAN, [1, 1], 0, 0, 1, 0, 0],
   ['bridge', 'Circulation', 'Bridge', 'neutral', ['1x2', '2x2', '2x3', 'L4'], [1, 2], 1, 0, 1, 1, 0],
   ['stair', 'Circulation', 'Stair tower', 'neutral', SMALL, [2, 4], 1, 0, 0, 1, 1],
   ['ramp', 'Circulation', 'Ramp', 'neutral', ['1x2'], [1, 1], 0, 1, 0, 0, 0],
@@ -54,7 +58,7 @@ const TABLE = [
   ['smokestack', 'Industrial', 'Smokestack', 'industrial', ['1x1'], [2, 4], 0, 0, 0, 0, 0],
   ['pipes', 'Industrial', 'Pipe run', 'industrial', BOXY, [1, 1], 0, 0, 0, 0, 0],
   ['tankfarm', 'Industrial', 'Tank farm', 'industrial', ['1x2', '2x2', '2x3'], [1, 2], 0, 0, 0, 0, 0],
-  ['gantry', 'Industrial', 'Conveyor gantry', 'industrial', ['1x2', '2x3'], [1, 1], 0, 0, 1, 0, 0],
+  ['gantry', 'Industrial', 'Conveyor gantry', 'industrial', SPAN, [1, 1], 0, 0, 1, 0, 0],
   ['chimney', 'Industrial', 'Chimney', 'industrial', ['1x1'], [2, 3], 0, 0, 0, 0, 0],
   ['cooling', 'Industrial', 'Cooling block', 'industrial', ['1x1', '2x2'], [1, 2], 0, 0, 0, 0, 0],
   ['solar', 'Eco', 'Solar array', 'eco', BOXY, [1, 1], 0, 0, 0, 0, 0],
@@ -66,7 +70,7 @@ const TABLE = [
 ];
 
 // Families whose facade sides take side profiles
-export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall', 'shop', 'stair', 'deck', 'brise', 'fins', 'spout', 'panel', 'podium'];
+export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall', 'penthouse', 'shop', 'stair', 'deck', 'brise', 'fins', 'spout', 'panel', 'podium'];
 
 export const FAMILIES = {};
 for (const row of TABLE) {
