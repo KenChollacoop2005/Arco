@@ -66,3 +66,7 @@ export const SMOKE_PARTICLES_MAX = 160; // smoke particle cap
 export const RUNOFF_STREAMS_MAX = 4; // runoff stream cap
 export const TURBINE_RPM = 22; // rotor speed
 export const TARP_SWAY_MM = 0.5; // tarp sway size
+
+// Toggles
+export const LIGHT_CORES_MAX = 4; // cores at or under this: light preset
+export const LIGHT_MEMORY_GB_MAX = 4; // memory at or under this: light preset

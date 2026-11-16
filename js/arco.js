@@ -14,6 +14,7 @@ import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
 import { setupBuild } from './ui/build.js';
 import { setupPhysics } from './ui/physics.js';
+import { setupToggles, bindToggle } from './ui/toggles.js';
 import { createCollection } from './core/collection.js';
 import { growOptions } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
@@ -236,6 +237,10 @@ for (const input of [query('#sectionToggle'), sectionPosition, ...document.query
 }
 section.set(readSection());
 setupPhysics(app, modules, query('#physicsToggle'));
+
+const toggles = setupToggles();
+app.toggles = toggles;
+bindToggle(toggles, query('#effectsToggle'), { id: 'effects', on: true, lightOn: false });
 
 query('#resetView').addEventListener('click', () => rig.home(false));
 
