@@ -175,6 +175,28 @@ function patch(material, defines) {
   return material;
 }
 
+// Section cut planes, empty when the cut is off
+export const sectionPlanes = [];
+
+// Counts cut solids in the stencil buffer
+function stencilCounter(side, operation) {
+  return patch(
+    new THREE.MeshBasicMaterial({
+      side,
+      colorWrite: false,
+      depthWrite: false,
+      depthTest: false,
+      clippingPlanes: sectionPlanes,
+      stencilWrite: true,
+      stencilFunc: THREE.AlwaysStencilFunc,
+      stencilFail: operation,
+      stencilZFail: operation,
+      stencilZPass: operation,
+    }),
+    { ARCO_INSTANCED: '' }
+  );
+}
+
 export function createModuleMaterials() {
   const lit = patch(
     new THREE.MeshStandardMaterial({
@@ -185,11 +207,15 @@ export function createModuleMaterials() {
       polygonOffset: true,
       polygonOffsetFactor: EDGE_OFFSET,
       polygonOffsetUnits: EDGE_OFFSET,
+      clippingPlanes: sectionPlanes,
+      clipShadows: true,
     }),
     { ARCO_INSTANCED: '' }
   );
   const depth = patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), { ARCO_INSTANCED: '' });
-  return { lit, depth };
+  const cutBack = stencilCounter(THREE.BackSide, THREE.IncrementWrapStencilOp);
+  const cutFront = stencilCounter(THREE.FrontSide, THREE.DecrementWrapStencilOp);
+  return { lit, depth, cutBack, cutFront };
 }
 
 export function createPlinthMaterial(ringRadius, cellSize) {

@@ -42,7 +42,7 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(tint, 3));
-    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: !onTop }));
+    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: !onTop, clippingPlanes: sectionPlanes }));
     lines.frustumCulled = false;
     lines.renderOrder = onTop ? 5 : 1;
     lines.visible = shown[name];

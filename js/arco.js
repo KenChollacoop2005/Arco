@@ -6,6 +6,7 @@ import { createScene } from './render/scene.js';
 import { createCameraRig } from './render/camera.js';
 import { createModuleView } from './render/modules.js';
 import { createDrawing } from './render/drawing.js';
+import { createSection } from './render/section.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
@@ -15,6 +16,7 @@ import { setupBuild } from './ui/build.js';
 import { createCollection } from './core/collection.js';
 import { growOptions } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
+import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -50,6 +52,7 @@ const modules = createModuleView(view, (variants, onPart) =>
 const checker = createWorkerClient(new URL('./workers/checks.worker.js', import.meta.url));
 const inspector = createInspector(query('#inspectorBody'));
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
+const section = createSection(view, modules);
 
 export const app = {
   view,
@@ -120,6 +123,7 @@ app.structureListeners.push(async (result, phase) => {
     drawing.update(app.structure, app.checks);
     return;
   }
+  section.setStructure(result.modules);
   app.checks = null;
   app.selection = [];
   showInspector();
@@ -219,6 +223,18 @@ for (const input of document.querySelectorAll('input[name="projection"]')) {
     view.setCamera(rig.camera);
   });
 }
+const sectionPosition = query('#sectionPosition');
+sectionPosition.max = String(SECTION_STEPS);
+const readSection = () => ({
+  on: query('#sectionToggle').checked,
+  axis: query('input[name="sectionAxis"]:checked').value,
+  share: sectionShare(Number(sectionPosition.value)),
+});
+for (const input of [query('#sectionToggle'), sectionPosition, ...document.querySelectorAll('input[name="sectionAxis"]')]) {
+  input.addEventListener('input', () => section.set(readSection()));
+}
+section.set(readSection());
+
 query('#resetView').addEventListener('click', () => rig.home(false));
 
 const exportWorker = createWorkerClient(new URL('./workers/export.worker.js', import.meta.url));

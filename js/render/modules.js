@@ -2,7 +2,8 @@ import * as THREE from '../../vendor/three/three.module.min.js';
 import { CELL_MM, STORY_MM, BUILD_MS_PER_MODULE, BUILD_TOTAL_MS, BUILD_STAGGER_MAX_MS } from '../config.js';
 import { instanceCells, instancePose, variantKey } from '../core/grid.js';
 import { hashString } from '../core/rng.js';
-import { createModuleMaterials, STATE_NORMAL, STATE_GHOST, STATE_INVALID } from './materials.js';
+import { planeDistance } from '../core/section.js';
+import { createModuleMaterials, sectionPlanes, STATE_NORMAL, STATE_GHOST, STATE_INVALID } from './materials.js';
 import { createSketch } from './sketch.js';
 
 const BUILD_LEAD_S = 0.08; // pause before the first module
@@ -10,6 +11,9 @@ const SETTLE_MS = 600; // redraw time after the last module
 const DONE_START = -1000; // start time of a finished module
 const ANIM_SIZE = 4; // floats per instance: start, state, height, tone
 const GHOST_TONE = 0.5; // concrete tone of the placement ghost
+const CUT_ORDER = 1; // stencil pass draws before the fill
+const MM_PER_CELL = CELL_MM; // physics poses arrive in cells
+const POSE_SIZE = 7; // floats per pose: position, quaternion
 
 const srgbToLinear = (value) => {
   const share = value / 255;
@@ -39,6 +43,11 @@ export function createModuleView(view, requestGeometry) {
   const cache = new Map();
   const turn = new THREE.Matrix4();
   const shift = new THREE.Matrix4();
+  const clipPlane = new THREE.Plane();
+  const posePosition = new THREE.Vector3();
+  const poseTurn = new THREE.Quaternion();
+  const poseScale = new THREE.Vector3(1, 1, 1);
+  let clip = null;
   let batches = new Map();
   let records = new Map();
   let generation = 0;
@@ -46,6 +55,7 @@ export function createModuleView(view, requestGeometry) {
 
   function clear() {
     for (const batch of batches.values()) {
+      dropCutters(batch);
       group.remove(batch.mesh);
       batch.mesh.dispose();
     }
@@ -54,6 +64,54 @@ export function createModuleView(view, requestGeometry) {
     sketch.clear();
   }
 
+  // Module rest pose as a matrix
+  function restMatrix(instance) {
+    const pose = instancePose(instance);
+    turn.makeRotationZ((pose.turns * Math.PI) / 2);
+    shift.makeTranslation(pose.x, pose.y, pose.z);
+    return shift.multiply(turn);
+  }
+
+  function dropCutters(batch) {
+    for (const cutter of batch.cutters) {
+      view.scene.remove(cutter);
+      cutter.dispose();
+    }
+    batch.cutters = [];
+  }
+
+  // Stencil copies that share the batch's instances
+  function addCutters(batch) {
+    for (const material of [materials.cutBack, materials.cutFront]) {
+      const cutter = new THREE.InstancedMesh(batch.mesh.geometry, material, batch.mesh.count);
+      cutter.instanceMatrix = batch.mesh.instanceMatrix;
+      cutter.frustumCulled = false;
+      cutter.renderOrder = CUT_ORDER;
+      view.scene.add(cutter);
+      batch.cutters.push(cutter);
+    }
+  }
+
+  // Plane from core/section.js, or null for no cut
+  function setClip(plane) {
+    clip = plane;
+    if (plane) {
+      clipPlane.normal.set(...plane.normal);
+      clipPlane.constant = plane.constant;
+      sectionPlanes[0] = clipPlane;
+    } else {
+      sectionPlanes.length = 0;
+    }
+    for (const batch of batches.values()) {
+      if (plane && batch.cutters.length === 0) addCutters(batch);
+      if (!plane) dropCutters(batch);
+    }
+    view.requestRender();
+  }
+
+  const visibleHit = (raycaster) =>
+    raycaster.intersectObjects(group.children, false).find((hit) => !clip || planeDistance(clip, [hit.point.x, hit.point.y, hit.point.z]) >= 0);
+
   function addBatch(key, entries) {
     const part = cache.get(key);
     const geometry = part.geometry;
@@ -61,10 +119,7 @@ export function createModuleView(view, requestGeometry) {
     const anim = new THREE.InstancedBufferAttribute(new Float32Array(entries.length * ANIM_SIZE), ANIM_SIZE);
     const now = view.now();
     entries.forEach((record, index) => {
-      const pose = instancePose(record.instance);
-      turn.makeRotationZ((pose.turns * Math.PI) / 2);
-      shift.makeTranslation(pose.x, pose.y, pose.z);
-      mesh.setMatrixAt(index, shift.multiply(turn));
+      mesh.setMatrixAt(index, restMatrix(record.instance));
       record.start = record.animate ? Math.max(record.start, now) : DONE_START;
       anim.setXYZW(index, record.start, record.state, record.instance.h * STORY_MM, (hashString('tone' + record.instance.id) % 1000) / 1000);
       record.key = key;
@@ -77,7 +132,9 @@ export function createModuleView(view, requestGeometry) {
     mesh.frustumCulled = false;
     mesh.userData.ids = entries.map((record) => record.instance.id);
     group.add(mesh);
-    batches.set(key, { mesh, anim });
+    const batch = { mesh, anim, cutters: [] };
+    batches.set(key, batch);
+    if (clip) addCutters(batch);
     const last = Math.max(...entries.map((record) => record.start));
     if (last > DONE_START) view.keepBusy((last - now) * 1000 + BUILD_MS_PER_MODULE + SETTLE_MS);
     view.requestRender();
@@ -158,10 +215,7 @@ export function createModuleView(view, requestGeometry) {
       view.scene.add(mesh);
       ghost = { key, mesh, anim };
     }
-    const pose = instancePose(instance);
-    turn.makeRotationZ((pose.turns * Math.PI) / 2);
-    shift.makeTranslation(pose.x, pose.y, pose.z);
-    ghost.mesh.setMatrixAt(0, shift.multiply(turn));
+    ghost.mesh.setMatrixAt(0, restMatrix(instance));
     ghost.mesh.instanceMatrix.needsUpdate = true;
     ghost.anim.setXYZW(0, DONE_START, invalid ? STATE_INVALID : STATE_GHOST, instance.h * STORY_MM, GHOST_TONE);
     ghost.anim.needsUpdate = true;
@@ -181,14 +235,45 @@ export function createModuleView(view, requestGeometry) {
   }
 
   function pick(raycaster) {
-    const hit = raycaster.intersectObjects(group.children, false)[0];
+    const hit = visibleHit(raycaster);
     return hit ? hit.object.userData.ids[hit.instanceId] : null;
   }
 
   // Module id and hit point under a ray
   function pickPoint(raycaster) {
-    const hit = raycaster.intersectObjects(group.children, false)[0];
+    const hit = visibleHit(raycaster);
     return hit ? { id: hit.object.userData.ids[hit.instanceId], point: hit.point } : null;
+  }
+
+  function touchBatches(settled) {
+    for (const batch of batches.values()) {
+      batch.mesh.instanceMatrix.needsUpdate = true;
+      if (settled) batch.mesh.computeBoundingSphere();
+    }
+    view.requestRender();
+  }
+
+  // Physics poses in cells, one per id in order
+  function setPoses(ids, poses, settled) {
+    ids.forEach((id, order) => {
+      const record = records.get(id);
+      const batch = record && batches.get(record.key);
+      if (!batch) return;
+      const at = order * POSE_SIZE;
+      posePosition.set(poses[at] * MM_PER_CELL, poses[at + 1] * MM_PER_CELL, poses[at + 2] * MM_PER_CELL);
+      poseTurn.set(poses[at + 3], poses[at + 4], poses[at + 5], poses[at + 6]);
+      batch.mesh.setMatrixAt(record.index, shift.compose(posePosition, poseTurn, poseScale));
+    });
+    touchBatches(settled);
+  }
+
+  // Every module back on its grid pose
+  function restPoses() {
+    for (const record of records.values()) {
+      const batch = batches.get(record.key);
+      if (batch) batch.mesh.setMatrixAt(record.index, restMatrix(record.instance));
+    }
+    touchBatches(true);
   }
 
   function boxOf(id) {
@@ -207,6 +292,9 @@ export function createModuleView(view, requestGeometry) {
     setStructure,
     setState,
     setGhost,
+    setClip,
+    setPoses,
+    restPoses,
     prepare,
     pick,
     pickPoint,
