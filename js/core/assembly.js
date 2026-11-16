@@ -17,15 +17,15 @@ export function assemblyOrder(parts) {
     }
   }
   const under = new Map(parts.map((part) => [part.id, new Set()]));
+  const after = new Map(parts.map((part) => [part.id, new Set()]));
   for (const column of columns.values()) {
     column.sort((first, second) => first.level - second.level);
     for (let upper = 1; upper < column.length; upper++) {
       for (let lower = 0; lower < upper; lower++) {
-        // Two claims share a cell in opposite halves
-        if (column[lower].claim && column[upper].claim) continue;
-        if (column[lower].id !== column[upper].id && column[lower].level < column[upper].level) {
-          under.get(column[upper].id).add(column[lower].id);
-        }
+        if (column[lower].id === column[upper].id || column[lower].level >= column[upper].level) continue;
+        // Two claims share a cell in opposite halves: lower first if it can
+        const facing = column[lower].claim && column[upper].claim;
+        (facing ? after : under).get(column[upper].id).add(column[lower].id);
       }
     }
   }
@@ -38,18 +38,15 @@ export function assemblyOrder(parts) {
   const placed = new Set();
   const order = [];
   let moved = true;
+  const ready = (part, rules) => rules.every((rule) => [...rule.get(part.id)].every((id) => placed.has(id)));
   while (waiting.length > 0 && moved) {
-    moved = false;
-    for (let slot = 0; slot < waiting.length; slot++) {
-      const part = waiting[slot];
-      if ([...under.get(part.id)].every((id) => placed.has(id))) {
-        placed.add(part.id);
-        order.push(part.id);
-        waiting.splice(slot, 1);
-        moved = true;
-        break;
-      }
-    }
+    let slot = waiting.findIndex((part) => ready(part, [under, after]));
+    if (slot < 0) slot = waiting.findIndex((part) => ready(part, [under]));
+    moved = slot >= 0;
+    if (!moved) break;
+    placed.add(waiting[slot].id);
+    order.push(waiting[slot].id);
+    waiting.splice(slot, 1);
   }
   const blocked = waiting.map((part) => ({ id: part.id, by: [...under.get(part.id)].filter((id) => !placed.has(id)) }));
   return { ok: blocked.length === 0, order, blocked };
