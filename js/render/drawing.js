@@ -3,7 +3,7 @@ import { CELL_MM, STORY_MM } from '../config.js';
 import { variantKey } from '../core/grid.js';
 import { centerMarks, loadPaths, connectorMarks, edgeLines } from '../core/drafting.js';
 import { COPY } from '../ui/copy.js';
-import { sharedUniforms } from './materials.js';
+import { sharedUniforms, sectionPlanes } from './materials.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const LABEL_RING_PX = 7; // critical joint ring radius
