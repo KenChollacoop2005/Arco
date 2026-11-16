@@ -70,3 +70,6 @@ export const TARP_SWAY_MM = 0.5; // tarp sway size
 // Toggles
 export const LIGHT_CORES_MAX = 4; // cores at or under this: light preset
 export const LIGHT_MEMORY_GB_MAX = 4; // memory at or under this: light preset
+
+// Analysis
+export const EXPOSURE_REACH_CELLS = 4; // free cells counted in front of a face

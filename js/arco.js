@@ -19,6 +19,7 @@ import { createCollection } from './core/collection.js';
 import { growOptions } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
+import { freezeDeep } from './core/analysis.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -52,6 +53,7 @@ const modules = createModuleView(view, (variants, onPart) =>
 );
 
 const checker = createWorkerClient(new URL('./workers/checks.worker.js', import.meta.url));
+const analyst = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 const inspector = createInspector(query('#inspectorBody'));
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
 const section = createSection(view, modules);
@@ -64,10 +66,12 @@ export const app = {
   reducedMotion,
   structure: null,
   checks: null,
+  analysis: null,
   selection: [],
   fit: null,
   modeListeners: [],
   structureListeners: [],
+  analysisListeners: [],
 };
 
 // Storage access can throw, so it stays lazy
@@ -135,6 +139,17 @@ app.structureListeners.push(async (result, phase) => {
   app.checks = checks;
   showInspector();
   drawing.update(result, checks);
+});
+
+// One analysis per structure, read-only for every layer
+app.structureListeners.push(async (result, phase) => {
+  if (phase !== 'start') return;
+  app.analysis = null;
+  for (const listener of app.analysisListeners) listener(null, result);
+  const analysis = await analyst.call({ modules: result.modules }).catch(() => null);
+  if (app.structure !== result || !analysis) return;
+  app.analysis = freezeDeep(analysis);
+  for (const listener of app.analysisListeners) listener(app.analysis, result);
 });
 
 app.modeListeners.push((mode) => {
