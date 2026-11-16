@@ -1,4 +1,4 @@
-import { instanceCells } from './grid.js';
+import { instanceCells, claimedCells } from './grid.js';
 
 // Lowest voxel of a part, by level, then y, then x
 function lowest(part) {
@@ -56,7 +56,9 @@ export function assemblyOrder(parts) {
 export function partsFromModules(modules) {
   return modules.map((instance) => {
     const voxels = [];
-    for (const [cellX, cellY] of instanceCells(instance)) {
+    // Claimed cells count: balconies slide down through them
+    const columns = [...instanceCells(instance), ...claimedCells(instance).map((claim) => [claim.x, claim.y])];
+    for (const [cellX, cellY] of columns) {
       for (let level = instance.z; level < instance.z + instance.h; level++) voxels.push([cellX, cellY, level]);
     }
     return { id: instance.id, voxels };

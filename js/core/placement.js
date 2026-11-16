@@ -1,6 +1,7 @@
 import { MAX_MODULES } from '../config.js';
 import {
   SIDES,
+  claimedCells,
   cellInPlinth,
   footprintSize,
   instanceCells,
@@ -71,6 +72,43 @@ function capBelow(world, instance) {
   return false;
 }
 
+const RESERVED_REASON = 'That space is kept clear for a balcony or bulge'; // draft UI copy
+const AROUND = [...SIDES, [1, 1], [-1, 1], [-1, -1], [1, -1]]; // cells a claim can come from
+
+// Claims other modules hold on one voxel
+function claimsOn(world, cellX, cellY, level, skipId) {
+  const found = [];
+  const seen = new Set();
+  for (const [stepX, stepY] of AROUND) {
+    const other = moduleAt(world, cellX + stepX, cellY + stepY, level);
+    if (!other || !other.prof || other.id === skipId || seen.has(other.id)) continue;
+    seen.add(other.id);
+    for (const claim of claimedCells(other)) {
+      if (claim.x === cellX && claim.y === cellY) found.push(claim);
+    }
+  }
+  return found;
+}
+
+// Reason a protrusion is illegal, or ''
+function reserveConflict(world, instance, cells) {
+  for (let level = instance.z; level < instance.z + instance.h; level++) {
+    for (const [cellX, cellY] of cells) {
+      if (claimsOn(world, cellX, cellY, level, instance.id).length > 0) return RESERVED_REASON;
+    }
+    for (const claim of claimedCells(instance)) {
+      if (!cellInPlinth(claim.x, claim.y)) return 'A balcony or bulge would pass the plinth edge';
+      const other = moduleAt(world, claim.x, claim.y, level);
+      if (other && other.id !== instance.id) return 'A balcony or bulge needs open air on that side';
+      const clash = claimsOn(world, claim.x, claim.y, level, instance.id).some(
+        (theirs) => claim.side >= 0 && theirs.side >= 0 && theirs.side !== ((claim.side + 2) & 3)
+      );
+      if (clash) return 'Two balconies or bulges would meet there';
+    }
+  }
+  return '';
+}
+
 // Reason text is draft UI copy
 export function checkPlacement(world, instance, options = {}) {
   const family = FAMILIES[instance.family];
@@ -86,6 +124,8 @@ export function checkPlacement(world, instance, options = {}) {
       if (other && other.id !== instance.id) return { ok: false, reason: 'Overlaps another module' };
     }
   }
+  const reserve = reserveConflict(world, instance, cells);
+  if (reserve) return { ok: false, reason: reserve };
   if (family.ground && instance.z !== 0) return { ok: false, reason: 'Ground level only' };
   const supports = supportsUnder(world, instance);
   if (!supports.some(Boolean)) return { ok: false, reason: 'No support below' };
