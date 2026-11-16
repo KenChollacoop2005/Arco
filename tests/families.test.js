@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CELL_MM, STORY_MM, MAX_BRIDGE_MM, MAX_OVERHANG_DEG, CONNECTOR_CLEARANCE_MM } from '../js/config.js';
 import { FAMILIES, canSupport, normalizeVariant } from '../js/core/catalog.js';
-import { instanceCells, moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
-import { BULGE, FLUSH, packProfiles, profilePlan } from '../js/core/profiles.js';
+import { claimedCells, footprintSize, instanceCells, moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
+import { BULGE, BULGE_BALCONY, FLUSH, packProfiles, profileAt, profileColliders, profilePlan } from '../js/core/profiles.js';
 import { checkPlacement, hasTwoSupports, placementOf, supportsUnder, validateStructure } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
 import { checkPrintability } from '../js/core/printability.js';
@@ -13,7 +13,7 @@ import { createBuild } from '../js/core/build.js';
 import { variantOf } from '../js/core/collection.js';
 import { pegJoints } from '../js/core/exportplan.js';
 import { PORT_TYPES, variantPorts } from '../js/core/ports.js';
-import { simulate } from '../js/core/physics.js';
+import { simulate, variantColliders } from '../js/core/physics.js';
 import { analyze } from '../js/core/analysis.js';
 import { decorItems } from '../js/core/decor.js';
 import { getRapier, getSolids } from './helpers.js';
@@ -25,6 +25,8 @@ const ANGLE_TOL_DEG = 0.5; // slack the print check allows
 const EDGE_MM = 0.5; // slice near the base and the top
 const FLARE_MM = [3.5, 5]; // base inset range of a flared side
 const SIZE_TOL_MM = 0.02; // rounding slack on mesh sizes
+const GAP_MM = CONNECTOR_CLEARANCE_MM / 2; // printed side gap per module
+const EPS_MM = 0.001; // rounding slack on mesh positions
 
 const part = (id, family, fp, h, x, y, z, rot = 0, extra = {}) => ({
   ...normalizeVariant({ family, fp, h, seed: 5, mask: 0, roof: false, ...extra }),
@@ -332,6 +334,8 @@ test('generated struts stand under a bulge of a neighbour', () => {
       const back = [[-1, 0], [0, -1], [1, 0], [0, 1]][instance.rot];
       const owner = moduleAt(world, instance.x + back[0], instance.y + back[1], instance.z + instance.h);
       assert.ok(owner && owner.prof, `${result.seed} strut ${instance.id} faces a profiled module`);
+      const kinds = claimedCells(owner).filter((claim) => claim.x === instance.x && claim.y === instance.y && claim.side >= 0).map((claim) => profileAt(owner.prof, (claim.side - owner.rot + 4) & 3));
+      assert.ok(kinds.some((kind) => kind === BULGE || kind === BULGE_BALCONY), `${result.seed} strut ${instance.id} is under a bulge, not ${kinds}`);
       assert.equal(moduleAt(world, instance.x, instance.y, instance.z + instance.h), null, `${result.seed} strut ${instance.id} is under open air`);
     }
   }
@@ -400,4 +404,47 @@ test('decor stays out of the space a bulge reaches into', () => {
     onFree += items.filter((item) => item.module === free.id).length;
   }
   assert.ok(onFree > 0, 'a free strut head can carry decor');
+});
+
+// Declared colliders: family list, profile boxes, else the cell box
+function declaredColliders(variant) {
+  const family = FAMILIES[variant.family];
+  if (family.colliders) return family.colliders(variant);
+  if (variant.prof) return profileColliders(variant, GAP_MM);
+  const [sizeX, sizeY] = footprintSize(variant.fp);
+  return [{ kind: 'box', min: [GAP_MM, GAP_MM, 0], max: [sizeX * CELL_MM - GAP_MM, sizeY * CELL_MM - GAP_MM, variant.h * STORY_MM] }];
+}
+
+// Mesh vertices outside every collider box
+function outsideColliders(mesh, shapes) {
+  let count = 0;
+  for (let at = 0; at < mesh.positions.length; at += 3) {
+    const point = [mesh.positions[at], mesh.positions[at + 1], mesh.positions[at + 2]];
+    if (!shapes.some((shape) => point.every((value, axis) => value >= shape.min[axis] - EPS_MM && value <= shape.max[axis] + EPS_MM))) count++;
+  }
+  return count;
+}
+
+test('colliders of the six new families match their declared lists and cover the solid', async () => {
+  const solids = await getSolids();
+  const ids = [...NEW_FAMILIES, ...SPANS];
+  const byKey = new Map();
+  for (const id of ids) {
+    assert.ok(FAMILIES[id].footprints.every((fp) => !fp.startsWith('L')), `${id} footprints are rectangles`);
+    for (const variant of variantsOf(id, [1, 2])) byKey.set(variantKey(variant), variant);
+  }
+  for (const structure of generated) {
+    for (const instance of structure.modules) {
+      if (ids.includes(instance.family)) byKey.set(variantKey(instance), instance);
+    }
+  }
+  const variants = [...byKey.values()];
+  for (const id of ids) assert.ok(variants.some((variant) => variant.family === id), `${id} has variants`);
+  assert.ok(variants.some((variant) => variant.prof), 'profiled variants in the set');
+  for (const variant of variants) {
+    const colliders = variantColliders(variant);
+    assert.deepEqual(colliders, declaredColliders(variant), variantKey(variant));
+    const built = solids.buildVariant(variant, { render: false, edges: false });
+    assert.equal(outsideColliders(built.solid, colliders), 0, `${variantKey(variant)} has geometry outside its colliders`);
+  }
 });

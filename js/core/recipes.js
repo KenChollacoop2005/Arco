@@ -4,6 +4,7 @@ import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, gr
 import { addBalconies } from './balcony.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
+const CUT_OVER_MM = 1; // cut overshoot past a face
 const SAW_REACH_MM = CELL_MM; // saw cut reaches past any bulge
 const THIN_MM = 1.6; // parapets and thin walls
 const DECK_MM = 3; // thin floor slabs
@@ -132,7 +133,7 @@ const SHACK_WINDOW_MM = [2.6, 5, 3, 5.5, 1.4]; // width range, height range, dep
 const SHACK_FRAME_MM = 1.6; // wall around a shack window
 const SHACK_PANE_MM = [0.3, 0.25, 0.2]; // pane edge gap, front, buried
 const SHACK_MIN_WINDOW_MM = [2, 2.4]; // smallest window width and height
-const SHACK_GROUPS = ['concrete', 'concrete', 'rust', 'wood', 'dark'];
+const SHACK_GROUPS = ['concrete', 'concrete', 'rust', 'wood', 'dark']; // shack materials, concrete twice as likely
 const FLARE_DEPTH_MM = [3.5, 5]; // flared base inset range
 const FLARE_DEG = [35, 45]; // flare slope from vertical
 const FLARE_BAND_MM = 14; // upright band above the flare
@@ -142,6 +143,8 @@ const STRUT_BASE_MM = 3; // strut base plate
 const STRUT_HEAD_MM = 5; // strut head plate
 const BUNDLE_MM = [2.6, 3, 2]; // pipe offset, pipe radius, core radius
 const BUNDLE_SIDES = 10; // bundle pipe facets
+const BUNDLE_CHANCE = 0.5; // chance a strut is a pipe bundle
+const STRUT_CORE_SIDES = 8; // strut core and collar facets
 const COLLAR_MM = [3.6, 6.6, 3, 1.2]; // collar radius low, high, cone, band
 const COLLAR_ROOM_MM = [2, 1]; // collar kept off the base and capital
 const BRACE_MM = [8, 1, 0.8, 1.6]; // brace width, end margin, shoe lip, shoe height
@@ -262,7 +265,7 @@ function shackSide(kit, run) {
     if (opening < SHACK_MIN_WINDOW_MM[0] || head - sill < SHACK_MIN_WINDOW_MM[1]) continue;
     const left = start + frame + rng.range(0, end - start - 2 * frame - opening);
     const back = front + windowDepth;
-    kit.cut(run.prismU([[front - 1, sill], [back, sill], [back, head - windowDepth], [front - 1, head + 1]], left, left + opening), group);
+    kit.cut(run.prismU([[front - CUT_OVER_MM, sill], [back, sill], [back, head - windowDepth], [front - CUT_OVER_MM, head + CUT_OVER_MM]], left, left + opening), group);
     // Glass only where the pane sits in concrete
     if (group === 'concrete') kit.add('glass', run.box(left + paneEdge, left + opening - paneEdge, sill, head - windowDepth, back - paneFront, back + paneBack));
   }
@@ -309,18 +312,18 @@ const RECIPES = {
     kit.slab('concrete', clear, 0, STRUT_BASE_MM);
     kit.slab('concrete', clear, slabBase, kit.H);
     const foot = STRUT_BASE_MM - SINK_MM;
-    if (kit.rng.chance(0.5)) {
+    if (kit.rng.chance(BUNDLE_CHANCE)) {
       const [offset, radius, core] = BUNDLE_MM;
       const reach = offset + radius;
       const capBase = slabBase - (half - reach);
       kit.add('concrete', pyramid(middle, middle, capBase, slabBase, reach, half));
-      kit.add('concrete', cyl(middle, middle, foot, capBase + SINK_MM, core, core, 8));
+      kit.add('concrete', cyl(middle, middle, foot, capBase + SINK_MM, core, core, STRUT_CORE_SIDES));
       for (const [signX, signY] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
         kit.add(kit.rng.pick(METAL_GROUPS), cyl(middle + signX * offset, middle + signY * offset, foot, capBase + SINK_MM, radius, radius, BUNDLE_SIDES));
       }
       const [collarLow, collarHigh, cone, band] = COLLAR_MM;
       const collar = lerp(STRUT_BASE_MM + COLLAR_ROOM_MM[0], capBase - cone - band - COLLAR_ROOM_MM[1], kit.rng.next());
-      stack(kit, middle, middle, 8, [
+      stack(kit, middle, middle, STRUT_CORE_SIDES, [
         ['steel', collar, collar + cone, collarLow, collarHigh],
         ['steel', collar + cone, collar + cone + band, collarHigh, collarHigh],
       ]);
@@ -410,7 +413,7 @@ const RECIPES = {
     const rise = kit.stories > 1 && kit.rng.chance(TAPER_CHANCE) ? top - FLARE_FOOT_MM : steep;
     const start = top - rise;
     for (const run of kit.facades) {
-      kit.cut(run.prismU([[-1, -1], [depth, -1], [depth, start], [-1, start + (rise * (depth + 1)) / depth]], run.lo, run.hi));
+      kit.cut(run.prismU([[-CUT_OVER_MM, -CUT_OVER_MM], [depth, -CUT_OVER_MM], [depth, start], [-CUT_OVER_MM, start + (rise * (depth + CUT_OVER_MM)) / depth]], run.lo, run.hi));
     }
     styled(kit, ['strip', 'grid', 'slit'], top, facadeTop(kit));
     if (kit.roof) roofGear(kit);

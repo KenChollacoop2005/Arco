@@ -36,6 +36,7 @@ import { getRapier, getSolids } from './helpers.js';
 
 const GAP = CONNECTOR_CLEARANCE_MM / 2;
 const EPS_MM = 0.001; // rounding slack on mesh positions
+const BOX_SAMPLES = [0, 0.25, 0.5, 0.75, 1]; // shares along each box edge to test
 const SWEEP_BUILDS = 400; // random variants in the suite sweep
 const OUT_KINDS = [INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP];
 const KINDS = PROFILE_IDS.map((id, kind) => kind).filter((kind) => kind !== FLUSH);
@@ -153,8 +154,12 @@ test('protrusions stay inside their reserved space and flush sides stay in the c
     assert.equal(strays(built.solid, allowedBoxes(variant), EPS_MM), 0, `${variantKey(variant)} leaves its reserved space`);
     for (const shape of profileBoxes(variant)) {
       if (shape.sign < 0) continue;
-      const flat = [{ min: shape.min, max: shape.max, positions: [...shape.min, ...shape.max] }];
-      assert.equal(strays(flat[0], allowedBoxes(variant), EPS_MM), 0, `${variantKey(variant)} declares a box outside its reserved space`);
+      const positions = [];
+      for (const shareX of BOX_SAMPLES) for (const shareY of BOX_SAMPLES) for (const shareZ of BOX_SAMPLES) {
+        positions.push(...[shareX, shareY, shareZ].map((share, axis) => shape.min[axis] + share * (shape.max[axis] - shape.min[axis])));
+      }
+      assert.equal(strays({ positions }, allowedBoxes(variant), EPS_MM), 0, `${variantKey(variant)} declares a box outside its reserved space`);
+      assert.ok(shape.min[2] >= -EPS_MM && shape.max[2] <= variant.h * STORY_MM + EPS_MM, `${variantKey(variant)} declares a box outside its height`);
     }
   }
 });
