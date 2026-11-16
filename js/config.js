@@ -50,6 +50,7 @@ export const PLATE_EDGE_MM = 3; // margin at plate edge
 export const PHYSICS_GRAVITY = 9.81; // gravity in cells per second squared
 export const PHYSICS_FRICTION = 0.6; // contact friction
 export const PHYSICS_STEP_S = 1 / 120; // simulation step
+export const PHYSICS_CONTACT_HZ = 60; // contact stiffness, engine default 30
 export const PHYSICS_SETTLE_S = 4; // test simulation length
 export const PHYSICS_RUN_MAX_S = 30; // longest run in the browser
 export const PHYSICS_MOVE_TOL_CELLS = 0.12; // drift counted as falling

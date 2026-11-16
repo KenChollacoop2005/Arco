@@ -6,6 +6,7 @@ import {
   PHYSICS_GRAVITY,
   PHYSICS_FRICTION,
   PHYSICS_STEP_S,
+  PHYSICS_CONTACT_HZ,
   PHYSICS_SETTLE_S,
   PHYSICS_MOVE_TOL_CELLS,
 } from '../config.js';
@@ -113,6 +114,8 @@ function turnPoint(turn, point) {
 export function createPhysicsWorld(RAPIER, modules) {
   const world = new RAPIER.World({ x: 0, y: 0, z: -PHYSICS_GRAVITY });
   world.timestep = PHYSICS_STEP_S;
+  // Stiffer contacts: loaded stacks sank and leaned
+  world.integrationParameters.contact_natural_frequency = PHYSICS_CONTACT_HZ;
   const plinth = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   world.createCollider(
     RAPIER.ColliderDesc.cylinder(PLINTH_THICK_CELLS / 2, PLINTH_DIAMETER_CELLS / 2)
