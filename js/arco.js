@@ -11,8 +11,10 @@ import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
+import { setupBuild } from './ui/build.js';
 import { createCollection } from './core/collection.js';
-import { variantKey } from './core/grid.js';
+import { growOptions } from './core/build.js';
+import { structureHash, variantKey } from './core/grid.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -101,8 +103,10 @@ function select(id, extend) {
   showInspector();
 }
 
-createPicker(canvas, rig, modules, {
-  onPick: select,
+const picker = createPicker(canvas, rig, modules, {
+  onPick(id, extend, event) {
+    if (!builder.click(event)) select(id, extend);
+  },
   onDouble(id) {
     const box = id ? modules.boxOf(id) : null;
     if (box) rig.frame(box);
@@ -143,23 +147,56 @@ for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'],
 }
 
 let generateToken = 0;
+let showToken = 0;
+
+// Puts a structure on the plinth, options.only animates those ids
+async function showStructure(result, options = {}) {
+  const token = ++showToken;
+  app.structure = result;
+  const heightMm = Math.max(0, ...result.modules.map((instance) => instance.z + instance.h)) * STORY_MM;
+  if (options.follow) rig.follow();
+  rig.setModelHeight(heightMm, false);
+  view.fitLight(heightMm);
+  for (const listener of app.structureListeners) listener(result, 'start');
+  await modules.setStructure(result.modules, { animate: !reducedMotion && !query('#skipAnimation').checked, only: options.only });
+  if (token !== showToken) return false;
+  for (const listener of app.structureListeners) listener(result, 'ready');
+  return true;
+}
 
 // Runs the generator and shows the result
 async function generateStructure(options) {
   const token = ++generateToken;
   const result = await generator.call({ options });
   if (token !== generateToken) return null;
-  app.structure = result;
-  const heightMm = Math.max(0, ...result.modules.map((instance) => instance.z + instance.h)) * STORY_MM;
-  rig.follow();
-  rig.setModelHeight(heightMm, false);
-  view.fitLight(heightMm);
-  for (const listener of app.structureListeners) listener(result, 'start');
-  await modules.setStructure(result.modules, { animate: !reducedMotion && !query('#skipAnimation').checked });
-  if (token !== generateToken) return null;
-  for (const listener of app.structureListeners) listener(result, 'ready');
-  return result;
+  builder.adopt(result.modules);
+  return (await showStructure(result, { follow: true })) ? result : null;
 }
+
+// Shows the hand edited build as the structure
+function showBuild(list, options = {}) {
+  generateToken++;
+  const result = { modules: list, seed: COPY.buildSeed, options: null, capped: false, hash: structureHash(list) };
+  showStructure(result, { only: options.only || new Set() });
+}
+
+// Generator run that keeps every current module
+async function growStructure(base) {
+  const token = ++generateToken;
+  const result = await generator.call({ options: growOptions(generatePanel.readOptions(), base) });
+  if (token !== generateToken) return null;
+  const known = new Set(base.map((instance) => instance.id));
+  const only = new Set(result.modules.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
+  builder.adopt(result.modules);
+  showStructure(result, { only });
+  return { added: only.size, seed: result.seed };
+}
+
+const builder = setupBuild(app, canvas, modules, collectionPanel, {
+  show: showBuild,
+  grow: growStructure,
+  targetAt: (event) => picker.targetAt(event),
+});
 
 export function setMode(mode) {
   app.mode = mode;
@@ -190,4 +227,4 @@ const exporter = setupExport(app, exportWorker, (fit) => {
   showInspector();
 });
 
-setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
+const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);

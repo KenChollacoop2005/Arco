@@ -1,19 +1,35 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
 
 const CLICK_SLOP_PX = 5; // pointer travel still counted as a click
+const INSIDE_MM = 1; // step past a hit face into the module
 
-// Handlers: onPick(id or null, shiftKey), onDouble(id or null)
+// Handlers: onPick(id or null, shiftKey, event), onDouble(id or null)
 export function createPicker(canvas, rig, moduleView, handlers) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let pressed = null;
 
-  function pickAt(event) {
+  function aim(event) {
     const rect = canvas.getBoundingClientRect();
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, 1 - ((event.clientY - rect.top) / rect.height) * 2);
     rig.camera.updateMatrixWorld();
     raycaster.setFromCamera(pointer, rig.camera);
+  }
+
+  function pickAt(event) {
+    aim(event);
     return moduleView.pick(raycaster);
+  }
+
+  // Point in mm on a module or the plinth plane
+  function targetAt(event) {
+    aim(event);
+    const { origin, direction } = raycaster.ray;
+    const hit = moduleView.pickPoint(raycaster);
+    if (hit) return { x: hit.point.x + direction.x * INSIDE_MM, y: hit.point.y + direction.y * INSIDE_MM };
+    if (direction.z >= 0) return null;
+    const reach = -origin.z / direction.z;
+    return { x: origin.x + direction.x * reach, y: origin.y + direction.y * reach };
   }
 
   canvas.addEventListener('pointerdown', (event) => {
@@ -23,7 +39,8 @@ export function createPicker(canvas, rig, moduleView, handlers) {
     if (!pressed || event.button !== 0) return;
     const travel = Math.hypot(event.clientX - pressed[0], event.clientY - pressed[1]);
     pressed = null;
-    if (travel <= CLICK_SLOP_PX) handlers.onPick(pickAt(event), event.shiftKey);
+    if (travel <= CLICK_SLOP_PX) handlers.onPick(pickAt(event), event.shiftKey, event);
   });
   canvas.addEventListener('dblclick', (event) => handlers.onDouble(pickAt(event)));
+  return { targetAt };
 }

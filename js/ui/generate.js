@@ -93,4 +93,5 @@ export function setupGenerate(form, skipInput, generate) {
     seedInput.value = seed;
     run(openingOptions(seed), false);
   }
+  return { readOptions: readForm };
 }
