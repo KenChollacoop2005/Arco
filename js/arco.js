@@ -7,6 +7,7 @@ import { createCameraRig } from './render/camera.js';
 import { createModuleView } from './render/modules.js';
 import { createDrawing } from './render/drawing.js';
 import { createSection } from './render/section.js';
+import { createDecor } from './render/decor.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
@@ -20,6 +21,7 @@ import { growOptions } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
+import { decorItems } from './core/decor.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -57,6 +59,7 @@ const analyst = createWorkerClient(new URL('./workers/analysis.worker.js', impor
 const inspector = createInspector(query('#inspectorBody'));
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
 const section = createSection(view, modules);
+const decor = createDecor(view);
 
 export const app = {
   view,
@@ -256,6 +259,23 @@ setupPhysics(app, modules, query('#physicsToggle'));
 const toggles = setupToggles();
 app.toggles = toggles;
 bindToggle(toggles, query('#effectsToggle'), { id: 'effects', on: true, lightOn: false });
+
+// Decor shows on a finished, still structure only
+let builtResult = null;
+function refreshDecor() {
+  const still = app.structure && builtResult === app.structure && app.analysis;
+  decor.set(still ? decorItems(app.analysis, app.structure.modules, app.structure.seed) : []);
+  decor.setShown(toggles.get('decor') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
+}
+bindToggle(toggles, query('#decorToggle'), { id: 'decor', on: false });
+toggles.watch('decor', refreshDecor);
+app.analysisListeners.push(refreshDecor);
+app.modeListeners.push(refreshDecor);
+app.structureListeners.push((result, phase) => {
+  builtResult = phase === 'ready' ? result : null;
+  refreshDecor();
+});
+query('#physicsToggle').addEventListener('change', refreshDecor);
 
 query('#resetView').addEventListener('click', () => rig.home(false));
 

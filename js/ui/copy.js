@@ -9,6 +9,7 @@ export const COPY = {
   viewOrtho: 'Orthographic',
   viewPersp: 'Perspective',
   viewSkip: 'Skip build animation',
+  viewDecor: 'Decor',
   viewReset: 'Reset view',
 
   generateTitle: 'Generate',
