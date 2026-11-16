@@ -1,6 +1,6 @@
 import { CELL_MM, STORY_MM } from '../config.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
-import { makeStyle, applyFacades, recess, glassPane, groove, roofTray } from './facade.js';
+import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const THIN_MM = 1.6; // parapets and thin walls
@@ -15,7 +15,7 @@ const WALK_TOP_MM = 8; // walkway parapet height
 const HATCH_HALF_MM = 4; // roof hatch half width
 const ROOF_DEPTH_MM = 2.5; // sunken roof depth
 const PILOTIS_SLAB_MM = 6; // slab over pilotis columns
-const COLUMN_HALF_MM = [5.5, 7]; // pilotis column half width range
+const COLUMN_HALF_MM = [6.2, 7]; // pilotis column half width range
 const ROUND_COLUMN_EXTRA_MM = 2.5; // round column radius over the half width
 const TRANSFER_LINE_MM = 6; // transfer slab pour line height
 const TRANSFER_BAND_MM = 8; // transfer slab beam band start
@@ -180,6 +180,9 @@ function roofGear(kit) {
   kit.add('concrete', box(centerX - HATCH_HALF_MM, centerY - HATCH_HALF_MM, floor, centerX + HATCH_HALF_MM, centerY + HATCH_HALF_MM, kit.H));
 }
 
+// Facades stop under a sunken roof
+const facadeTop = (kit) => (kit.roof ? kit.H - ROOF_DEPTH_MM : kit.H);
+
 function styled(kit, types, low = 0, high = kit.H) {
   const style = makeStyle(kit.styleRng, types ? kit.styleRng.pick(types) : undefined);
   applyFacades(kit, style, low, high);
@@ -189,7 +192,7 @@ function styled(kit, types, low = 0, high = kit.H) {
 const RECIPES = {
   core(kit) {
     mass(kit);
-    styled(kit, ['slit', 'blank', 'oct']);
+    styled(kit, ['slit', 'blank', 'oct'], 0, facadeTop(kit));
     if (kit.roof) roofGear(kit);
   },
 
@@ -235,7 +238,7 @@ const RECIPES = {
 
   housing(kit) {
     mass(kit);
-    styled(kit);
+    styled(kit, null, 0, facadeTop(kit));
     if (kit.roof) roofGear(kit);
   },
 
@@ -257,7 +260,7 @@ const RECIPES = {
 
   hall(kit) {
     mass(kit);
-    styled(kit, ['fins', 'strip', 'egg']);
+    styled(kit, ['fins', 'strip', 'egg'], 0, facadeTop(kit));
     if (kit.roof) roofGear(kit);
   },
 
@@ -321,15 +324,13 @@ const RECIPES = {
       for (let story = 0; story < kit.stories; story++) {
         const floor = story * STORY_MM + GALLERY_FLOOR_MM;
         const head = (story + 1) * STORY_MM - GALLERY_HEAD_MM;
-        kit.cut(recess(run, run.lo, run.hi, floor, head, GALLERY_DEPTH_MM));
         glassPane(kit, run, run.lo, run.hi, floor, head, GALLERY_DEPTH_MM);
-        kit.add(
-          'concrete',
-          run.box(Math.max(run.lo, 0), Math.min(run.hi, run.length), floor - SINK_MM, floor + GALLERY_RAIL_MM, 0, THIN_MM)
-        );
-        for (let post = 1; post < run.cells * 2; post++) {
-          const at = run.bayStart(0) + (post * CELL_MM) / 2;
-          kit.add('concrete', run.box(at - POST_HALF_MM, at + POST_HALF_MM, floor - SINK_MM, head + SINK_MM, 0, GALLERY_DEPTH_MM + SINK_MM));
+        // Posts are the wall left between bays
+        const stops = [run.lo - POST_HALF_MM];
+        for (let post = 1; post < run.cells * 2; post++) stops.push(run.bayStart(0) + (post * CELL_MM) / 2);
+        stops.push(run.hi + POST_HALF_MM);
+        for (let bay = 0; bay + 1 < stops.length; bay++) {
+          railRecess(kit, run, stops[bay] + POST_HALF_MM, stops[bay + 1] - POST_HALF_MM, floor, head, GALLERY_DEPTH_MM, GALLERY_RAIL_MM, THIN_MM);
         }
       }
     }
@@ -461,8 +462,10 @@ const RECIPES = {
 
   spout(kit) {
     mass(kit);
-    styled(kit, ['blank']);
+    const style = makeStyle(kit.styleRng, kit.styleRng.pick(['blank']));
     const run = kit.facades.find((wall) => wall.length > SPOUT_HALF_MM * 6);
+    // No small windows beside the channel
+    for (const wall of kit.facades) applyFacade(kit, wall, wall === run ? { ...style, punch: 0 } : style);
     if (!run) return;
     const middle = run.length / 2;
     const mouth = kit.H - kit.rng.range(SPOUT_DROP_MM[0], kit.H * SPOUT_DROP_MM[1]);

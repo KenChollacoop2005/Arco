@@ -19,6 +19,7 @@ const GROOVE_PAST_MM = 0.5; // groove cut outside the face
 const SLIT_EXTRA_MM = 1.5; // slit depth beyond panel depth
 const SLIT_EDGE_MM = 4.5; // slits kept off bay edges
 const SLIT_BLANK = 0.1; // extra chance a slit is skipped
+const SLIT_PIER_MM = 1.6; // least wall between slits
 const EGG_DEPTH_MM = 3.2; // egg crate cell depth
 const EGG_MIN_HEIGHT_MM = 3; // shortest egg crate cell
 const EGG_SILL_SHARE = 0.55; // egg crate sill share
@@ -81,6 +82,21 @@ export function recess(run, u0, u1, v0, v1, depth) {
   );
 }
 
+// Recess that leaves a parapet at the face
+export function railRecess(kit, run, u0, u1, v0, v1, depth, rail, thick) {
+  const safeDepth = Math.min(depth, v1 - v0 - rail - HEAD_MIN_MM);
+  // Open corners: leave a corner post
+  const low = run.lo < 0 ? Math.max(u0, thick) : u0;
+  const high = run.hi > run.length ? Math.min(u1, run.length - thick) : u1;
+  kit.cut(
+    run.prismU(
+      [[-CUT_PAST_MM, v0 + rail], [thick, v0 + rail], [thick, v0], [safeDepth, v0], [safeDepth, v1 - safeDepth], [-CUT_PAST_MM, v1 + CUT_PAST_MM]],
+      low,
+      high
+    )
+  );
+}
+
 export function glassPane(kit, run, u0, u1, v0, v1, depth) {
   // Open corners: stop at the side wall's recess
   const low = Math.max(u0, run.lo < 0 ? depth : GLASS_EDGE_MM);
@@ -122,6 +138,7 @@ export function makeStyle(rng, forced) {
     eggRows: rng.int(EGG_MIN, EGG_MAX),
     mullion: pick('mullion'),
     grooves: rng.chance(GROOVE_CHANCE),
+    punch: PUNCH_CHANCE,
   };
 }
 
@@ -195,9 +212,10 @@ function slitStyle(kit, run, style, low, high) {
     const zoneStart = Math.max(bayStart + SLIT_EDGE_MM, run.lo);
     const zoneEnd = Math.min(bayEnd - SLIT_EDGE_MM, run.hi);
     if (zoneEnd - zoneStart < style.slitWidth) continue;
-    for (let slit = 0; slit < style.slits; slit++) {
+    const slits = Math.max(1, Math.min(style.slits, Math.floor((zoneEnd - zoneStart) / (style.slitWidth + SLIT_PIER_MM))));
+    for (let slit = 0; slit < slits; slit++) {
       if (kit.rng.chance(style.blank + SLIT_BLANK)) continue;
-      const center = zoneStart + ((slit + 0.5) / style.slits) * (zoneEnd - zoneStart);
+      const center = zoneStart + ((slit + 0.5) / slits) * (zoneEnd - zoneStart);
       const slitStart = Math.max(zoneStart, center - style.slitWidth / 2);
       const slitEnd = Math.min(zoneEnd, center + style.slitWidth / 2);
       if (slitEnd - slitStart < MIN_WINDOW_MM) continue;
@@ -234,15 +252,18 @@ function finsStyle(kit, run, style, low, high) {
   const depth = style.depth + FIN_EXTRA_MM;
   const panelLow = low + style.sill * FIN_SILL_SHARE;
   const panelHigh = high - style.head;
-  kit.cut(recess(run, run.lo, run.hi, panelLow, panelHigh, depth));
   glassPane(kit, run, run.lo, run.hi, panelLow, panelHigh, depth);
   const last = run.length - style.finWidth;
   const count = Math.max(1, Math.round(last / (style.finGap + style.finWidth)));
+  // Fins are the wall left between cuts
+  let gapStart = run.lo;
   for (let fin = 0; fin <= count; fin++) {
     const at = (last * fin) / count;
     if ((fin === 0 && run.lo > 0) || (fin === count && run.hi < run.length)) continue;
-    kit.add('concrete', run.box(at, at + style.finWidth, panelLow - BURY_MM, panelHigh + BURY_MM, 0, depth + BURY_MM));
+    if (at > Math.max(gapStart, 0)) kit.cut(recess(run, gapStart, at, panelLow, panelHigh, depth));
+    gapStart = Math.max(gapStart, at + style.finWidth);
   }
+  if (gapStart < Math.min(run.hi, run.length)) kit.cut(recess(run, gapStart, run.hi, panelLow, panelHigh, depth));
 }
 
 function loggiaStyle(kit, run, style, low, high) {
@@ -252,19 +273,8 @@ function loggiaStyle(kit, run, style, low, high) {
       const zoneEnd = Math.min(bayEnd - style.pier / 2, run.hi);
       if (zoneEnd - zoneStart < MIN_PANEL_MM || kit.rng.chance(style.blank)) continue;
       const floor = base + LOGGIA_FLOOR_MM;
-      kit.cut(recess(run, zoneStart, zoneEnd, floor, top - style.head, LOGGIA_DEPTH_MM));
+      railRecess(kit, run, zoneStart, zoneEnd, floor, top - style.head, LOGGIA_DEPTH_MM, LOGGIA_PARAPET_MM, PARAPET_MM);
       glassPane(kit, run, zoneStart + LOGGIA_GLASS_EDGE_MM, zoneEnd - LOGGIA_GLASS_EDGE_MM, floor, top - style.head, LOGGIA_DEPTH_MM);
-      kit.add(
-        'concrete',
-        run.box(
-          Math.max(zoneStart, 0) - BURY_MM,
-          Math.min(zoneEnd, run.length) + BURY_MM,
-          floor - BURY_MM,
-          floor + LOGGIA_PARAPET_MM,
-          0,
-          PARAPET_MM
-        )
-      );
     }
   }
 }
@@ -288,7 +298,7 @@ function blankStyle(kit, run, style, low, high) {
   for (let line = low + STORY_MM; line < high - 1; line += STORY_MM) groove(kit, run, line);
   for (const [base, top] of storyGroups(low, high, 1)) {
     for (const [bayStart, bayEnd] of bays(run, 1)) {
-      if (!kit.rng.chance(PUNCH_CHANCE)) continue;
+      if (!kit.rng.chance(style.punch)) continue;
       const zoneStart = Math.max(bayStart + PUNCH_EDGE_MM, run.lo, OCT_EDGE_MM);
       const zoneEnd = Math.min(bayEnd - PUNCH_EDGE_MM, run.hi, run.length - OCT_EDGE_MM) - PUNCH_WIDTH_MM;
       if (zoneEnd <= zoneStart) continue;

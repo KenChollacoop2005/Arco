@@ -111,3 +111,33 @@ test('every module in generated structures passes printability', async () => {
   ];
   assert.deepEqual(await printFailures(structures.flatMap((structure) => structure.modules)), []);
 });
+
+// Variants a wide random sweep once failed
+const SWEEP_CASES = [
+  { family: 'fins', fp: '2x2', h: 1, seed: 583524249, mask: 4, roof: false },
+  { family: 'transfer', fp: '2x2', h: 1, seed: 3029476, mask: 4, roof: false },
+  { family: 'hall', fp: '2x2', h: 2, seed: 5249005, mask: 5, roof: true },
+  { family: 'deck', fp: '2x2', h: 2, seed: 3344027, mask: 4, roof: false },
+  { family: 'housing', fp: '1x2', h: 3, seed: 13805943, mask: 6, roof: false },
+  { family: 'studio', fp: '1x1', h: 2, seed: 4486572, mask: 15, roof: false },
+  { family: 'plant', fp: '2x2', h: 1, seed: 1190059, mask: 15, roof: true },
+  { family: 'spout', fp: '1x1', h: 1, seed: 3158389, mask: 4, roof: false },
+  { family: 'core', fp: 'L3', h: 4, seed: 23842817, mask: 6, roof: true },
+  { family: 'housing', fp: 'L4', h: 1, seed: 33352244, mask: 5, roof: true },
+  { family: 'pilotis', fp: '1x1', h: 1, seed: 17412589, mask: 5, roof: false },
+];
+
+test('variants that failed a wide random sweep are printable, with and without connectors', async () => {
+  const solids = await getSolids();
+  const failures = [];
+  for (const variant of SWEEP_CASES) {
+    for (const connectors of [false, true]) {
+      const built = solids.buildVariant(variant, { render: false, edges: false, connectors });
+      const result = checkPrintability(built.solid, { pieces: built.parts });
+      if (result.status === 'pass') continue;
+      const broken = Object.entries(result.rules).filter(([, rule]) => rule.status !== 'pass').map(([name, rule]) => `${name}=${JSON.stringify(rule.value)}`);
+      failures.push(`${variantKey(variant)} connectors=${connectors} ${broken.join(' ')}`);
+    }
+  }
+  assert.deepEqual(failures, []);
+});

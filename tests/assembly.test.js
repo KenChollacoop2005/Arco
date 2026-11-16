@@ -24,7 +24,7 @@ function orderIsValid(parts, order) {
 
 test('every generated structure in the seed set has a valid assembly order', () => {
   for (const seed of SEEDS) {
-    for (const scale of ['block', 'megastructure']) {
+    for (const scale of ['block', 'mega']) {
       const { modules } = generate({ seed, scale });
       const result = assemblySteps(modules);
       assert.ok(result.ok, `${seed} ${scale} has an order`);
