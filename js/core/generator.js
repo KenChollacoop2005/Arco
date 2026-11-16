@@ -14,7 +14,7 @@ import {
   toBody,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, canSupport, normalizeVariant } from './catalog.js';
+import { FAMILIES, FAMILY_IDS, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
@@ -60,6 +60,7 @@ const CAP_SEEDS = 6; // variants per cap family
 const PRUNE_ROUNDS = 24; // most repair passes
 const TOPUP_ROUNDS = 4; // extra dressing passes for the opening
 const UNIT_HEIGHT_TRIES = 2; // rolls toward a taller unit
+const GROW_RISE = [1, 2]; // stories a grown build may add on top
 
 const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5]];
 const UPPER_MASS = [
@@ -93,6 +94,17 @@ function emptyAt(world, cellX, cellY, level, stories = 1) {
   return true;
 }
 
+// True when a locked module shows a facade to this side
+function lockedFacade(ctx, instance, side) {
+  for (const [cellX, cellY] of instanceCells(instance)) {
+    for (let level = instance.z; level < instance.z + instance.h; level++) {
+      const other = moduleAt(ctx.world, cellX + SIDES[side][0], cellY + SIDES[side][1], level);
+      if (other && ctx.locked.has(other.id) && sideType(other, (side + 2) & 3) === 'facade') return true;
+    }
+  }
+  return false;
+}
+
 function place(ctx, spec) {
   if (ctx.world.modules.size >= ctx.limit) {
     ctx.capped = true;
@@ -101,6 +113,11 @@ function place(ctx, spec) {
   const variant = normalizeVariant({ mask: 0, roof: false, ...spec });
   const instance = { ...variant, x: spec.x, y: spec.y, z: spec.z, rot: spec.rot & 3 };
   if (spec.placement) instance.placement = spec.placement;
+  if (ctx.locked.size > 0 && FAMILIES[instance.family].rails) {
+    for (let side = 0; side < 4; side++) {
+      if (lockedFacade(ctx, instance, side)) instance.mask |= 1 << ((side - instance.rot + 4) & 3);
+    }
+  }
   if (!checkPlacement(ctx.world, instance).ok) return null;
   return addModule(ctx.world, instance);
 }
@@ -163,6 +180,13 @@ function planSite(ctx) {
     ctx.half = half;
     ctx.center = [centerX, centerY];
   }
+  if (ctx.lockedCenter && !mega) {
+    const center = ctx.lockedCenter.map(Math.round);
+    site = plinthCells().filter(
+      ([cellX, cellY]) => cellX >= center[0] - ctx.half && cellX < center[0] + ctx.half && cellY >= center[1] - ctx.half && cellY < center[1] + ctx.half
+    );
+    ctx.center = center;
+  }
   ctx.site = site;
   ctx.inSite = new Set(site.map(([cellX, cellY]) => cellKey(cellX, cellY)));
   ctx.datum = rng.pick(DATUMS);
@@ -199,6 +223,11 @@ function planTowers(ctx) {
   const base = opts.budget ? rng.int(OPENING_HEIGHT[0], OPENING_HEIGHT[1]) : (mega ? MEGA_HEIGHT : BLOCK_HEIGHT)[opts.height];
   const reach = opts.budget ? OPENING_REACH : (mega ? MEGA_REACH : BLOCK_REACH)[opts.density];
   ctx.towers = [];
+  if (ctx.lockedCenter) {
+    const [centerX, centerY] = ctx.lockedCenter;
+    const stories = Math.max(base + rng.int(0, HEIGHT_SPREAD[mega ? 1 : 0]), worldHeight(ctx.world) + rng.int(GROW_RISE[0], GROW_RISE[1]));
+    ctx.towers.push({ x: Math.floor(centerX), y: Math.floor(centerY), centerX, centerY, stories, reach, seed: ctx.pool[0], cells: [] });
+  }
   for (const [cellX, cellY] of rng.shuffle(ctx.site)) {
     if (ctx.towers.length >= count) break;
     if (!mega && (Math.abs(cellX - ctx.center[0] + 0.5) > 1 || Math.abs(cellY - ctx.center[1] + 0.5) > 1)) continue;
@@ -478,16 +507,17 @@ function prune(ctx) {
 }
 
 // Facade where no railed neighbour touches the side
-function setMasks(world) {
+function setMasks(world, locked) {
+  const closed = (other, side) => locked.has(other.id) && sideType(other, (side + 2) & 3) === 'facade';
   for (const instance of world.modules.values()) {
-    if (!FAMILIES[instance.family].rails) continue;
+    if (!FAMILIES[instance.family].rails || locked.has(instance.id)) continue;
     let mask = 0;
     for (let side = 0; side < 4; side++) {
       let joined = false;
       for (const [cellX, cellY] of instanceCells(instance)) {
         for (let level = instance.z; level < instance.z + instance.h && !joined; level++) {
           const other = moduleAt(world, cellX + SIDES[side][0], cellY + SIDES[side][1], level);
-          joined = !!other && other.id !== instance.id && FAMILIES[other.family].rails;
+          joined = !!other && other.id !== instance.id && FAMILIES[other.family].rails && !closed(other, side);
         }
         if (joined) break;
       }
@@ -568,6 +598,8 @@ export function generate(options) {
   };
   const angle = rng.range(0, Math.PI * 2);
   ctx.themeAxis = [Math.cos(angle), Math.sin(angle)];
+  const lockedCells = [...world.modules.values()].flatMap(instanceCells);
+  ctx.lockedCenter = lockedCells.length === 0 ? null : [0, 1].map((axis) => lockedCells.reduce((sum, cell) => sum + cell[axis] + 0.5, 0) / lockedCells.length);
   if (opts.scale === 'unit') {
     unit(ctx);
   } else {
@@ -586,7 +618,7 @@ export function generate(options) {
     }
     prune(ctx);
   }
-  setMasks(world);
+  setMasks(world, ctx.locked);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );
