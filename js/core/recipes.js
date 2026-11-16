@@ -4,6 +4,7 @@ import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, gr
 import { addBalconies } from './balcony.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
+const SAW_REACH_MM = CELL_MM; // saw cut reaches past any bulge
 const THIN_MM = 1.6; // parapets and thin walls
 const DECK_MM = 3; // thin floor slabs
 const CURB_MM = 4; // low bases under roof parts
@@ -254,8 +255,8 @@ const RECIPES = {
     for (let tooth = 0; tooth < teeth; tooth++) {
       const start = kit.inset + tooth * pitch;
       const end = start + pitch;
-      const past = tooth === teeth - 1 ? end + CELL_MM : end;
-      kit.cut(prismY([[start, kit.H + 1], [past, kit.H + 1], [past, kit.H - SAW_DROP_MM], [end, kit.H - SAW_DROP_MM], [start, kit.H]], -CELL_MM, kit.D + CELL_MM));
+      const past = tooth === teeth - 1 ? end + SAW_REACH_MM : end;
+      kit.cut(prismY([[start, kit.H + 1], [past, kit.H + 1], [past, kit.H - SAW_DROP_MM], [end, kit.H - SAW_DROP_MM], [start, kit.H]], -SAW_REACH_MM, kit.D + SAW_REACH_MM));
     }
   },
 

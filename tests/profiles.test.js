@@ -392,3 +392,14 @@ test('profiled modules of generated structures are printable', async () => {
   assert.ok(seen.size > 10);
   assert.deepEqual(failures, []);
 });
+
+test('facing claims at different levels still have an assembly order', () => {
+  const build = createBuild();
+  assert.equal(build.place(at(housing(one(BULGE, 0), { h: 3 }), 0, 0, 0)).ok, true);
+  assert.equal(build.place(at(housing(0, { h: 1 }), 2, 0, 0)).ok, true);
+  assert.equal(build.place(at(housing(one(BULGE, 2), { h: 1 }), 2, 0, 1)).ok, true);
+  assert.equal(build.place(at(housing(0, { h: 1 }), 2, 0, 2)).ok, true);
+  const steps = assemblySteps(build.modules);
+  assert.deepEqual(steps.blocked, []);
+  assert.equal(steps.steps.length, 4);
+});

@@ -10,10 +10,10 @@ function lowest(part) {
 export function assemblyOrder(parts) {
   const columns = new Map();
   for (const part of parts) {
-    for (const [cellX, cellY, level] of part.voxels) {
+    for (const [cellX, cellY, level, claim] of part.voxels) {
       const key = cellX + ',' + cellY;
       if (!columns.has(key)) columns.set(key, []);
-      columns.get(key).push({ level, id: part.id });
+      columns.get(key).push({ level, id: part.id, claim: !!claim });
     }
   }
   const under = new Map(parts.map((part) => [part.id, new Set()]));
@@ -21,6 +21,8 @@ export function assemblyOrder(parts) {
     column.sort((first, second) => first.level - second.level);
     for (let upper = 1; upper < column.length; upper++) {
       for (let lower = 0; lower < upper; lower++) {
+        // Two claims share a cell in opposite halves
+        if (column[lower].claim && column[upper].claim) continue;
         if (column[lower].id !== column[upper].id && column[lower].level < column[upper].level) {
           under.get(column[upper].id).add(column[lower].id);
         }
@@ -57,9 +59,12 @@ export function partsFromModules(modules) {
   return modules.map((instance) => {
     const voxels = [];
     // Claimed cells count: balconies slide down through them
-    const columns = [...instanceCells(instance), ...claimedCells(instance).map((claim) => [claim.x, claim.y])];
-    for (const [cellX, cellY] of columns) {
-      for (let level = instance.z; level < instance.z + instance.h; level++) voxels.push([cellX, cellY, level]);
+    const columns = [
+      ...instanceCells(instance).map(([cellX, cellY]) => [cellX, cellY, false]),
+      ...claimedCells(instance).map((claim) => [claim.x, claim.y, true]),
+    ];
+    for (const [cellX, cellY, claim] of columns) {
+      for (let level = instance.z; level < instance.z + instance.h; level++) voxels.push([cellX, cellY, level, claim]);
     }
     return { id: instance.id, voxels };
   });
