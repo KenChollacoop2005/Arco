@@ -2,11 +2,14 @@ import { CELL_MM, STORY_MM, CONNECTOR_CLEARANCE_MM, SIDE_CLEAR_MM } from '../con
 import { FOOTPRINTS, SIDES } from './grid.js';
 import { FAMILIES } from './catalog.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
+import { profilePlan, PROFILE_FOOTPRINTS } from './profiles.js';
 
 const END_MARGIN_MM = 4.5; // facade keep-out at closed corners
 const OVERSHOOT_MM = 1; // cut distance past open corners
 const JOIN_MM = 0.25; // overlap between joined cells
 const ROUND_SIDES = 16; // default cylinder facets
+const ZONE_EDGE_MM = 1.6; // openings kept off the piers of an inset
+const MIN_LOBE_MM = 1.2; // narrowest outline step worth keeping
 
 // Footprints as one or two rectangles, in cells
 const RECTS = {
@@ -85,15 +88,7 @@ function makeRun(cells, has, side, first, last, inset, mask, railed) {
   const startOpen = !startConcave && facadeAt(sideOf([-tangent[0], -tangent[1]]));
   const endOpen = !endConcave && facadeAt(sideOf(tangent));
   const length = end - start;
-  const tangent3 = [tangent[0], tangent[1], 0];
-  const inward = [-normal[0], -normal[1], 0];
-  const up = [0, 0, 1];
-  const point = (u, v, w) => [
-    origin[0] + tangent[0] * u - normal[0] * w,
-    origin[1] + tangent[1] * u - normal[1] * w,
-    v,
-  ];
-  const run = {
+  return frameRun({
     side,
     facade: facadeAt(side),
     length,
@@ -106,21 +101,91 @@ function makeRun(cells, has, side, first, last, inset, mask, railed) {
     origin,
     normal,
     tangent,
-    point,
-    box(u0, u1, v0, v1, w0, w1) {
-      const cornerA = point(u0, v0, w0);
-      const cornerB = point(u1, v1, w1);
-      return box(cornerA[0], cornerA[1], cornerA[2], cornerB[0], cornerB[1], cornerB[2]);
-    },
-    // Profile in (depth, height), swept along the wall
-    prismU: (poly, u0, u1) => prism(origin, inward, up, tangent3, poly, u0, u1),
-    // Profile in (along, depth), swept upward
-    prismV: (poly, v0, v1) => prism(origin, tangent3, inward, up, poly, v0, v1),
-    // Profile in (along, height), swept into the wall
-    prismW: (poly, w0, w1) => prism(origin, tangent3, up, inward, poly, w0, w1),
-    bayStart: (bay) => bay * CELL_MM - (start - rawStart),
+  });
+}
+
+// Adds the drawing helpers to a wall run
+function frameRun(run) {
+  const { origin, normal, tangent } = run;
+  const tangent3 = [tangent[0], tangent[1], 0];
+  const inward = [-normal[0], -normal[1], 0];
+  const up = [0, 0, 1];
+  const point = (u, v, w) => [
+    origin[0] + tangent[0] * u - normal[0] * w,
+    origin[1] + tangent[1] * u - normal[1] * w,
+    v,
+  ];
+  run.point = point;
+  run.box = (u0, u1, v0, v1, w0, w1) => {
+    const cornerA = point(u0, v0, w0);
+    const cornerB = point(u1, v1, w1);
+    return box(cornerA[0], cornerA[1], cornerA[2], cornerB[0], cornerB[1], cornerB[2]);
   };
+  // Profile in (depth, height), swept along the wall
+  run.prismU = (poly, u0, u1) => prism(origin, inward, up, tangent3, poly, u0, u1);
+  // Profile in (along, depth), swept upward
+  run.prismV = (poly, v0, v1) => prism(origin, tangent3, inward, up, poly, v0, v1);
+  // Profile in (along, height), swept into the wall
+  run.prismW = (poly, w0, w1) => prism(origin, tangent3, up, inward, poly, w0, w1);
+  run.bayStart = (bay) => bay * CELL_MM - run.shift;
   return run;
+}
+
+// Middle stretch of a side, moved in or out between its piers
+function zoneRun(run, side) {
+  const from = side.pier - run.shift;
+  const length = run.length - 2 * from;
+  const edge = side.shift < 0 ? ZONE_EDGE_MM : END_MARGIN_MM;
+  return frameRun({
+    side: run.side,
+    facade: run.facade,
+    length,
+    cells: run.cells,
+    shift: side.pier,
+    lo: edge,
+    hi: length - edge,
+    inLo: edge,
+    inHi: length - edge,
+    origin: run.point(from, 0, -side.shift),
+    normal: run.normal,
+    tangent: run.tangent,
+  });
+}
+
+// Body outline with inset and bulged sides, pulled in by a margin
+function profiledOutline(footprintId, plan, inset, margin) {
+  const [sizeX, sizeY] = PROFILE_FOOTPRINTS[footprintId];
+  const width = sizeX * CELL_MM;
+  const depth = sizeY * CELL_MM;
+  const extra = margin - inset;
+  const corners = [[width, 0], [width, depth], [0, depth], [0, 0]];
+  const lengths = [depth, width, depth, width];
+  const sides = plan.map((side, index) => {
+    if (!side.shift) return { base: -margin, zone: null };
+    const grow = side.shift > 0 ? extra : -extra;
+    const from = side.pier + grow;
+    const to = lengths[index] - side.pier - grow;
+    if (side.shift < 0 && side.pier - extra - margin < MIN_LOBE_MM) return { base: -margin + side.shift, zone: null };
+    if (to - from < MIN_LOBE_MM) return { base: -margin, zone: null };
+    return { base: -margin, zone: [from, to, -margin + side.shift] };
+  });
+  const outline = [];
+  sides.forEach((side, index) => {
+    const normal = SIDES[index];
+    const tangent = [-normal[1], normal[0]];
+    const at = (along, out) => outline.push([
+      corners[index][0] + tangent[0] * along + normal[0] * out,
+      corners[index][1] + tangent[1] * along + normal[1] * out,
+    ]);
+    at(-sides[(index + 3) & 3].base, side.base);
+    if (!side.zone) return;
+    const [from, to, plane] = side.zone;
+    at(from, side.base);
+    at(from, plane);
+    at(to, plane);
+    at(to, side.base);
+  });
+  return outline;
 }
 
 function wallRuns(cells, inset, mask, railed) {
@@ -157,8 +222,10 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
   const depth = (Math.max(...cells.map((cell) => cell[1])) + 1) * CELL_MM;
   const height = variant.h * STORY_MM;
   const ops = [];
+  const profile = profilePlan(variant);
   const kit = {
     variant,
+    profile,
     family,
     cells,
     inset,
@@ -189,6 +256,7 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
     },
     // Footprint as one solid, so L shapes have no shared faces
     block(margin, fromZ, toZ) {
+      if (profile) return prismZ(profiledOutline(variant.fp, profile, inset, margin), fromZ, toZ);
       const rects = kit.rects(margin);
       if (rects.length === 1) return box(rects[0][0], rects[0][1], fromZ, rects[0][2], rects[0][3], toZ);
       const [long, tall] = rects;
@@ -218,6 +286,7 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
     walls: wallRuns(cells, family.rails ? inset : SIDE_CLEAR_MM, variant.mask, family.rails),
     clear: SIDE_CLEAR_MM,
   };
+  if (profile) kit.walls = kit.walls.map((run) => (profile[run.side].shift && run.facade ? zoneRun(run, profile[run.side]) : run));
   kit.facades = kit.walls.filter((run) => run.facade);
   return kit;
 }

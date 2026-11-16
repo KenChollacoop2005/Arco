@@ -14,7 +14,7 @@ export function variantOf(record) {
   if (!family || !family.footprints.includes(record.fp)) return null;
   if (!Number.isInteger(record.h) || record.h < family.minStories || record.h > family.maxStories) return null;
   if (!Number.isFinite(record.seed) || !Number.isFinite(record.mask === undefined ? 0 : record.mask)) return null;
-  return normalizeVariant({ family: record.family, fp: record.fp, h: record.h, seed: record.seed, mask: record.mask || 0, roof: !!record.roof });
+  return normalizeVariant({ family: record.family, fp: record.fp, h: record.h, seed: record.seed, mask: record.mask || 0, roof: !!record.roof, prof: record.prof });
 }
 
 function cleanThumb(thumb) {

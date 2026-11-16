@@ -1,5 +1,6 @@
 import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
 import { hashString } from './rng.js';
+import { profileBoxes, profileClaims } from './profiles.js';
 
 export const FOOTPRINTS = {
   '1x1': [[0, 0]],
@@ -123,6 +124,19 @@ export function columnTop(world, cellX, cellY, fromLevel) {
 
 // Rigid block description in mm
 export function toBody(instance) {
+  const body = bodyBlock(instance);
+  if (!instance.prof) return body;
+  const pose = instancePose(instance);
+  // Notches, bulges and balconies as signed volumes
+  body.lumps = profileBoxes(instance).map((shape) => {
+    const size = [0, 1, 2].map((axis) => shape.max[axis] - shape.min[axis]);
+    const center = poseApply(pose, (shape.min[0] + shape.max[0]) / 2, (shape.min[1] + shape.max[1]) / 2, 0);
+    return { volume: shape.sign * size[0] * size[1] * size[2], x: center[0], y: center[1] };
+  });
+  return body;
+}
+
+function bodyBlock(instance) {
   return {
     id: instance.id,
     rects: instanceCells(instance).map(([cellX, cellY]) => [
@@ -171,7 +185,32 @@ export function variantKey(variant) {
     variant.seed >>> 0,
     variant.mask & 15,
     variant.roof ? 1 : 0,
-  ].join(':');
+  ].join(':') + (variant.prof ? ':' + variant.prof : '');
+}
+
+// Claimed cells; side -1 marks a corner
+export function claimedCells(instance) {
+  if (!instance.prof) return [];
+  const claims = profileClaims(instance.prof);
+  const cells = instanceCells(instance);
+  const turned = (local) => (local + instance.rot) & 3;
+  const reach = (cell, side) => SIDES[side][0] * cell[0] + SIDES[side][1] * cell[1];
+  const edgeCells = (side) => {
+    const far = Math.max(...cells.map((cell) => reach(cell, side)));
+    return cells.filter((cell) => reach(cell, side) === far);
+  };
+  const claimed = [];
+  for (let local = 0; local < 4; local++) {
+    const side = turned(local);
+    if (claims.sides[local]) {
+      for (const [cellX, cellY] of edgeCells(side)) claimed.push({ x: cellX + SIDES[side][0], y: cellY + SIDES[side][1], side });
+    }
+    if (!claims.corners[local]) continue;
+    const next = turned(local + 1);
+    const [cornerX, cornerY] = edgeCells(side).find((cell) => edgeCells(next).includes(cell));
+    claimed.push({ x: cornerX + SIDES[side][0] + SIDES[next][0], y: cornerY + SIDES[side][1] + SIDES[next][1], side: -1 });
+  }
+  return claimed;
 }
 
 export function structureHash(modules) {

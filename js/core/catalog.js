@@ -1,4 +1,5 @@
 import { FOOTPRINT_IDS } from './grid.js';
+import { cleanProfiles } from './profiles.js';
 
 export const ROLE_GROUPS = [
   'Structure',
@@ -64,6 +65,9 @@ const TABLE = [
   ['planted', 'Eco', 'Planted terrace', 'eco', MID, [1, 1], 0, 0, 0, 0, 0],
 ];
 
+// Families whose facade sides take side profiles
+export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall', 'shop', 'stair', 'deck', 'brise', 'fins', 'spout', 'panel', 'podium'];
+
 export const FAMILIES = {};
 for (const row of TABLE) {
   const [id, group, label, theme, footprints, heights, stack, ground, spanning, rails, roofable] = row;
@@ -80,6 +84,7 @@ for (const row of TABLE) {
     spanning: !!spanning,
     rails: !!rails,
     roofable: !!roofable,
+    profiles: PROFILE_FAMILIES.includes(id),
   };
 }
 
@@ -112,7 +117,7 @@ export function defaultPlacement(instance) {
 
 export function normalizeVariant(variant) {
   const family = FAMILIES[variant.family];
-  return {
+  const record = {
     family: variant.family,
     fp: variant.fp,
     h: variant.h,
@@ -120,4 +125,8 @@ export function normalizeVariant(variant) {
     mask: family.rails ? variant.mask & 15 : 15,
     roof: family.roofable ? !!variant.roof : !family.stack,
   };
+  // Flush variants carry no prof field
+  const prof = cleanProfiles(variant.prof, record.mask, record.fp, family.profiles);
+  if (prof) record.prof = prof;
+  return record;
 }

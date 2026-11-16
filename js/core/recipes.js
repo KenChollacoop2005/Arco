@@ -1,6 +1,7 @@
 import { CELL_MM, STORY_MM } from '../config.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
+import { addBalconies } from './balcony.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const THIN_MM = 1.6; // parapets and thin walls
@@ -253,8 +254,8 @@ const RECIPES = {
     for (let tooth = 0; tooth < teeth; tooth++) {
       const start = kit.inset + tooth * pitch;
       const end = start + pitch;
-      const past = tooth === teeth - 1 ? end + 1 : end;
-      kit.cut(prismY([[start, kit.H + 1], [past, kit.H + 1], [past, kit.H - SAW_DROP_MM], [end, kit.H - SAW_DROP_MM], [start, kit.H]], -1, kit.D + 1));
+      const past = tooth === teeth - 1 ? end + CELL_MM : end;
+      kit.cut(prismY([[start, kit.H + 1], [past, kit.H + 1], [past, kit.H - SAW_DROP_MM], [end, kit.H - SAW_DROP_MM], [start, kit.H]], -CELL_MM, kit.D + CELL_MM));
     }
   },
 
@@ -299,6 +300,7 @@ const RECIPES = {
         for (let bay = 0; bay < run.cells; bay++) {
           for (let slit = 0; slit < STAIR_SLITS; slit++) {
             const start = run.bayStart(bay) + STAIR_RISE_MM + slit * STAIR_STEP_MM;
+            if (start < run.inLo || start + slitWidth > run.inHi) continue;
             const low = story * STORY_MM + STAIR_RISE_MM + slit * STAIR_RISE_MM;
             kit.cut(recess(run, start, start + slitWidth, low, low + slitHeight, slitDepth));
             glassPane(kit, run, start, start + slitWidth, low, low + slitHeight, slitDepth);
@@ -765,5 +767,6 @@ export const RECIPE_IDS = Object.keys(RECIPES);
 export function buildRecipe(variant, clearance) {
   const kit = createKit(variant, clearance);
   RECIPES[variant.family](kit);
+  addBalconies(kit);
   return { ops: kit.ops, anchors: kit.anchors, kit };
 }
