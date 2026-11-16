@@ -141,6 +141,7 @@ export function setupCollection(collection) {
   });
 
   collection.load();
+  render();
   return {
     save,
     render,
