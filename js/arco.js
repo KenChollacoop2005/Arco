@@ -13,6 +13,7 @@ import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
 import { setupBuild } from './ui/build.js';
+import { setupPhysics } from './ui/physics.js';
 import { createCollection } from './core/collection.js';
 import { growOptions } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
@@ -234,6 +235,7 @@ for (const input of [query('#sectionToggle'), sectionPosition, ...document.query
   input.addEventListener('input', () => section.set(readSection()));
 }
 section.set(readSection());
+setupPhysics(app, modules, query('#physicsToggle'));
 
 query('#resetView').addEventListener('click', () => rig.home(false));
 

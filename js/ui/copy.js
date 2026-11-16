@@ -110,6 +110,9 @@ export const COPY = {
   exportButton: 'Export',
   sectionHorizontal: 'Horizontal',
   sectionVertical: 'Vertical',
+  physicsLoading: 'Loading physics',
+  physicsStands: 'Everything stayed up.',
+  physicsFell: 'Modules that fell:',
 
   exportTitle: 'Export',
   exportSelected: 'Selected modules',

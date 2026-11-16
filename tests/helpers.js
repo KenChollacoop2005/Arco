@@ -9,6 +9,17 @@ export async function getSolids() {
   return solids;
 }
 
+let rapier = null;
+
+// Rapier loaded once for the physics tests
+export async function getRapier() {
+  if (!rapier) {
+    rapier = (await import('../vendor/rapier/rapier.mjs')).default;
+    await rapier.init();
+  }
+  return rapier;
+}
+
 // One variant per family, footprint and height limit
 export function sampleVariants() {
   const variants = [];

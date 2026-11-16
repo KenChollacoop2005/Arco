@@ -3,6 +3,7 @@ import { CELL_MM, STORY_MM, BUILD_MS_PER_MODULE, BUILD_TOTAL_MS, BUILD_STAGGER_M
 import { instanceCells, instancePose, variantKey } from '../core/grid.js';
 import { hashString } from '../core/rng.js';
 import { planeDistance } from '../core/section.js';
+import { POSE_SIZE } from '../core/physics.js';
 import { createModuleMaterials, sectionPlanes, STATE_NORMAL, STATE_GHOST, STATE_INVALID } from './materials.js';
 import { createSketch } from './sketch.js';
 
@@ -13,7 +14,6 @@ const ANIM_SIZE = 4; // floats per instance: start, state, height, tone
 const GHOST_TONE = 0.5; // concrete tone of the placement ghost
 const CUT_ORDER = 1; // stencil pass draws before the fill
 const MM_PER_CELL = CELL_MM; // physics poses arrive in cells
-const POSE_SIZE = 7; // floats per pose: position, quaternion
 
 const srgbToLinear = (value) => {
   const share = value / 255;
@@ -47,6 +47,7 @@ export function createModuleView(view, requestGeometry) {
   const posePosition = new THREE.Vector3();
   const poseTurn = new THREE.Quaternion();
   const poseScale = new THREE.Vector3(1, 1, 1);
+  const poseGone = new THREE.Matrix4().makeScale(0, 0, 0);
   let clip = null;
   let batches = new Map();
   let records = new Map();
@@ -253,7 +254,7 @@ export function createModuleView(view, requestGeometry) {
     view.requestRender();
   }
 
-  // Physics poses in cells, one per id in order
+  // Physics poses in cells, zero turn hides a module
   function setPoses(ids, poses, settled) {
     ids.forEach((id, order) => {
       const record = records.get(id);
@@ -262,7 +263,8 @@ export function createModuleView(view, requestGeometry) {
       const at = order * POSE_SIZE;
       posePosition.set(poses[at] * MM_PER_CELL, poses[at + 1] * MM_PER_CELL, poses[at + 2] * MM_PER_CELL);
       poseTurn.set(poses[at + 3], poses[at + 4], poses[at + 5], poses[at + 6]);
-      batch.mesh.setMatrixAt(record.index, shift.compose(posePosition, poseTurn, poseScale));
+      const gone = poseTurn.lengthSq() === 0;
+      batch.mesh.setMatrixAt(record.index, gone ? poseGone : shift.compose(posePosition, poseTurn, poseScale));
     });
     touchBatches(settled);
   }
