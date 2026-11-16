@@ -10,6 +10,8 @@ import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
+import { setupCollection } from './ui/collection.js';
+import { createCollection } from './core/collection.js';
 import { variantKey } from './core/grid.js';
 import { createWorkerClient } from './workers/client.js';
 
@@ -61,6 +63,14 @@ export const app = {
   structureListeners: [],
 };
 
+// Storage access can throw, so it stays lazy
+const browserStore = {
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+};
+const collection = createCollection(browserStore);
+const collectionPanel = setupCollection(collection);
+
 const printOf = (instance) => {
   const part = modules.partOf(variantKey(instance));
   return part ? part.print : null;
@@ -70,10 +80,12 @@ const socketsOf = (instance) => {
   return part ? part.sockets : null;
 };
 
+const saveModule = (instance) => collectionPanel.save(instance, modules.partOf(variantKey(instance)));
+
 function showInspector() {
   const lastId = app.selection[app.selection.length - 1];
   const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
-  inspector.render({ structure: app.structure, checks: app.checks, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]) }, selected);
+  inspector.render({ structure: app.structure, checks: app.checks, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
 }
 
 // Click selects, shift click adds or removes

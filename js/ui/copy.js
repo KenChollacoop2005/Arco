@@ -34,7 +34,8 @@ export const COPY = {
   collectionExport: 'Export file',
   collectionImport: 'Import file',
   collectionRemove: 'Remove',
-  collectionFull: 'Storage is full. Remove a module and try again.',
+  collectionFull: 'Could not write to browser storage (full or blocked). Your modules stay until you close this page. Use Export file to keep them.',
+  collectionImported: 'modules added from the file',
   collectionBadFile: 'That file is not an Arco collection.',
 
   buildTitle: 'Build',
@@ -77,6 +78,7 @@ export const COPY = {
   critical: 'Critical joint',
   save: 'Save',
   saved: 'Saved to collection',
+  savedAlready: 'Already in the collection',
   exportStl: 'Export STL',
   checking: 'Checking',
   pass: 'Pass',

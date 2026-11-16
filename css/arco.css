@@ -227,6 +227,8 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); ou
 .card small { font: 10px var(--font-mono); color: var(--ink-soft); }
 .card .card-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--ink-soft); }
 .card .card-remove:hover { color: var(--fail); }
+.card .card-shape { display: flex; align-items: center; gap: 5px; }
+.card-footprint { flex: none; fill: var(--ink-soft); }
 
 /* Inspector */
 .rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; }

@@ -70,7 +70,7 @@ export function createInspector(body) {
     body.append(list);
   }
 
-  function moduleView({ checks, printOf, socketsOf, fit, onExport }, instance) {
+  function moduleView({ checks, printOf, socketsOf, fit, onExport, onSave }, instance) {
     const family = FAMILIES[instance.family];
     const [sizeX, sizeY] = footprintSize(instance.fp, instance.rot);
     body.append(node('p', 'inspector-name', family.label), node('p', 'inspector-sub', family.group));
@@ -100,9 +100,13 @@ export function createInspector(body) {
     else if (!fit) list.append(checkLine(COPY.connectorFit, '', COPY.checking));
     else list.append(checkLine(COPY.connectorFit, fitStatus(fit.gap, fit.clearance), `${fit.gap.toFixed(2)} mm`, `${COPY.fitMeasured} ${fit.clearance.toFixed(2)} mm`));
     body.append(list);
+    const save = node('button', 'primary', COPY.save);
+    save.addEventListener('click', () => onSave(instance));
     const button = node('button', 'plain', COPY.exportStl);
     button.addEventListener('click', () => onExport(instance.id));
-    body.append(button);
+    const actions = node('div', 'button-row');
+    actions.append(save, button);
+    body.append(actions);
   }
 
   return {

@@ -9,7 +9,7 @@ const SEED_NAME_MAX = 24; // longest seed used in a file name
 
 const query = (selector) => document.querySelector(selector);
 
-function download(file) {
+export function download(file) {
   const link = document.createElement('a');
   const address = URL.createObjectURL(new Blob([file.bytes], { type: 'application/octet-stream' }));
   link.href = address;
