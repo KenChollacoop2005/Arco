@@ -11,6 +11,7 @@ import {
 } from '../config.js';
 import { FOOTPRINTS, footprintSize, instancePose } from './grid.js';
 import { FAMILIES } from './catalog.js';
+import { profileColliders } from './profiles.js';
 
 export const POSE_SIZE = 7; // floats per pose: position, quaternion
 const PLINTH_THICK_CELLS = 1; // plinth collider depth
@@ -62,7 +63,8 @@ function cellBoxes(variant) {
 // Collider shapes of a variant in local mm
 export function variantColliders(variant) {
   const family = FAMILIES[variant.family];
-  return family && family.colliders ? family.colliders(variant) : cellBoxes(variant);
+  if (family && family.colliders) return family.colliders(variant);
+  return profileColliders(variant, SIDE_INSET_MM) || cellBoxes(variant);
 }
 
 const SHAPE_BUILDERS = {

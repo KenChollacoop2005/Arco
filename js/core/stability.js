@@ -23,11 +23,24 @@ function massOf(body) {
     momentY += rectArea * (minY + maxY) * 0.5;
   }
   const density = body.density === undefined ? 1 : body.density;
-  return {
-    weight: area * (body.z1 - body.z0) * density,
-    x: momentX / area,
-    y: momentY / area,
-  };
+  if (!body.lumps || body.lumps.length === 0) {
+    return {
+      weight: area * (body.z1 - body.z0) * density,
+      x: momentX / area,
+      y: momentY / area,
+    };
+  }
+  // Protrusions and notches shift the weight
+  const height = body.z1 - body.z0;
+  let volume = area * height;
+  momentX *= height;
+  momentY *= height;
+  for (const lump of body.lumps) {
+    volume += lump.volume;
+    momentX += lump.volume * lump.x;
+    momentY += lump.volume * lump.y;
+  }
+  return { weight: volume * density, x: momentX / volume, y: momentY / volume };
 }
 
 // Contact patches under each body
