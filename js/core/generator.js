@@ -18,6 +18,7 @@ import { FAMILIES, FAMILY_IDS, canSupport, normalizeVariant, sideType } from './
 import { checkPlacement, validateStructure } from './placement.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
+import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, cleanProfiles, packProfiles } from './profiles.js';
 
 export const SCALES = ['unit', 'block', 'mega'];
 
@@ -61,6 +62,12 @@ const PRUNE_ROUNDS = 24; // most repair passes
 const TOPUP_ROUNDS = 4; // extra dressing passes for the opening
 const UNIT_HEIGHT_TRIES = 2; // rolls toward a taller unit
 const GROW_RISE = [1, 2]; // stories a grown build may add on top
+const PROFILED_CHANCE = 0.35; // share of facade modules that get side profiles
+const PROFILE_SEED = 0x9f0f11e; // keeps profile rolls apart from layout rolls
+const PROFILE_ROUNDS = 6; // most stability repair passes for profiles
+const SIDE_KINDS = [[FLUSH, 3], [INSET, 2], [INSET_BALCONY, 2.5], [INSET_BALCONY_OUT, 1.5], [BULGE, 1.5], [BULGE_BALCONY, 1.5], [WRAP, 1]];
+// Kind used when a side has no open air
+const INSIDE_KIND = { [INSET_BALCONY_OUT]: INSET_BALCONY, [BULGE]: INSET, [BULGE_BALCONY]: INSET_BALCONY, [WRAP]: INSET_BALCONY };
 
 const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5]];
 const UPPER_MASS = [
@@ -527,6 +534,44 @@ function setMasks(world, locked) {
   }
 }
 
+// Seeded side profiles, kept where legal and stable
+function setProfiles(ctx) {
+  const { world, opts } = ctx;
+  const rng = makeRng(mixSeed(hashString(opts.seed), PROFILE_SEED));
+  const changed = [];
+  for (const instance of world.modules.values()) {
+    const family = FAMILIES[instance.family];
+    if (ctx.locked.has(instance.id) || !family.profiles || !PROFILE_FOOTPRINTS[instance.fp]) continue;
+    if ((instance.mask & 15) === 0 || !rng.chance(PROFILED_CHANCE)) continue;
+    const kinds = [FLUSH, FLUSH, FLUSH, FLUSH];
+    const legal = () => {
+      const prof = cleanProfiles(packProfiles(kinds), instance.mask, instance.fp, true);
+      if (prof) instance.prof = prof;
+      else delete instance.prof;
+      return checkPlacement(world, instance).ok;
+    };
+    for (const side of rng.shuffle([0, 1, 2, 3])) {
+      if (((instance.mask >> side) & 1) === 0) continue;
+      const kind = rng.weighted(SIDE_KINDS);
+      kinds[side] = kind;
+      if (legal()) continue;
+      kinds[side] = INSIDE_KIND[kind] || FLUSH;
+      if (!legal()) kinds[side] = FLUSH;
+    }
+    if (!legal()) delete instance.prof;
+    if (instance.prof) changed.push(instance);
+  }
+  if (opts.unstable || changed.length === 0) return;
+  for (let round = 0; round < PROFILE_ROUNDS; round++) {
+    const result = checkStability(bodiesOf(world));
+    if (result.status === 'pass') return;
+    const weak = changed.filter((instance) => instance.prof && result.modules.get(instance.id).status !== 'pass');
+    if (weak.length === 0) break;
+    for (const instance of weak) delete instance.prof;
+  }
+  if (checkStability(bodiesOf(world)).status !== 'pass') for (const instance of changed) delete instance.prof;
+}
+
 function unit(ctx) {
   const { rng } = ctx;
   const family = FAMILIES[rng.pick(FAMILY_IDS.filter((id) => !UNIT_SKIP.includes(id)))];
@@ -619,6 +664,7 @@ export function generate(options) {
     prune(ctx);
   }
   setMasks(world, ctx.locked);
+  setProfiles(ctx);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );
