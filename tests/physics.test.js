@@ -5,6 +5,7 @@ import { POSE_SIZE, createPhysicsWorld, createPoseStage, restPoses, simulate, va
 import { FOOTPRINT_IDS, FOOTPRINTS, instanceCells } from '../js/core/grid.js';
 import { FAMILIES } from '../js/core/catalog.js';
 import { generate } from '../js/core/generator.js';
+import { runChecks } from '../js/core/checks.js';
 import { getRapier } from './helpers.js';
 
 const INSET = CONNECTOR_CLEARANCE_MM / 2;
@@ -166,4 +167,75 @@ test('a new run takes over from the one before it', () => {
   assert.equal(view.poses[0], 4);
   stage.stop();
   assert.deepEqual(view.poses, restPoses(tower));
+});
+
+const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
+const UNSTABLE_MEGA_SEEDS = ['arco', 'habitat', 'x9'];
+const looseBlock = (seed) => ({ seed, scale: 'block', density: 0, height: 1, daring: 2, theme: 0, unstable: true });
+const looseMega = (seed) => ({ seed, scale: 'mega', density: 1, height: 1, daring: 2, theme: 2, unstable: true });
+
+// Ids resting on any of the given ids, at any height
+function ridersOf(checks, ids) {
+  const riding = new Set(ids);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [id, entry] of Object.entries(checks.modules)) {
+      if (!riding.has(Number(id)) && entry.stability.supports.some((lower) => riding.has(lower))) {
+        riding.add(Number(id));
+        grew = true;
+      }
+    }
+  }
+  return riding;
+}
+
+// Ids under a module, down to the plinth
+function chainUnder(checks, id, found = new Set()) {
+  for (const lower of checks.modules[id].stability.supports) {
+    if (lower !== 0 && !found.has(lower)) {
+      found.add(lower);
+      chainUnder(checks, lower, found);
+    }
+  }
+  return found;
+}
+
+test('structures that pass the static check stay up in physics', async () => {
+  const RAPIER = await getRapier();
+  for (const seed of SEEDS) {
+    for (const options of [{ seed, scale: 'block' }, { seed, scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 }]) {
+      const { modules } = generate(options);
+      assert.equal(runChecks(modules).stability, 'pass', `${seed} ${options.scale} static`);
+      assert.deepEqual(simulate(RAPIER, modules).fallen, [], `${seed} ${options.scale} physics`);
+    }
+  }
+});
+
+test('modules the static check fails fall, and what is left stands', async () => {
+  const RAPIER = await getRapier();
+  let failed = 0;
+  for (const options of [...SEEDS.map(looseBlock), ...UNSTABLE_MEGA_SEEDS.map(looseMega)]) {
+    const { modules } = generate(options);
+    const checks = runChecks(modules);
+    const statusOf = (id) => checks.modules[id].stability.status;
+    const flagged = modules.filter((instance) => statusOf(instance.id) !== 'pass').map((instance) => instance.id);
+    let left = modules;
+    let leftChecks = checks;
+    while (leftChecks.stability !== 'pass') {
+      const marked = left.filter((instance) => leftChecks.modules[instance.id].stability.status !== 'pass').map((instance) => instance.id);
+      const doomed = ridersOf(leftChecks, marked);
+      left = left.filter((instance) => !doomed.has(instance.id));
+      leftChecks = runChecks(left);
+    }
+    assert.ok(left.length > 0, `${options.seed} ${options.scale} something is left`);
+    assert.deepEqual(simulate(RAPIER, left).fallen, [], `${options.seed} ${options.scale} rest stands`);
+    for (const id of flagged.filter((flag) => statusOf(flag) === 'fail')) {
+      failed++;
+      const kept = new Set([id, ...chainUnder(checks, id), ...ridersOf(checks, [id])]);
+      const alone = modules.filter((instance) => kept.has(instance.id));
+      assert.ok(simulate(RAPIER, alone).fallen.includes(id), `${options.seed} ${options.scale} module ${id} falls`);
+    }
+  }
+  assert.ok(failed >= 10, `static failures in the set: ${failed}`);
 });
