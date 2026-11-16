@@ -11,6 +11,9 @@ import { getRapier } from './helpers.js';
 const INSET = CONNECTOR_CLEARANCE_MM / 2;
 const part = (id, family, fp, h, x, y, z, rot = 0) => ({ id, family, fp, h, x, y, z, rot, seed: 1, mask: 0, roof: false });
 const tower = [part(1, 'core', '2x2', 3, 0, 0, 0), part(2, 'housing', '2x2', 2, 0, 0, 3), part(3, 'terrace', '1x1', 1, 0, 0, 5)];
+const DROP_STEPS = 600; // steps for a module to leave the plinth
+const FALL_STEPS = 360; // steps for an unstable block to tip
+const FRAME_EVERY = 6; // steps between pose frames
 const boxVolume = (shape) => (shape.max[0] - shape.min[0]) * (shape.max[1] - shape.min[1]) * (shape.max[2] - shape.min[2]);
 
 function turned(turn, point) {
@@ -110,7 +113,7 @@ test('a module with nothing under it drops', async () => {
 test('a module that leaves the plinth is retired with a zero pose', async () => {
   const RAPIER = await getRapier();
   const world = createPhysicsWorld(RAPIER, [part(1, 'housing', '1x1', 1, 9, 9, 0)]);
-  for (let count = 0; count < 600; count++) world.step();
+  for (let count = 0; count < DROP_STEPS; count++) world.step();
   const poses = world.poses();
   const moved = world.drift().get(1);
   world.free();
@@ -140,9 +143,9 @@ test('switching physics off restores every pose exactly', async () => {
   const stage = createPoseStage(view);
   const world = createPhysicsWorld(RAPIER, modules);
   const feed = stage.start(world.ids);
-  for (let count = 0; count < 360; count++) {
+  for (let count = 0; count < FALL_STEPS; count++) {
     world.step();
-    if (count % 6 === 0) assert.equal(feed(world.poses(), false), true);
+    if (count % FRAME_EVERY === 0) assert.equal(feed(world.poses(), false), true);
   }
   assert.ok(world.fallen().length > 0, 'something fell');
   assert.notDeepEqual(view.poses, rest);

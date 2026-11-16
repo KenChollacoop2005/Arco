@@ -18,7 +18,7 @@ const FLOOR_CELLS = -40; // bodies below this are retired
 const DENSITY = 1; // uniform, as in the static check
 const SIDE_INSET_MM = CONNECTOR_CLEARANCE_MM / 2; // printed side gap per module
 const UNIT_MM = CELL_MM; // one physics length unit
-const HALF_TURN_X = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 }; // cylinder axis to z
+const QUARTER_TURN_X = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 }; // cylinder axis to z
 
 // Footprint cells merged into rectangles, in cells
 function footprintRects(footprintId) {
@@ -115,7 +115,7 @@ export function createPhysicsWorld(RAPIER, modules) {
   world.createCollider(
     RAPIER.ColliderDesc.cylinder(PLINTH_THICK_CELLS / 2, PLINTH_DIAMETER_CELLS / 2)
       .setTranslation(0, 0, -PLINTH_THICK_CELLS / 2)
-      .setRotation(HALF_TURN_X)
+      .setRotation(QUARTER_TURN_X)
       .setFriction(PHYSICS_FRICTION),
     plinth
   );

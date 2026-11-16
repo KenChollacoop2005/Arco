@@ -14,7 +14,7 @@ export function setupPhysics(app, moduleView, toggle) {
   }
 
   async function run() {
-    if (!toggle.checked || !app.structure) return;
+    if (!toggle.checked || !app.structure || app.structure.modules.length === 0) return;
     if (!client) {
       showToast(COPY.physicsLoading);
       client = createWorkerClient(new URL('../workers/physics.worker.js', import.meta.url));
@@ -23,7 +23,7 @@ export function setupPhysics(app, moduleView, toggle) {
     const feed = stage.start(modules.map((instance) => instance.id));
     try {
       const result = await client.call({ kind: 'run', modules }, (frame) => feed(frame.poses, frame.settled));
-      if (result) showToast(result.fallen ? `${COPY.physicsFell} ${result.fallen} ${COPY.assemblyOf} ${result.total}` : COPY.physicsStands);
+      if (result && toggle.checked) showToast(result.fallen ? `${COPY.physicsFell} ${result.fallen} ${COPY.assemblyOf} ${result.total}` : COPY.physicsStands);
     } catch {
       client = null;
       toggle.checked = false;

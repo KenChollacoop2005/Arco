@@ -4,6 +4,7 @@ import { sectionExtent, sectionPlane } from '../core/section.js';
 const POCHE_COLOR = 0x2b2a28; // solid fill on cut faces
 const FILL_SIZE_MM = 4000; // fill quad edge, larger than any model
 const FILL_ORDER = 2; // fill draws after the stencil pass
+const START_SHARE = 0.5; // cut position before the slider is read
 
 // Cut plane with a solid fill where it meets a module
 export function createSection(view, moduleView) {
@@ -25,7 +26,7 @@ export function createSection(view, moduleView) {
   fill.onAfterRender = (renderer) => renderer.clearStencil();
   view.scene.add(fill);
   const facing = new THREE.Vector3();
-  const state = { on: false, axis: 'h', share: 0.5 };
+  const state = { on: false, axis: 'h', share: START_SHARE };
   let extent = sectionExtent([]);
 
   function apply() {
