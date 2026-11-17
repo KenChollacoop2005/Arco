@@ -25,6 +25,7 @@ import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
 import { createWorkerClient } from './workers/client.js';
 import { drawnPorts } from './core/services.js';
+import { growLimits, placeCap } from './core/budget.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -217,7 +218,8 @@ function showBuild(list, options = {}) {
 // Generator run that keeps every current module
 async function growStructure(base) {
   const token = ++generateToken;
-  const result = await generator.call({ options: growOptions(generatePanel.readOptions(), base) });
+  const choices = generatePanel.readOptions();
+  const result = await generator.call({ options: { ...growOptions(choices, base), ...growLimits(generatePanel.readBudget(), choices.seed, base.length) } });
   if (token !== generateToken) return null;
   const known = new Set(base.map((instance) => instance.id));
   const only = new Set(result.modules.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
@@ -311,3 +313,13 @@ const exporter = setupExport(app, exportWorker, (fit) => {
 });
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
+// Budget: Build's cap and the module count follow the control
+const syncBudget = (budget) => {
+  builder.setCap(placeCap(budget));
+  generatePanel.showCount(app.structure ? app.structure.modules.length : 0);
+};
+generatePanel.onBudget(syncBudget);
+syncBudget(generatePanel.readBudget());
+app.structureListeners.push((result, phase) => {
+  if (phase === 'ready') generatePanel.showCount(result.modules.length);
+});

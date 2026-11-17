@@ -146,6 +146,10 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   refreshButtons();
 
   return {
+    // Most modules Build may place, from the budget
+    setCap(cap) {
+      build.setCap(cap);
+    },
     // A structure made elsewhere becomes the build
     adopt(modules) {
       build.replace(modules);

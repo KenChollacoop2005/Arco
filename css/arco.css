@@ -194,6 +194,8 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
   font-family: var(--font-mono);
 }
 .field input:focus-visible { outline: 2px solid var(--blue); outline-offset: 0; }
+.budget-cap { display: none; }
+#generateForm:has(input[name='budgetMode'][value='custom']:checked) .budget-cap { display: grid; }
 
 .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .check input { width: 14px; height: 14px; margin: 0; accent-color: var(--ink); }

@@ -2,6 +2,8 @@ import { normalizeOptions, openingOptions } from '../core/generator.js';
 import { randomSeedText } from '../core/rng.js';
 import { COPY } from './copy.js';
 import { readSetting, writeSetting } from './legend.js';
+import { BUDGET_HARD_CAP, BUDGET_CUSTOM_MIN, BUDGET_CUSTOM_DEFAULT, FANTASY_GROW } from '../config.js';
+import { makeBudget, budgetCap, generateLimits, budgetParams, budgetFromParams } from '../core/budget.js';
 
 const SKIP_KEY = 'arco.skipAnimation'; // remembered animation setting
 const URL_KEYS = { scale: 'scale', density: 'density', height: 'height', daring: 'cantilevers', theme: 'theme' };
@@ -13,14 +15,15 @@ function readUrl() {
   for (const [field, name] of Object.entries(URL_KEYS)) {
     if (params.has(name)) options[field] = params.get(name);
   }
-  return normalizeOptions(options);
+  return { options: normalizeOptions(options), budget: budgetFromParams((name) => params.get(name)) };
 }
 
-function writeUrl(options) {
+function writeUrl(options, budget) {
   const params = new URLSearchParams();
   params.set('seed', options.seed);
   for (const [field, name] of Object.entries(URL_KEYS)) params.set(name, options[field]);
   if (options.unstable) params.set('unstable', '1');
+  for (const [name, value] of Object.entries(budgetParams(budget))) params.set(name, value);
   window.history.replaceState(null, '', '?' + params.toString());
 }
 
@@ -29,6 +32,39 @@ export function setupGenerate(form, skipInput, generate) {
   const status = form.querySelector('#generateStatus');
   const button = form.querySelector('#generateButton');
   const seedInput = form.querySelector('#seedInput');
+  const capInput = form.querySelector('#budgetCap');
+  const countLine = form.querySelector('#budgetCount');
+  const budgetListeners = [];
+  let shownCount = 0;
+  capInput.min = BUDGET_CUSTOM_MIN;
+  capInput.max = BUDGET_HARD_CAP;
+  capInput.value = BUDGET_CUSTOM_DEFAULT;
+
+  function readBudget() {
+    return makeBudget({ mode: new FormData(form).get('budgetMode'), cap: capInput.value });
+  }
+
+  function writeBudget(budget) {
+    form.querySelector(`input[name="budgetMode"][value="${budget.mode}"]`).checked = true;
+    if (budget.mode === 'custom') capInput.value = budget.cap;
+  }
+
+  // Modules against the cap, draft copy
+  function showCount(count) {
+    shownCount = count;
+    const budget = readBudget();
+    const parts = [`${count} ${COPY.budgetOf} ${budgetCap(budget)} ${COPY.modules.toLowerCase()}`];
+    if (budget.mode === 'fantasy') parts.push(`${COPY.budgetGrows} ${FANTASY_GROW[0]} ${COPY.budgetTo} ${FANTASY_GROW[1]}`);
+    countLine.textContent = parts.join(', ');
+  }
+
+  function budgetChanged() {
+    writeBudget(readBudget());
+    showCount(shownCount);
+    for (const listener of budgetListeners) listener(readBudget());
+  }
+  for (const input of form.querySelectorAll('input[name="budgetMode"]')) input.addEventListener('change', budgetChanged);
+  capInput.addEventListener('change', budgetChanged);
 
   function readForm() {
     const data = new FormData(form);
@@ -52,15 +88,15 @@ export function setupGenerate(form, skipInput, generate) {
     form.querySelector('#allowUnstable').checked = !!options.unstable;
   }
 
-  async function run(options, keepUrl) {
+  async function run(options, keepUrl, budget = makeBudget()) {
     button.disabled = true;
     status.textContent = COPY.generating;
     try {
-      const result = await generate(options);
+      const result = await generate({ ...options, ...generateLimits(budget) });
       if (!result) return;
-      if (keepUrl) writeUrl(result.options);
+      if (keepUrl) writeUrl(result.options, budget);
       const notes = [`${result.modules.length} ${COPY.modules.toLowerCase()}`];
-      if (result.capped && !options.budget) notes.push(COPY.limitReached);
+      if (result.capped && !options.budget) notes.push(budget.mode === 'fixed' ? COPY.limitReached : COPY.budgetReached);
       if (options.unstable) notes.push(COPY.unstableNote);
       status.textContent = notes.join('. ');
     } catch {
@@ -74,11 +110,11 @@ export function setupGenerate(form, skipInput, generate) {
     event.preventDefault();
     const options = readForm();
     seedInput.value = options.seed;
-    run(options, true);
+    run(options, true, readBudget());
   });
   form.querySelector('#newSeed').addEventListener('click', () => {
     seedInput.value = randomSeedText();
-    run(readForm(), true);
+    run(readForm(), true, readBudget());
   });
 
   skipInput.checked = readSetting(SKIP_KEY, 'off') === 'on';
@@ -86,12 +122,13 @@ export function setupGenerate(form, skipInput, generate) {
 
   const shared = readUrl();
   if (shared) {
-    writeForm(shared);
-    run(shared, true);
+    writeForm(shared.options);
+    writeBudget(shared.budget);
+    run(shared.options, true, shared.budget);
   } else {
     const seed = randomSeedText();
     seedInput.value = seed;
     run(openingOptions(seed), false);
   }
-  return { readOptions: readForm };
+  return { readOptions: readForm, readBudget, showCount, onBudget: (listener) => budgetListeners.push(listener) };
 }

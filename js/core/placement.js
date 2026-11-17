@@ -180,7 +180,7 @@ export function checkPlacement(world, instance, options = {}) {
   const family = FAMILIES[instance.family];
   const cells = instanceCells(instance);
   const exists = world.modules.has(instance.id);
-  if (!exists && !options.ignoreCap && world.modules.size >= MAX_MODULES) {
+  if (!exists && !options.ignoreCap && world.modules.size >= (options.cap || MAX_MODULES)) {
     return { ok: false, reason: 'Module limit reached' };
   }
   for (const [cellX, cellY] of cells) {

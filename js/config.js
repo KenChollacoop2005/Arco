@@ -5,6 +5,12 @@ export const PLINTH_DIAMETER_CELLS = 12; // plinth width in cells
 export const MAX_MODULE_STORIES = 4; // tallest single module
 export const MAX_MODULES = 220; // performance cap
 
+// Budget modes
+export const BUDGET_HARD_CAP = 400; // most modules a structure may ever hold
+export const BUDGET_CUSTOM_MIN = 10; // smallest custom module cap
+export const BUDGET_CUSTOM_DEFAULT = 120; // custom cap when none is typed
+export const FANTASY_GROW = [8, 30]; // fewest and most modules one fantasy Grow adds
+
 // Opening structure
 export const OPENING_UNIT_MIN = 12; // fewest opening modules
 export const OPENING_UNIT_MAX = 30; // most opening modules

@@ -1,4 +1,4 @@
-import { MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX } from '../config.js';
+import { MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX, BUDGET_HARD_CAP } from '../config.js';
 import {
   SIDES,
   FOOTPRINTS,
@@ -156,7 +156,7 @@ function place(ctx, spec) {
       if (lockedFacade(ctx, instance, side)) instance.mask |= 1 << ((side - instance.rot + 4) & 3);
     }
   }
-  if (!checkPlacement(ctx.world, instance).ok) return null;
+  if (!checkPlacement(ctx.world, instance, { cap: Math.max(MAX_MODULES, ctx.limit) }).ok) return null;
   return addModule(ctx.world, instance);
 }
 
@@ -338,6 +338,14 @@ function planHeights(ctx) {
   for (const tower of ctx.towers) {
     for (const [cellX, cellY] of tower.cells) heights.set(cellKey(cellX, cellY), tower.stories);
   }
+  // Fantasy Grow stacks the plan on what already stands
+  if (opts.rise) {
+    const top = worldHeight(ctx.world);
+    for (const [cellX, cellY] of ctx.site) {
+      const key = cellKey(cellX, cellY);
+      if (heights.get(key)) heights.set(key, heights.get(key) + columnTop(ctx.world, cellX, cellY, top));
+    }
+  }
   ctx.heights = heights;
 }
 
@@ -407,7 +415,8 @@ function massCell(ctx, cell, level, open) {
 
 function massing(ctx) {
   const top = Math.max(0, ...ctx.heights.values());
-  const massLimit = Math.floor(ctx.limit * MASS_SHARE);
+  // A fantasy Grow spends its share on top of what is locked
+  const massLimit = ctx.opts.rise ? ctx.locked.size + Math.floor((ctx.limit - ctx.locked.size) * MASS_SHARE) : Math.floor(ctx.limit * MASS_SHARE);
   for (let level = 0; level < top; level++) {
     bridgeGate(ctx, level);
     const open = (cellX, cellY) => {
@@ -964,6 +973,9 @@ export function normalizeOptions(options = {}) {
     unstable: !!options.unstable,
     budget: options.budget ? Math.min(MAX_MODULES, options.budget) : 0,
     budgetMin: options.budgetMin || 0,
+    // Module cap from the budget control; a plain limit, not part of the seed
+    cap: options.cap ? Math.min(BUDGET_HARD_CAP, Math.max(1, Math.round(options.cap))) : 0,
+    rise: !!options.rise,
     locked: options.locked || [],
   };
 }
@@ -993,7 +1005,7 @@ export function generate(options) {
     opts,
     world,
     locked: new Set(world.modules.keys()),
-    limit: opts.budget || MAX_MODULES,
+    limit: opts.budget || opts.cap || MAX_MODULES,
     capped: false,
     towers: [],
     pool: Array.from({ length: STYLE_POOL }, () => rng.int(1, 0x7fffffff)),

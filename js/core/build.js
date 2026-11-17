@@ -1,4 +1,4 @@
-import { CELL_MM } from '../config.js';
+import { CELL_MM, MAX_MODULES } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
 import { isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
@@ -19,9 +19,9 @@ export function restLevel(world, footprintId, rot, originX, originY) {
 }
 
 // Lowest level where a docked bridge meets two docks
-export function dockLevel(world, instance) {
+export function dockLevel(world, instance, cap = MAX_MODULES) {
   for (let level = instance.z; level <= worldHeight(world); level++) {
-    if (checkPlacement(world, { ...instance, z: level }).ok) return level;
+    if (checkPlacement(world, { ...instance, z: level }, { cap }).ok) return level;
   }
   return instance.z;
 }
@@ -33,8 +33,9 @@ export function growOptions(choices, modules) {
   return { ...choices, scale: choices.scale === 'unit' ? 'block' : choices.scale, budget: 0, budgetMin: 0, locked: modules.map((instance) => ({ ...instance })) };
 }
 
-export function createBuild(initial = []) {
+export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
   let modules = initial.slice();
+  let placeCap = cap;
   let undoStack = [];
   let redoStack = [];
 
@@ -57,12 +58,16 @@ export function createBuild(initial = []) {
   }
 
   function check(instance) {
-    return checkPlacement(worldFromModules(modules), instance);
+    return checkPlacement(worldFromModules(modules), instance, { cap: placeCap });
   }
 
   return {
     get modules() {
       return modules;
+    },
+    // Most modules Build may place
+    setCap(next) {
+      placeCap = next;
     },
     canUndo: () => undoStack.length > 0,
     canRedo: () => redoStack.length > 0,
@@ -72,8 +77,8 @@ export function createBuild(initial = []) {
       const [originX, originY] = snapOrigin(xMm, yMm, variant.fp, turn);
       const world = worldFromModules(modules);
       const instance = { ...normalizeVariant(variant), x: originX, y: originY, z: restLevel(world, variant.fp, turn, originX, originY), rot: turn };
-      if (isDocked(instance)) instance.z = dockLevel(world, instance);
-      const result = checkPlacement(world, instance);
+      if (isDocked(instance)) instance.z = dockLevel(world, instance, placeCap);
+      const result = checkPlacement(world, instance, { cap: placeCap });
       return { instance, ok: result.ok, reason: result.reason };
     },
     place(spec) {
@@ -97,7 +102,7 @@ export function createBuild(initial = []) {
       if (!current) return { ok: false, reason: '' };
       const turned = { ...current, rot: nextRot(current.rot) };
       const rest = modules.filter((instance) => instance.id !== id);
-      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 });
+      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 }, { cap: placeCap });
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
