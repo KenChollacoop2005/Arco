@@ -9,6 +9,7 @@ const LINE_SEED = 0x11e5; // keeps line rolls apart from other rolls
 const TARP_SEED = 0x7a59; // keeps tarp rolls apart from line rolls
 const PEG_DROP_MM = 0.2; // laundry hangs this far under the line
 const TARP_OFF_MM = 1; // tarp corners sit this far off the hook
+const TARP_CORNERS = [3, 4]; // fewest and most hooks per tarp
 
 const distance = (first, second) => Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
 
@@ -22,7 +23,7 @@ function stringTarps(hooks, context, rng) {
       .filter((hook) => hook !== first && hook.left > 0 && Math.abs(hook.position[2] - first.position[2]) <= TARP_RISE_MM && distance(hook.position, first.position) <= TARP_REACH_MM)
       .sort((hookA, hookB) => distance(hookA.position, first.position) - distance(hookB.position, first.position) || hookA.module - hookB.module || hookA.index - hookB.index);
     const anchors = [first];
-    const want = rng.int(3, 4);
+    const want = rng.int(TARP_CORNERS[0], TARP_CORNERS[1]);
     for (const hook of near) {
       if (anchors.length >= want) break;
       const clear = (anchor) => !pathBlocked(context, [standoff(anchor, TARP_OFF_MM), standoff(hook, TARP_OFF_MM)], [anchor.module, hook.module]);

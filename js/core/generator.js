@@ -903,8 +903,12 @@ function services(ctx) {
   const mains = rng.int(0, MAINS[opts.density][mega]);
   for (let main = 0; main < mains; main++) mainColumn(ctx, rng).forEach(keep);
   // Some tanks get a pump, same footprint and seed
+  const pumped = [];
   for (const instance of world.modules.values()) {
-    if (instance.family === 'tank' && !ctx.locked.has(instance.id) && rng.chance(PUMPED_TANK_CHANCE)) instance.family = 'pumptank';
+    if (instance.family === 'tank' && !ctx.locked.has(instance.id) && rng.chance(PUMPED_TANK_CHANCE)) {
+      instance.family = 'pumptank';
+      pumped.push(instance);
+    }
   }
   const pumps = rng.int(0, SMALL_PUMPS[opts.density][mega]);
   for (let pump = 0; pump < pumps; pump++) keep(roofSpot(ctx, rng, 'smallpump', THIRSTY));
@@ -919,6 +923,10 @@ function services(ctx) {
     for (const instance of failing.length > 0 ? failing : added.splice(0)) removeModule(world, instance.id);
     for (const instance of failing) added.splice(added.indexOf(instance), 1);
   }
+  // Still failing: drop every service part and pumped tank
+  if (checkStability(bodiesOf(world)).status === 'pass') return;
+  for (const instance of added) removeModule(world, instance.id);
+  for (const instance of pumped) instance.family = 'tank';
 }
 
 function unit(ctx) {

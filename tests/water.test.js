@@ -215,3 +215,14 @@ test('generated networks balance, keep head and throughput, and repeat for a see
     assert.deepEqual(planWater(modules, seed), plan);
   }
 });
+
+test('a pump with more water of its own than it can push spills the rest and the balance holds', () => {
+  const solved = solveWater({
+    nodes: [{ id: 'pump', kind: 'pump', supply: 4, head: 9, throughput: 3, level: 0 }, consumer('farm', 10)],
+    links: [link(0, 'pump', 'farm', 1, 0)],
+  });
+  assert.equal(solved.nodes.farm.taken, 3);
+  assert.equal(solved.nodes.pump.overflow, 1);
+  assert.equal(solved.totals.supplied, 4);
+  assert.ok(balanced(solved.totals), JSON.stringify(solved.totals));
+});

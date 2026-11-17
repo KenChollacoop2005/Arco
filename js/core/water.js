@@ -6,12 +6,14 @@ import { SIDES, instanceCells, worldFromModules, columnTop, moduleAt } from './g
 import { FAMILIES, hasPump } from './catalog.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
 import { structureMounts } from './mounts.js';
-import { stringContext, pipeRoute } from './strings.js';
+import { stringContext, pipeRoute, pathBlocked } from './strings.js';
 
 const WATER_SEED = 0x7a7e5; // keeps network rolls apart from other rolls
 const STEP = WATER_STEP * WATER_QUARTERS; // split step in quarters
 const SPILL_LIP_MM = 1; // overflow leaves this far past the wall
 const SPILL_LIFT_MM = 0.5; // overflow starts this far above the roof
+const SPILL_CLEAR_MM = 1; // sheet collision test stops this far above the landing
+const SPLIT_ROUNDS_MAX = 1000; // safety cap on split rounds
 export const WATER_REASONS = ['out of head', 'no route', 'blocked by module', 'source empty', 'no free port'];
 
 const toQuarters = (units) => Math.round(units * WATER_QUARTERS);
@@ -34,7 +36,7 @@ export function splitWater(available, branches) {
   let left = available;
   const order = branches.map((branch, index) => index).sort((first, second) => branches[first].length - branches[second].length || branches[first].port - branches[second].port);
   const room = (index) => branches[index].want - given[index];
-  for (let guard = 0; guard < 1000 && left > 0; guard++) {
+  for (let guard = 0; guard < SPLIT_ROUNDS_MAX && left > 0; guard++) {
     const active = order.filter((index) => room(index) > 0);
     if (active.length === 0) break;
     const share = Math.floor(left / active.length / STEP) * STEP;
@@ -101,7 +103,7 @@ export function solveWater({ nodes, links }) {
     let spill = 0;
     if (node.kind === 'pump') {
       const capped = Math.min(available, toQuarters(node.throughput));
-      spill = Math.max(0, inflow - capped);
+      spill = available - capped;
       available = capped;
     }
     // Head: a pump resets it, a merge keeps the lowest
@@ -219,7 +221,7 @@ export function runSize(fromPort, toPort) {
 }
 
 // Where a node's surplus lands: the shortest fall beside it
-function spillOf(world, node, instances, consumerAt) {
+function spillOf(world, node, instances, consumerAt, context) {
   const own = new Set(instances.flatMap(instanceCells).map(([cellX, cellY]) => cellX + ',' + cellY));
   const level = node.level;
   let best = null;
@@ -238,7 +240,10 @@ function spillOf(world, node, instances, consumerAt) {
       const out = Math.hypot(lip[0], lip[1]);
       const foot = out > rim ? [(lip[0] * rim) / out, (lip[1] * rim) / out] : [lip[0], lip[1]];
       const option = { node: target, landing, points: [lip, [foot[0], foot[1], landing * STORY_MM]], key: (target ? 0 : 1) * 1000 - landing };
-      if (!best || option.key < best.key) best = option;
+      // A sheet may not start in or fall through a module
+      if (best && option.key >= best.key) continue;
+      if (pathBlocked(context, [lip, [foot[0], foot[1], landing * STORY_MM + SPILL_CLEAR_MM]], node.members)) continue;
+      best = option;
     }
   }
   return best ? [best] : [];
@@ -278,7 +283,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
       if (role.kind === 'consumer') consumerAt.set(instance.id, node.id);
     }
   }
-  for (const node of nodes) node.spill = spillOf(world, node, node.members.map((id) => byId.get(id)), consumerAt);
+  for (const node of nodes) node.spill = spillOf(world, node, node.members.map((id) => byId.get(id)), consumerAt, context);
   // Estimated water and head at each node while building
   const estimate = new Map(nodes.map((node) => [node.id, { units: node.kind === 'source' ? node.supply : node.kind === 'pump' ? node.supply : 0, head: node.kind === 'pump' ? node.head : GRAVITY_HEAD, gravity: node.kind !== 'pump', used: 0, entry: null }]));
   const links = [];

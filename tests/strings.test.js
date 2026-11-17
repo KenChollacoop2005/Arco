@@ -87,3 +87,22 @@ test('no string of a generated structure passes through a module or below the pl
   }
   assert.ok(pipes >= 20 && sheets >= 5, `pipes ${pipes}, sheets ${sheets}`);
 });
+
+test('overflow sheets never start in or fall through a module', () => {
+  // Structures where sheets used to cut through bridges, shops, cores and decks
+  const cases = [['barbican', 'mega', 0], ['habitat', 'mega', 2], ['arco', 'mega', 0], ['barbican', 'block', 0], ['brunswick', 'mega', 2]];
+  let sheets = 0;
+  for (const [seed, scale, density] of cases) {
+    const { modules } = generate({ seed, scale, density });
+    const context = stringContext(modules);
+    const plan = planServices(modules, seed, { context });
+    const members = new Map(plan.water.nodes.map((node) => [node.id, node.members]));
+    for (const sheet of plan.sheets) {
+      const [lip, foot] = sheet.points;
+      const fall = [lip, [foot[0], foot[1], foot[2] + 1]];
+      assert.equal(pathBlocked(context, fall, members.get(sheet.from)), null, `${seed} ${scale} ${density} sheet from ${sheet.from}`);
+      sheets++;
+    }
+  }
+  assert.ok(sheets >= 10, `sheets ${sheets}`);
+});
