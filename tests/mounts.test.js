@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PORT_FRONT_MM } from '../js/config.js';
-import { normalizeVariant, FAMILIES } from '../js/core/catalog.js';
+import { normalizeVariant, FAMILIES, hasPump } from '../js/core/catalog.js';
 import { variantOf } from '../js/core/collection.js';
 import { instancePose, poseApply } from '../js/core/grid.js';
 import { PORT_TYPES, STRING_PORT_TYPES } from '../js/core/ports.js';
@@ -98,8 +98,10 @@ test('every family with rules gets each port type on a full facade variant', () 
   for (const [family, rules] of Object.entries(MOUNT_PORTS)) {
     const spec = FAMILIES[family];
     const fp = spec.footprints.includes('1x2') ? '1x2' : spec.footprints[0];
-    const ports = variantMounts(normalizeVariant({ family, fp, h: spec.maxStories, seed: 21, mask: 15, roof: false }));
-    for (const rule of rules) assert.ok(ports.some((port) => port.type === rule.type), `${family} ${rule.type}`);
+    const variant = normalizeVariant({ family, fp, h: spec.maxStories, seed: 21, mask: 15, roof: false });
+    const ports = variantMounts(variant);
+    // Pump ports only on a variant that has the pump
+    for (const rule of rules) if (!rule.when || hasPump(variant)) assert.ok(ports.some((port) => port.type === rule.type), `${family} ${rule.type}`);
   }
 });
 

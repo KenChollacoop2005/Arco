@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FAMILIES, normalizeVariant } from '../js/core/catalog.js';
+import { FAMILIES, PLANT_PUMP_CHANCE, hasPump, normalizeVariant } from '../js/core/catalog.js';
 import { toBody, variantKey, worldFromModules } from '../js/core/grid.js';
 import { validateStructure } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
@@ -94,4 +94,27 @@ test('service families are reachable from Build and save as parts', () => {
     assert.ok(saved, `${spec.family} saves`);
     assert.equal(variantKey(saved), variantKey(normalizeVariant(spec)));
   }
+});
+
+test('some plant rooms carry a pump by seed, with water ports only then', async () => {
+  const plants = variantsOf('plant', Array.from({ length: 60 }, (unused, index) => index + 1));
+  const pumped = plants.filter(hasPump);
+  const share = pumped.length / plants.length;
+  assert.ok(Math.abs(share - PLANT_PUMP_CHANCE) < 0.15, `pump share ${share}`);
+  for (const variant of plants) {
+    const water = variantMounts(variant).filter((port) => port.type.startsWith('water'));
+    assert.equal(water.length > 0, hasPump(variant), variantKey(variant));
+    assert.equal(hasPump({ ...variant }), hasPump(variant));
+  }
+  // The pump adds steel on the roof and nothing else changes
+  const solids = await getSolids();
+  const plain = plants.find((variant) => !hasPump(variant));
+  const pump = plants.find(hasPump);
+  for (const variant of [plain, pump]) {
+    for (const connectors of [false, true]) {
+      const built = solids.buildVariant(variant, { connectors, render: false, edges: false });
+      assert.equal(checkPrintability(built.solid, { pieces: built.parts }).status, 'pass', variantKey(variant));
+    }
+  }
+  assert.ok(generated.some((result) => result.modules.some((instance) => instance.family === 'plant' && hasPump(instance))), 'pumped plant room generated');
 });

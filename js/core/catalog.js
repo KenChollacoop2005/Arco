@@ -1,4 +1,5 @@
 import { cleanProfiles } from './profiles.js';
+import { makeRng, mixSeed } from './rng.js';
 
 export const ROLE_GROUPS = [
   'Structure',
@@ -161,4 +162,15 @@ export function normalizeVariant(variant) {
   const dock = cleanDock(variant.dock, record.mask, record.fp, family);
   if (dock) record.dock = dock;
   return record;
+}
+
+const PLANT_PUMP_SEED = 0x9a17; // keeps the pump roll apart from shape rolls
+export const PLANT_PUMP_CHANCE = 0.35; // share of plant rooms with a pump
+export const PUMP_FAMILIES = ['pumproom', 'smallpump', 'pumptank']; // families that always pump
+
+// True when a variant carries a pump, seeded for plant rooms
+export function hasPump(variant) {
+  if (PUMP_FAMILIES.includes(variant.family)) return true;
+  if (variant.family !== 'plant') return false;
+  return makeRng(mixSeed(variant.seed >>> 0, PLANT_PUMP_SEED)).chance(PLANT_PUMP_CHANCE);
 }

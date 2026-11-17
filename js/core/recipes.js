@@ -1,5 +1,5 @@
 import { CELL_MM, STORY_MM, DOCK_LIP_MM, DOCK_HEAD_MM } from '../config.js';
-import { isDocked } from './catalog.js';
+import { isDocked, hasPump } from './catalog.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
@@ -157,6 +157,7 @@ const PUMP_DRUM_MM = [2, 9]; // pump drum radius and height
 const SMALL_PUMP_MM = [4.5, 11, 1, 2]; // small pump body radius, height, cap, shift off center
 const PUMP_MOTOR_MM = [2.6, 3, 6]; // pump motor half length, half width, height
 const TANK_PUMP_MM = [1.9, 2, 7, 1]; // tank pump radius, corner offset, height, cap
+const PLANT_PUMP_MM = [2.3, 2.8, 8, 1]; // plant room pump radius, corner offset, height, cap
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -607,6 +608,12 @@ const RECIPES = {
         kit.add('steel', cyl(centerX, centerY, top, top + height + 1, VENT_MM[0]));
       }
     }
+    if (!hasPump(kit.variant)) return;
+    // Pump in the free corner of the first cell
+    const [radius, offset, pumpHeight, cap] = PLANT_PUMP_MM;
+    const at = kit.clear + offset;
+    kit.add('steel', cyl(at, at, top - SINK_MM, top + pumpHeight, radius, radius, 10));
+    kit.add('hazard', cyl(at, at, top + pumpHeight, top + pumpHeight + cap, radius, radius, 10));
   },
 
   vent(kit) {

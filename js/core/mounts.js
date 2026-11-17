@@ -1,6 +1,6 @@
 import { CELL_MM, STORY_MM, PORT_RAY_OUT_MM, PORT_RAY_IN_MM, PORT_RAY_STEP_MM, PORT_TRIES, PORT_FRONT_MM } from '../config.js';
 import { FOOTPRINTS, SIDES, instancePose, poseApply, variantKey, worldFromModules, moduleAt, instanceCells } from './grid.js';
-import { FAMILIES } from './catalog.js';
+import { FAMILIES, hasPump } from './catalog.js';
 import { PORT_TYPES } from './ports.js';
 import { buildRecipe } from './recipes.js';
 import { variantColliders } from './physics.js';
@@ -64,7 +64,11 @@ export const MOUNT_PORTS = {
   pumptank: TANK,
   turbine: [{ type: 'power', sides: 'any', each: 'module', zMm: [5, 12], along: [0.45, 0.55], capacity: 4 }],
   solar: [{ type: 'power', sides: 'any', each: 'module', zMm: [2.8, 4.5], along: [0.3, 0.7], capacity: 4 }],
-  plant: MACHINE(4, 15),
+  plant: [
+    ...MACHINE(4, 15),
+    { type: 'water-in', sides: 'any', each: 'module', zMm: [3, 15], when: 'pump' },
+    { type: 'water-out', sides: 'any', each: 'module', zMm: [3, 15], when: 'pump' },
+  ],
   smokestack: MACHINE(1, 4),
   chimney: MACHINE(1, 4),
   cooling: MACHINE(0.5, 2),
@@ -214,7 +218,7 @@ export function variantMounts(variant, rules = MOUNT_PORTS[variant.family] || []
     const rng = makeRng(mixSeed(variant.seed >>> 0, MOUNT_SEED));
     for (const rule of rules) {
       const kind = PORT_TYPES[rule.type];
-      if (!kind) continue;
+      if (!kind || (rule.when === 'pump' && !hasPump(variant))) continue;
       for (const group of edgeGroups(rule, variant, cells)) {
         const port = placePort(ops, rule, variant, group, rng);
         if (!port) continue;
