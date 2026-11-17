@@ -1,5 +1,5 @@
 import { analyze } from '../core/analysis.js';
-import { waterNetwork, wireNetwork, tarpNetwork } from '../core/flows.js';
+import { waterNetwork, wireNetwork } from '../core/flows.js';
 import { structureMounts } from '../core/mounts.js';
 import { stringContext } from '../core/strings.js';
 import { planServices } from '../core/services.js';
@@ -16,7 +16,7 @@ self.onmessage = (event) => {
     const ports = mounts.filter((port) => port.active).map(portView);
     // Water, power and lines as strings on the physical ports
     const services = planServices(modules, seed, { mounts, context });
-    const flows = { water: waterNetwork(modules, seed), wires: wireNetwork(modules, seed).wires, tarps: tarpNetwork(modules, seed).tarps, ports, services };
+    const flows = { water: waterNetwork(modules, seed), wires: wireNetwork(modules, seed).wires, ports, services };
     self.postMessage({ id, done: true, result: { ...analyze(modules), flows } });
   } catch (error) {
     self.postMessage({ id, error: String(error && error.message ? error.message : error) });

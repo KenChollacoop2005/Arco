@@ -2,6 +2,7 @@ import { structureMounts } from './mounts.js';
 import { stringContext, makeString } from './strings.js';
 import { planWater } from './water.js';
 import { planPower } from './power.js';
+import { planLines } from './lines.js';
 
 const portKey = (module, index) => module + ':' + index;
 
@@ -19,5 +20,6 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
   // Overflow sheets, basin to basin or down to the roof or plinth
   const sheets = water.solved.sheets.filter((sheet) => sheet.points).map((sheet) => ({ from: sheet.from, to: sheet.to, units: sheet.units, points: sheet.points }));
   const power = planPower(modules, seedText, { ports: mounts, context });
-  return { water, power: { links: power.links, powered: power.powered }, pipes, sheets, wires: power.cables, lines: [], blocked: [...blockedPipes, ...power.blocked] };
+  const plain = planLines(modules, seedText, { ports: mounts, context });
+  return { water, power: { links: power.links, powered: power.powered }, pipes, sheets, wires: power.cables, lines: plain.lines, laundry: plain.laundry, tarps: plain.tarps, blocked: [...blockedPipes, ...power.blocked] };
 }

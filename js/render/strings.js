@@ -28,6 +28,10 @@ const LIGHT_SHARE = 0.5; // share of strings drawn on weak devices
 const TAG_COLOR = 0xe2b31c; // yellow cable tag
 const TAG_MM = [1.4, 0.75]; // tag length along the cable, radius
 const VERTICAL_TOL = 0.98; // a segment this upright counts as down a facade
+const LAUNDRY_THICK_MM = 0.15; // washing thickness
+const TARP_SAG_MM = 3; // tarp middle hangs this far below its corners
+const TARP_OPACITY = 0.9; // tarps let a little light through
+const TARP_LIGHT = 2; // most tarps on weak devices
 
 // Ports, pipes, cables, lines and overflow; render only, never picked or exported
 export function createStrings(view) {
@@ -40,7 +44,10 @@ export function createStrings(view) {
   const looks = {};
   for (const [type, [color]] of Object.entries(STRING_LOOK)) looks[type] = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, clippingPlanes: sectionPlanes });
   const water = new THREE.MeshStandardMaterial({ color: SHEET_COLOR, roughness: 0.15, metalness: 0, transparent: true, opacity: SHEET_OPACITY, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: sectionPlanes });
+  const cloth = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, side: THREE.DoubleSide, clippingPlanes: sectionPlanes });
+  const canvas = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: TARP_OPACITY, clippingPlanes: sectionPlanes });
   const meshes = [];
+  const plain = [];
   const matrix = new THREE.Matrix4();
   const basis = new THREE.Matrix4();
   const turn = new THREE.Quaternion();
@@ -56,6 +63,10 @@ export function createStrings(view) {
     for (const mesh of meshes.splice(0)) {
       group.remove(mesh);
       mesh.dispose();
+    }
+    for (const mesh of plain.splice(0)) {
+      group.remove(mesh);
+      mesh.geometry.dispose();
     }
   }
 
@@ -176,10 +187,54 @@ export function createStrings(view) {
     });
   }
 
+  // Washing on the lines, flat pieces facing across the line
+  function setLaundry(pieces) {
+    addMesh(cube, cloth, pieces.length, (mesh) => {
+      pieces.forEach((piece, order) => {
+        across.set(piece.along[0], piece.along[1], 0);
+        if (across.lengthSq() < 1e-9) across.set(1, 0, 0);
+        across.normalize();
+        up.set(0, 0, 1);
+        out.crossVectors(across, up).normalize();
+        basis.makeBasis(across, up, out);
+        turn.setFromRotationMatrix(basis);
+        middle.set(piece.top[0], piece.top[1], piece.top[2] - piece.drop / 2);
+        size.set(piece.width, piece.drop, LAUNDRY_THICK_MM);
+        mesh.setMatrixAt(order, matrix.compose(middle, turn, size));
+        mesh.setColorAt(order, tint.setHex(piece.color));
+      });
+    });
+  }
+
+  // Tarps as fans from a sagging middle, one mesh
+  function setTarps(tarps) {
+    if (tarps.length === 0) return;
+    const positions = [];
+    const colors = [];
+    for (const tarp of tarps) {
+      tint.setHex(tarp.color);
+      const low = [tarp.middle[0], tarp.middle[1], tarp.middle[2] - TARP_SAG_MM];
+      tarp.points.forEach((corner, index) => {
+        const next = tarp.points[(index + 1) % tarp.points.length];
+        for (const point of [low, corner, next]) {
+          positions.push(point[0], point[1], point[2]);
+          colors.push(tint.r, tint.g, tint.b);
+        }
+      });
+    }
+    const shape = new THREE.BufferGeometry();
+    shape.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    shape.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    shape.computeVertexNormals();
+    const mesh = new THREE.Mesh(shape, canvas);
+    group.add(mesh);
+    plain.push(mesh);
+  }
+
   return {
     group,
     // Ports and strings from the services plan; light draws fewer and thinner
-    set({ ports = [], pipes = [], wires = [], lines = [], sheets = [] } = {}, light = false) {
+    set({ ports = [], pipes = [], wires = [], lines = [], sheets = [], laundry = [], tarps = [] } = {}, light = false) {
       clear();
       const keep = (list) => (light ? list.slice(0, Math.ceil(list.length * LIGHT_SHARE)) : list);
       setPorts(ports);
@@ -187,6 +242,8 @@ export function createStrings(view) {
       setStrings('wire', keep(wires), light);
       setStrings('line', keep(lines), light);
       setSheets(sheets);
+      setLaundry(keep(laundry));
+      setTarps(light ? tarps.slice(0, TARP_LIGHT) : tarps);
       view.requestRender();
     },
     setShown(on) {

@@ -8,7 +8,6 @@ import { createModuleView } from './render/modules.js';
 import { createDrawing } from './render/drawing.js';
 import { createSection } from './render/section.js';
 import { createDecor } from './render/decor.js';
-import { createFlows } from './render/flows.js';
 import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
@@ -24,7 +23,6 @@ import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
-import { TARP_LIGHT } from './core/flows.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -63,7 +61,6 @@ const inspector = createInspector(query('#inspectorBody'));
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
 const section = createSection(view, modules);
 const decor = createDecor(view);
-const flows = createFlows(view);
 const strings = createStrings(view);
 
 export const app = {
@@ -284,17 +281,13 @@ app.structureListeners.push((result, phase) => {
 });
 query('#physicsToggle').addEventListener('change', refreshDecor);
 
-// Flow networks show on a finished, still structure only
+// Strings show on a finished, still structure only
 function refreshFlows() {
   const still = app.structure && builtResult === app.structure && app.analysis && app.analysis.flows;
-  const tarps = still ? app.analysis.flows.tarps : [];
-  // Weak devices draw fewer tarps
-  flows.set(toggles.light ? tarps.slice(0, TARP_LIGHT) : tarps);
   const services = still ? app.analysis.flows.services : null;
-  strings.set(services ? { ports: app.analysis.flows.ports, pipes: services.pipes, wires: services.wires, lines: services.lines, sheets: services.sheets } : {}, toggles.light);
-  const shown = toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked;
-  flows.setShown(shown);
-  strings.setShown(shown);
+  const { pipes, wires, lines, sheets, laundry, tarps } = services || {};
+  strings.set(services ? { ports: app.analysis.flows.ports, pipes, wires, lines, sheets, laundry, tarps } : {}, toggles.light);
+  strings.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
 }
 bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });
 toggles.watch('flows', refreshFlows);

@@ -135,3 +135,16 @@ export const CABLE_SHIFT_MM = 0.9; // seeded shift of each cable's ends
 export const CABLE_TILT = 0.35; // most sideways swing of a cable's sag, radians
 export const SPARE_SHARE = 0.15; // share of links with a slack spare cable
 export const SPARE_SAG = [0.22, 0.32]; // spare cable sag, share of the span
+
+// Strings: plain lines and decor
+export const LINE_RISE_MM = 0.6 * 25; // most height difference along a clothesline
+export const CLOTHESLINES_MAX = 36; // most clotheslines per structure
+export const LAUNDRY_GAP_MM = [2.6, 5.5]; // spacing of laundry along a line
+export const LAUNDRY_CHANCE = 0.7; // chance a spot on the line has laundry
+export const LAUNDRY_SIZE_MM = [[1.4, 3], [1.8, 3.6]]; // laundry width range, drop range
+export const LAUNDRY_COLORS = [0xe4ded0, 0x9b3d3d, 0x3d5e8a, 0xd9b44a, 0x6f8f5e, 0xc4c4c4, 0xb86040]; // washing colors
+export const TARP_REACH_MM = 2.3 * 25; // longest tarp edge
+export const TARP_RISE_MM = 25; // most height difference between tarp corners
+export const TARP_MIN_AREA_MM2 = 60; // smallest tarp in plan
+export const TARPS_MAX = 6; // most tarps per structure
+export const TARP_COLORS = [0xb5694a, 0xc9a23f, 0x5f9c95]; // terracotta, mustard, faded teal
