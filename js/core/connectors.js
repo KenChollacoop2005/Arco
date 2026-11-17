@@ -163,10 +163,6 @@ export function plugOps(edge, clearance) {
   return { adds, cuts: [] };
 }
 
-// Half widths of the box stand-ins for a dock slot and a plug rail
-export const dockSlotHalf = (clearance = CONNECTOR_CLEARANCE_MM) => RAIL_NECK_MM / 2 + (RAIL_DEPTH_MM + clearance / 2) * flankTan + clearance / 2 / flankCos;
-export const plugRailHalf = RAIL_NECK_MM / 2;
-
 export const socketHalf = (clearance) => (PEG_SIZE_MM + clearance) / 2;
 export const socketDepth = (clearance) => (PEG_LENGTH_MM + clearance) / 2;
 

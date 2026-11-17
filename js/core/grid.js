@@ -1,6 +1,8 @@
-import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
+import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, DOCK_LIP_MM } from '../config.js';
 import { hashString } from './rng.js';
 import { profileBoxes, profileClaims } from './profiles.js';
+import { dockSlots, plugRails } from './docks.js';
+import { isDocked } from './catalog.js';
 
 export const FOOTPRINTS = {
   '1x1': [[0, 0]],
@@ -128,6 +130,7 @@ export function columnTop(world, cellX, cellY, fromLevel) {
 // Rigid block description in mm
 export function toBody(instance) {
   const body = bodyBlock(instance);
+  if (instance.dock) dockSurfaces(instance, body);
   if (!instance.prof) return body;
   const pose = instancePose(instance);
   // Notches, bulges and balconies as signed volumes
@@ -137,6 +140,26 @@ export function toBody(instance) {
     return { volume: shape.sign * size[0] * size[1] * size[2], x: center[0], y: center[1] };
   });
   return body;
+}
+
+// Local box as a world rectangle
+function worldRect(pose, shape) {
+  const first = poseApply(pose, shape.min[0], shape.min[1], 0);
+  const second = poseApply(pose, shape.max[0], shape.max[1], 0);
+  return [Math.min(first[0], second[0]), Math.min(first[1], second[1]), Math.max(first[0], second[0]), Math.max(first[1], second[1])];
+}
+
+// Lips carry, and a docked bridge rests on its rail feet only
+function dockSurfaces(instance, body) {
+  const pose = instancePose(instance);
+  const cells = FOOTPRINTS[instance.fp];
+  const level = body.z0 + DOCK_LIP_MM;
+  if (isDocked(instance)) {
+    body.bottoms = [{ z: level, rects: plugRails(cells, instance.dock).map((rail) => worldRect(pose, rail)) }];
+    return;
+  }
+  const lips = dockSlots(cells, instance.dock, instance.h * STORY_MM).map((slot) => worldRect(pose, slot.lip));
+  body.tops = [{ z: body.z1, rects: body.rects }, { z: level, rects: lips }];
 }
 
 function bodyBlock(instance) {

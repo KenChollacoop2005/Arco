@@ -11,8 +11,9 @@ import {
   PHYSICS_MOVE_TOL_CELLS,
 } from '../config.js';
 import { FOOTPRINTS, footprintSize, instancePose } from './grid.js';
-import { FAMILIES } from './catalog.js';
+import { FAMILIES, isDocked } from './catalog.js';
 import { profileColliders } from './profiles.js';
+import { dockColliders, plugColliders } from './docks.js';
 
 export const POSE_SIZE = 7; // floats per pose: position, quaternion
 const PLINTH_THICK_CELLS = 1; // plinth collider depth
@@ -65,7 +66,13 @@ function cellBoxes(variant) {
 export function variantColliders(variant) {
   const family = FAMILIES[variant.family];
   if (family && family.colliders) return family.colliders(variant);
-  return profileColliders(variant, SIDE_INSET_MM) || cellBoxes(variant);
+  const shapes = profileColliders(variant, SIDE_INSET_MM) || cellBoxes(variant);
+  if (!variant.dock) return shapes;
+  // Docks open their slots, docked bridges add their rails
+  const cells = FOOTPRINTS[variant.fp];
+  return isDocked(variant)
+    ? plugColliders(shapes, cells, variant.dock, SIDE_INSET_MM)
+    : dockColliders(shapes, cells, variant.dock, variant.h * STORY_MM, SIDE_INSET_MM);
 }
 
 const SHAPE_BUILDERS = {

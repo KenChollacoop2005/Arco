@@ -12,6 +12,11 @@ const FORCE_EPS = 1e-12; // force treated as zero
 const LP_MAX_VARIABLES = 6000; // global solve size limit
 const levelKey = (height) => Math.round(height * 1000);
 
+// Faces a body rests on and offers, default its cell rectangles
+const bottomsOf = (body) => body.bottoms || [{ z: body.z0, rects: body.rects }];
+const topsOf = (body) => body.tops || [{ z: body.z1, rects: body.rects }];
+const restOf = (body) => Math.min(...bottomsOf(body).map((face) => face.z));
+
 function massOf(body) {
   let area = 0;
   let momentX = 0;
@@ -47,26 +52,30 @@ function massOf(body) {
 function findContacts(bodies) {
   const tops = new Map();
   for (const body of bodies) {
-    const key = levelKey(body.z1);
-    if (!tops.has(key)) tops.set(key, []);
-    tops.get(key).push(body);
+    for (const face of topsOf(body)) {
+      const key = levelKey(face.z);
+      if (!tops.has(key)) tops.set(key, []);
+      tops.get(key).push({ body, rects: face.rects });
+    }
   }
   const contacts = new Map();
   for (const body of bodies) {
     const patches = [];
-    if (levelKey(body.z0) === 0) {
-      for (const rect of body.rects) patches.push({ lower: 0, rect });
-    } else {
-      for (const lower of tops.get(levelKey(body.z0)) || []) {
-        if (lower === body) continue;
-        for (const upperRect of body.rects) {
+    for (const face of bottomsOf(body)) {
+      if (levelKey(face.z) === 0) {
+        for (const rect of face.rects) patches.push({ lower: 0, rect });
+        continue;
+      }
+      for (const lower of tops.get(levelKey(face.z)) || []) {
+        if (lower.body === body) continue;
+        for (const upperRect of face.rects) {
           for (const lowerRect of lower.rects) {
             const minX = Math.max(upperRect[0], lowerRect[0]);
             const minY = Math.max(upperRect[1], lowerRect[1]);
             const maxX = Math.min(upperRect[2], lowerRect[2]);
             const maxY = Math.min(upperRect[3], lowerRect[3]);
             if (maxX - minX > LENGTH_EPS && maxY - minY > LENGTH_EPS && (maxX - minX) * (maxY - minY) > AREA_EPS) {
-              patches.push({ lower: lower.id, rect: [minX, minY, maxX, maxY] });
+              patches.push({ lower: lower.body.id, rect: [minX, minY, maxX, maxY] });
             }
           }
         }
@@ -79,7 +88,7 @@ function findContacts(bodies) {
 
 function findGrounded(bodies, contacts) {
   const grounded = new Set([0]);
-  const ordered = bodies.slice().sort((bodyA, bodyB) => bodyA.z0 - bodyB.z0);
+  const ordered = bodies.slice().sort((bodyA, bodyB) => restOf(bodyA) - restOf(bodyB));
   for (const body of ordered) {
     if (contacts.get(body.id).some((patch) => grounded.has(patch.lower))) grounded.add(body.id);
   }
@@ -205,7 +214,7 @@ function greedyPass(bodies, contacts, grounded, masses, margin) {
   const resultants = new Map();
   const ordered = bodies
     .filter((body) => grounded.has(body.id))
-    .sort((bodyA, bodyB) => bodyB.z0 - bodyA.z0);
+    .sort((bodyA, bodyB) => restOf(bodyB) - restOf(bodyA));
   for (const body of ordered) {
     const mass = masses.get(body.id);
     let total = mass.weight;
