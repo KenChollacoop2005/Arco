@@ -9,6 +9,7 @@ import { createDrawing } from './render/drawing.js';
 import { createSection } from './render/section.js';
 import { createDecor } from './render/decor.js';
 import { createFlows } from './render/flows.js';
+import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
@@ -63,6 +64,7 @@ const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#tit
 const section = createSection(view, modules);
 const decor = createDecor(view);
 const flows = createFlows(view);
+const strings = createStrings(view);
 
 export const app = {
   view,
@@ -288,7 +290,10 @@ function refreshFlows() {
   const tarps = still ? app.analysis.flows.tarps : [];
   // Weak devices draw fewer tarps
   flows.set(toggles.light ? tarps.slice(0, TARP_LIGHT) : tarps);
-  flows.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
+  strings.set({ ports: still ? app.analysis.flows.ports : [] });
+  const shown = toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked;
+  flows.setShown(shown);
+  strings.setShown(shown);
 }
 bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });
 toggles.watch('flows', refreshFlows);

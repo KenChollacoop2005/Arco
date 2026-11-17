@@ -12,7 +12,14 @@ export const PORT_TYPES = {
   balcony: { label: 'Balcony slot', capacity: 1 },
   infill: { label: 'Infill slot', capacity: 1 },
   seat: { label: 'Bearing seat', capacity: 1 },
+  // Physical string ports, placed on real surfaces by mounts.js
+  power: { label: 'Power bracket', capacity: 2, string: 'wire' },
+  'water-in': { label: 'Water inlet', capacity: 2, string: 'pipe' },
+  'water-out': { label: 'Water outlet', capacity: 2, string: 'pipe' },
+  line: { label: 'Line hook', capacity: 2, string: 'line' },
 };
+
+export const STRING_PORT_TYPES = ['power', 'water-in', 'water-out', 'line'];
 
 export const PORT_FACES = ['top', 'bottom', 'facade', 'connector', 'side'];
 export const PORT_REPEATS = ['module', 'cell', 'story'];
@@ -121,3 +128,4 @@ export function instancePorts(instance) {
     };
   });
 }
+

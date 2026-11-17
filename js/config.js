@@ -77,3 +77,10 @@ export const LIGHT_MEMORY_GB_MAX = 4; // memory at or under this: light preset
 
 // Analysis
 export const EXPOSURE_REACH_CELLS = 4; // free cells counted in front of a face
+
+// Strings: physical ports
+export const PORT_RAY_OUT_MM = 14; // probe starts this far outside the cell edge
+export const PORT_RAY_IN_MM = 13; // probe reaches this far inside the cell edge
+export const PORT_RAY_STEP_MM = 0.25; // probe step before refining
+export const PORT_TRIES = 8; // seeded spots tried per port
+export const PORT_FRONT_MM = 2; // space a port needs in front of it
