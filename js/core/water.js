@@ -334,12 +334,12 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     for (const option of options) {
       const route = pipeRoute(context, option.out, option.inlet);
       if (route.blocked) {
-        tried.blocked = true;
+        tried.blocked = tried.blocked || { from: option.out, to: option.inlet, route };
         continue;
       }
       return { ...option, route, need };
     }
-    if (tried.blocked) return { fail: { reason: 'blocked by module' } };
+    if (tried.blocked) return { fail: { reason: 'blocked by module', attempt: tried.blocked } };
     if (tried.head < Infinity) return { fail: { reason: 'out of head', short: tried.head } };
     if (tried.port) return { fail: { reason: 'no free port' } };
     if (tried.empty) return { fail: { reason: 'source empty' } };
@@ -393,10 +393,13 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     }
   }
   const solved = solveWater({ nodes, links });
+  // Pipes that would have run but hit a module
+  const blocked = [...noLink.values()].filter((fail) => fail.attempt).map(({ attempt }) => ({ from: attempt.from, to: attempt.to, points: attempt.route.points, blocked: attempt.route.blocked }));
   const report = {};
   for (const node of nodes) {
     if (node.kind !== 'consumer') continue;
-    report[node.module] = consumerStatus(node, solved, links.filter((link) => link.to === node.id), noLink.get(node.id));
+    const fail = noLink.get(node.id);
+    report[node.module] = consumerStatus(node, solved, links.filter((link) => link.to === node.id), fail && { reason: fail.reason, short: fail.short || 0 });
   }
-  return { nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report };
+  return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report };
 }

@@ -1,4 +1,4 @@
-import { PIPE_STANDOFF_MM, PIPE_DIAGONAL_MM, STRING_CLEAR_MM } from '../config.js';
+import { PIPE_STANDOFF_MM, PIPE_DIAGONAL_MM, STRING_CLEAR_MM, CURVE_STEPS, WIRE_OUT_MM } from '../config.js';
 import { instancePose, variantKey } from './grid.js';
 import { buildRecipe } from './recipes.js';
 import { groupAt, worldColliders } from './mounts.js';
@@ -107,4 +107,35 @@ export function pipeRoute(context, from, to) {
     blocked = blocked || hit;
   }
   return { shape: null, points: pipePoints(from, to, 'drop'), length: pathLength(pipePoints(from, to, 'drop')), blocked };
+}
+
+// Points of a hanging string, ends exact, lowest at mid span
+export function sagPoints(from, to, sag, steps) {
+  const points = [];
+  for (let index = 0; index <= steps; index++) {
+    const share = index / steps;
+    points.push([
+      from[0] + (to[0] - from[0]) * share,
+      from[1] + (to[1] - from[1]) * share,
+      from[2] + (to[2] - from[2]) * share - 4 * sag * share * (1 - share),
+    ]);
+  }
+  return points;
+}
+
+// One string between two ports: type, ends, points, length with sag
+export function makeString(type, from, to, points, extra = {}) {
+  const end = (port) => ({ module: port.module, index: port.index, position: port.position, normal: port.normal });
+  return { type, from: end(from), to: end(to), points, length: pathLength(points), blocked: null, ...extra };
+}
+
+// A hanging wire or line, checked against modules and its length limit
+export function hangString(context, type, from, to, sag, limit) {
+  const start = standoff(from, WIRE_OUT_MM);
+  const end = standoff(to, WIRE_OUT_MM);
+  const curve = sagPoints(start, end, sag, CURVE_STEPS);
+  const string = makeString(type, from, to, [from.position, ...curve, to.position], { sag });
+  if (string.length > limit) string.blocked = { module: null, reason: 'length' };
+  else string.blocked = pathBlocked(context, string.points, [from.module, to.module]);
+  return string;
 }

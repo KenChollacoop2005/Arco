@@ -290,7 +290,8 @@ function refreshFlows() {
   const tarps = still ? app.analysis.flows.tarps : [];
   // Weak devices draw fewer tarps
   flows.set(toggles.light ? tarps.slice(0, TARP_LIGHT) : tarps);
-  strings.set({ ports: still ? app.analysis.flows.ports : [] });
+  const services = still ? app.analysis.flows.services : null;
+  strings.set(services ? { ports: app.analysis.flows.ports, pipes: services.pipes, wires: services.wires, lines: services.lines, sheets: services.sheets } : {}, toggles.light);
   const shown = toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked;
   flows.setShown(shown);
   strings.setShown(shown);
