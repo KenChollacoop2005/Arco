@@ -64,6 +64,7 @@ export const COPY = {
   showLoads: 'Load paths',
   showCenters: 'Centers of mass',
   showConnectors: 'Connectors',
+  showServices: 'Water and power',
   keyPass: 'Pass',
   keyWarn: 'Warning',
   keyFail: 'Fail',

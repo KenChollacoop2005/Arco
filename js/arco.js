@@ -151,10 +151,12 @@ app.structureListeners.push(async (result, phase) => {
 app.structureListeners.push(async (result, phase) => {
   if (phase !== 'start') return;
   app.analysis = null;
+  drawing.setServices(null);
   for (const listener of app.analysisListeners) listener(null, result);
   const analysis = await analyst.call({ modules: result.modules, seed: result.seed }).catch(() => null);
   if (app.structure !== result || !analysis) return;
   app.analysis = freezeDeep(analysis);
+  drawing.setServices(app.analysis.flows || null);
   for (const listener of app.analysisListeners) listener(app.analysis, result);
 });
 
@@ -169,7 +171,7 @@ app.modeListeners.push((mode) => {
 for (const input of document.querySelectorAll('input[name="drawingView"]')) {
   input.addEventListener('change', () => rig.setView(input.value));
 }
-for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'], ['#showConnectors', 'connectors']]) {
+for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'], ['#showConnectors', 'connectors'], ['#showServices', 'services']]) {
   query(id).addEventListener('change', (event) => drawing.setLayer(layer, event.target.checked));
 }
 

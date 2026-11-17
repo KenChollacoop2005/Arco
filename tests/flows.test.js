@@ -7,6 +7,7 @@ import { instancePorts } from '../js/core/ports.js';
 import { analyze } from '../js/core/analysis.js';
 import { generate } from '../js/core/generator.js';
 import { runChecks } from '../js/core/checks.js';
+import { serviceLines } from '../js/core/drafting.js';
 import { waterNetwork, WATER_ENDS, WATER_MAX_PATHS, FALL_DROP_MM, linkWires, planCross, wirePoints, wireNetwork, tarpNetwork, WIRE_MAX, WIRE_MAX_MM, WIRE_SAG_SHARE, TARP_MAX, TARP_COLORS } from '../js/core/flows.js';
 
 const EPS_MM = 1e-6; // rounding slack
@@ -241,4 +242,20 @@ test('wires and tarps of generated structures stay legal and repeat for a seed',
   }
   assert.ok(wireTotal >= 20, `wires in the seed set: ${wireTotal}`);
   assert.ok(tarpTotal >= 1, `tarps in the seed set: ${tarpTotal}`);
+});
+
+test('the services drawing has one water line per path step and hanging power lines', () => {
+  assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
+  const { modules } = generate({ seed: 'barbican', ...MEGA });
+  const flows = { water: waterNetwork(modules, 'barbican'), wires: wireNetwork(modules, 'barbican').wires };
+  const lines = serviceLines(flows);
+  const waterSteps = flows.water.paths.reduce((sum, path) => sum + path.points.length - 1, 0);
+  assert.ok(waterSteps > 0 && flows.wires.length > 0);
+  assert.equal(lines.statuses.filter((status) => status === 'water').length, waterSteps);
+  const power = lines.statuses.filter((status) => status === 'power').length;
+  assert.equal(power % flows.wires.length, 0);
+  assert.equal(lines.positions.length, lines.statuses.length * 6);
+  // First power line starts on its wire end
+  const first = lines.statuses.indexOf('power') * 6;
+  assert.deepEqual(lines.positions.slice(first, first + 3), flows.wires[0].a);
 });

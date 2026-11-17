@@ -1,7 +1,7 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
 import { CELL_MM, STORY_MM } from '../config.js';
 import { variantKey } from '../core/grid.js';
-import { centerMarks, loadPaths, connectorMarks, edgeLines } from '../core/drafting.js';
+import { centerMarks, loadPaths, connectorMarks, edgeLines, serviceLines } from '../core/drafting.js';
 import { COPY } from '../ui/copy.js';
 import { sharedUniforms, sectionPlanes } from './materials.js';
 
@@ -9,7 +9,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const LABEL_RING_PX = 7; // critical joint ring radius
 const LABEL_LEAD_PX = [26, -22]; // leader line offset
 const LABEL_GAP_PX = 4; // text gap after the leader
-const STATUS_VARS = { line: '--blue', pass: '--pass', warn: '--warn', fail: '--fail' };
+const STATUS_VARS = { line: '--blue', pass: '--pass', warn: '--warn', fail: '--fail', water: '--water', power: '--power' };
 
 function cssColor(name) {
   return new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
@@ -22,11 +22,12 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
   group.visible = false;
   view.scene.add(group);
   const layers = {};
-  const shown = { edges: true, centers: true, loads: true, connectors: true };
+  const shown = { edges: true, centers: true, loads: true, connectors: true, services: true };
   const point = new THREE.Vector3();
   let active = false;
   let stale = true;
   let current = { structure: null, checks: null };
+  let services = null;
 
   function setLayerLines(name, positions, statuses, onTop) {
     if (layers[name]) {
@@ -112,6 +113,8 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     const loads = checks ? loadPaths(checks) : { positions: [], statuses: [] };
     setLayerLines('centers', centers.positions, centers.statuses, true);
     setLayerLines('loads', loads.positions, loads.statuses, true);
+    const lines = serviceLines(services);
+    setLayerLines('services', lines.positions, lines.statuses, false);
     fillTitle();
     placeLabel();
     view.requestRender();
@@ -123,6 +126,12 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
   return {
     update(structure, checks) {
       current = { structure, checks };
+      stale = true;
+      if (active) rebuild();
+    },
+    // Flow networks from the analysis, null while it runs
+    setServices(flows) {
+      services = flows;
       stale = true;
       if (active) rebuild();
     },

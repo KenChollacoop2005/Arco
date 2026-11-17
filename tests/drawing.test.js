@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three/three.module.min.js';
 import { runChecks } from '../js/core/checks.js';
 import { generate } from '../js/core/generator.js';
+import { waterNetwork, wireNetwork } from '../js/core/flows.js';
 
-const LAYERS = ['edges', 'connectors', 'centers', 'loads'];
-const STATUS_HEX = { '--blue': '#2244aa', '--pass': '#22aa44', '--warn': '#ee7700', '--fail': '#cc2222' };
+const LAYERS = ['edges', 'connectors', 'centers', 'loads', 'services'];
+const STATUS_HEX = { '--blue': '#2244aa', '--pass': '#22aa44', '--warn': '#ee7700', '--fail': '#cc2222', '--water': '#1188dd', '--power': '#ddaa00' };
 
 // Smallest page stand-in the drawing layer needs
 function fakePage() {
@@ -27,6 +28,7 @@ test('drawing mode builds every line layer, load paths included', async () => {
   const structure = generate({ seed: 'habitat', scale: 'block' });
   const checks = runChecks(structure.modules);
   drawing.update(structure, checks);
+  drawing.setServices({ water: waterNetwork(structure.modules, 'habitat'), wires: wireNetwork(structure.modules, 'habitat').wires });
   assert.doesNotThrow(() => drawing.setActive(true));
   const group = scene.children[scene.children.length - 1];
   assert.equal(group.visible, true);
@@ -40,4 +42,7 @@ test('drawing mode builds every line layer, load paths included', async () => {
   const tint = loads.geometry.getAttribute('color').array;
   const pass = new THREE.Color(STATUS_HEX['--pass']);
   assert.ok(Math.abs(tint[0] - pass.r) < 1e-6 && Math.abs(tint[1] - pass.g) < 1e-6, 'load paths carry the status color');
+  const services = group.children[LAYERS.indexOf('services')].geometry.getAttribute('color').array;
+  const water = new THREE.Color(STATUS_HEX['--water']);
+  assert.ok(Math.abs(services[0] - water.r) < 1e-6 && Math.abs(services[2] - water.b) < 1e-6, 'water lines are water blue');
 });

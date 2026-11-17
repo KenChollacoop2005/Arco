@@ -1,10 +1,12 @@
 import { CELL_MM, STORY_MM, PEG_SIZE_MM, RAIL_OFFSET_MM } from '../config.js';
 import { SIDES, instanceCells, instancePose, poseApply } from './grid.js';
 import { FAMILIES, canSupport, sideType } from './catalog.js';
+import { wirePoints } from './flows.js';
 
 const CENTER_MARK_MM = 3; // half length of a center of mass cross
 const SEAT_MARK_MM = 2.5; // half width of a plinth seat tick
 const LIFT_MM = 0.2; // marks sit off the surface
+const SERVICE_WIRE_STEPS = 8; // straight pieces per drawn wire
 
 // All results: { positions: number[], statuses: string[] }, one status per segment
 const sheet = () => ({ positions: [], statuses: [] });
@@ -94,4 +96,18 @@ export function edgeLines(modules, edgesOf) {
     }
   }
   return positions;
+}
+
+// Services: water paths as 'water', wires as 'power'
+export function serviceLines(flows) {
+  const target = sheet();
+  if (!flows) return target;
+  for (const path of flows.water.paths) {
+    for (let index = 1; index < path.points.length; index++) segment(target, path.points[index - 1], path.points[index], 'water');
+  }
+  for (const wire of flows.wires) {
+    const points = wirePoints(wire, SERVICE_WIRE_STEPS);
+    for (let index = 1; index < points.length; index++) segment(target, points[index - 1], points[index], 'power');
+  }
+  return target;
 }
