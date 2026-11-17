@@ -309,7 +309,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
   function bestLink(node, need) {
     const tried = { head: Infinity, port: false, empty: false };
     const inlets = node.ins.filter((inlet) => inlet.left > 0 && inlet.node !== null);
-    if (node.ins.some((inlet) => inlet.left <= 0)) tried.port = true;
+    if (inlets.length === 0 && node.ins.length > 0) tried.port = true;
     const candidates = [];
     for (const from of nodes) {
       if (from === node || !['source', 'pump', 'main', 'consumer'].includes(from.kind) || from.outs.length === 0) continue;

@@ -71,6 +71,10 @@ test('a pipe crosses the gap between two towers as one straight span, bracket to
   // Gravity water takes the same span, it never climbs
   const fall = pipePath(graph, pipeSearch(graph, [graph.portNodes[1]], true), graph.portNodes[0]);
   assert.deepEqual(fall.points, path.points);
+  // A head limit equal to the span's head still reaches it; the length tie does not count
+  const exact = pipeSearch(graph, [graph.portNodes[1]], true, 25.2 / CELL_MM);
+  assert.ok(exact.reached(graph.portNodes[0]));
+  assert.ok(Math.abs(exact.flat(graph.portNodes[0]) - 25.2 / CELL_MM) < EPS);
   // Water cannot climb back up the same span by gravity
   assert.equal(pipeSearch(graph, [graph.portNodes[0]], true).reached(graph.portNodes[1]), false);
 });

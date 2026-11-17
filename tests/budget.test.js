@@ -135,6 +135,9 @@ test('Build places past today\'s cap only under custom or fantasy, refuses at th
   assert.equal(build.place(spot(today)).reason, 'Module limit reached');
   build.setCap(placeCap(FANTASY));
   assert.ok(build.place(spot(today)).ok);
+  // Back in fixed past 220, turning a part is still allowed
+  build.setCap(placeCap(FIXED));
+  assert.notEqual(build.rotate(1).reason, 'Module limit reached');
   // Grow under fantasy goes on the undo stack like any Grow
   const start = createBuild();
   const first = generate({ ...BLOCK, ...generateLimits(FANTASY) }).modules;

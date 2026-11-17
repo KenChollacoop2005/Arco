@@ -12,6 +12,7 @@ const KEY_SCALE = 1e3; // node keys round to a thousandth of a mm
 const RUN_STEP_MM = 1; // sample spacing along runs and spans
 const LENGTH_TIE = 1e-4; // search cost per mm, picks the shorter of equal head routes
 const HEAD_ROUND = 1e6; // head sizes round to a millionth
+const HEAD_SLACK = 1e-9; // rounding allowance on a search's head limit
 const BODY_MIN_TALL_MM = 1; // thinnest solid counted as body
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
 const NEIGHBOUR_MM = 2 * OFF; // boxes this close shape a face's node lines
@@ -659,7 +660,6 @@ export function pipeSearch(graph, targets, gravity, bound = Infinity) {
   }
   while (heap.size > 0) {
     const [cost, state] = heap.pop();
-    if (cost > bound) break;
     if (cost > rank[state]) continue;
     const at = state >> 1;
     // Other ports are ends, never passed through
@@ -671,6 +671,8 @@ export function pipeSearch(graph, targets, gravity, bound = Infinity) {
       const from = other[slot] * 2 + edgeSpan[slot];
       const total = cost + edgeFlat[slot] * HEAD_PER_CELL + climb * HEAD_PER_STORY_UP + edgeLength[slot] * LENGTH_TIE;
       if (total >= rank[from]) continue;
+      // The limit is on head alone; the length tie never stops a route
+      if ((flat[state] + edgeFlat[slot]) * HEAD_PER_CELL + (up[state] + climb) * HEAD_PER_STORY_UP > bound + HEAD_SLACK) continue;
       rank[from] = total;
       flat[from] = flat[state] + edgeFlat[slot];
       up[from] = up[state] + climb;

@@ -102,7 +102,8 @@ export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
       if (!current) return { ok: false, reason: '' };
       const turned = { ...current, rot: nextRot(current.rot) };
       const rest = modules.filter((instance) => instance.id !== id);
-      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 }, { cap: placeCap });
+      // Turning keeps the count, so the cap never refuses it
+      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 }, { ignoreCap: true });
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
