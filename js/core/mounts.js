@@ -72,6 +72,10 @@ export const MOUNT_PORTS = {
     { type: 'water-out', sides: 'any', each: 'side', z: [0.12, 0.5] },
     { type: 'power', sides: 'any', each: 'module', z: [0.6, 0.9] },
   ],
+  smallpump: [
+    { type: 'water-in', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
+    { type: 'water-out', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
+  ],
 };
 
 const inBox = (shape, point) => point.every((value, axis) => value > shape.min[axis] && value < shape.max[axis]);

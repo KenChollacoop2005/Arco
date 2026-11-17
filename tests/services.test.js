@@ -16,6 +16,7 @@ import { getSolids } from './helpers.js';
 // Families added for water and power, with the ports each must have
 const SERVICE_FAMILIES = {
   pumproom: ['water-in', 'water-out', 'power'],
+  smallpump: ['water-in', 'water-out'],
 };
 const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
 const generated = SEEDS.flatMap((seed, index) => [
@@ -46,6 +47,7 @@ test('each service family has a catalog entry, a recipe and its ports', () => {
     }
   }
   assert.ok(FAMILIES.pumproom.stack && !FAMILIES.pumproom.rails && FAMILIES.pumproom.theme === 'industrial');
+  assert.ok(!FAMILIES.smallpump.stack && FAMILIES.smallpump.footprints.join() === '1x1');
   assert.ok(variantMounts(normalizeVariant({ family: 'pumproom', fp: '1x1', h: 1, seed: 1, mask: 15 })).filter((port) => port.type.startsWith('water')).length >= 6);
 });
 
@@ -80,6 +82,7 @@ test('service families are reachable from Build and save as parts', () => {
   const specs = [
     { family: 'pumproom', fp: '1x2', h: 2, seed: 7, mask: 15, roof: false, x: -3, y: 0, z: 0 },
     { family: 'core', fp: '1x1', h: 1, seed: 1, mask: 0, roof: false, x: -3, y: 0, z: 2 },
+    { family: 'smallpump', fp: '1x1', h: 1, seed: 3, mask: 15, roof: true, x: 0, y: 0, z: 2 },
   ];
   for (const spec of specs) {
     const result = build.place({ ...spec, rot: 0 });

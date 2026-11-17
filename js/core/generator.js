@@ -89,6 +89,9 @@ const PIER_SPAN = 4; // spans from this length get a pier
 const SERVICE_SEED = 0x5e771c; // keeps service rolls apart from layout rolls
 const SERVICE_ROUNDS = 6; // most stability repair passes for services
 const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by density: block, mega
+const SMALL_PUMPS = [[0, 1], [1, 2], [1, 4]]; // small pumps per structure by density: block, mega
+const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
+const NEAR_CELLS = 2; // reach of near, in cells
 const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
 
 const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8]];
@@ -840,6 +843,24 @@ function groundSpot(ctx, rng, family, footprintId, stories) {
   return null;
 }
 
+// Open roof cell for a 1x1 cap, near a wanted family when one is
+function roofSpot(ctx, rng, family, near) {
+  const { world } = ctx;
+  const top = worldHeight(world);
+  const wanted = [...world.modules.values()].filter((instance) => near.includes(instance.family)).flatMap(instanceCells);
+  const close = ([cellX, cellY]) => wanted.some(([wantX, wantY]) => Math.abs(wantX - cellX) <= NEAR_CELLS && Math.abs(wantY - cellY) <= NEAR_CELLS);
+  const cells = rng.shuffle(ctx.site).filter(([cellX, cellY]) => {
+    const level = columnTop(world, cellX, cellY, top);
+    return level > 0 && supportedAt(world, cellX, cellY, level);
+  });
+  for (const cell of [...cells.filter(close), ...cells.filter((cell) => !close(cell))]) {
+    const level = columnTop(world, cell[0], cell[1], top);
+    const placed = place(ctx, { family, fp: '1x1', h: 1, seed: rng.int(1, 0x7fffffff), x: cell[0], y: cell[1], z: level, rot: rng.int(0, 3) });
+    if (placed) return placed;
+  }
+  return null;
+}
+
 // Pump rooms, pumps, mains and power rooms, on their own rng
 function services(ctx) {
   const { world, opts } = ctx;
@@ -852,6 +873,8 @@ function services(ctx) {
     const family = FAMILIES.pumproom;
     keep(groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)));
   }
+  const pumps = rng.int(0, SMALL_PUMPS[opts.density][mega]);
+  for (let pump = 0; pump < pumps; pump++) keep(roofSpot(ctx, rng, 'smallpump', THIRSTY));
   if (opts.unstable) return;
   // New parts go again until the structure passes
   for (let round = 0; round < SERVICE_ROUNDS && added.length > 0; round++) {

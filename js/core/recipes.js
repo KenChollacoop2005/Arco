@@ -154,6 +154,8 @@ const PIER_MM = [3, 4, 2]; // pier base plate, head plate, plinth step
 const PIER_HALF_MM = [5.5, 6.5]; // pier shaft half width range, wide enough for sockets
 const PUMP_BAY_MM = [5, 2, 5, 20]; // pump room bay half width, floor, depth, top
 const PUMP_DRUM_MM = [2, 9]; // pump drum radius and height
+const SMALL_PUMP_MM = [4.5, 11, 1, 2]; // small pump body radius, height, cap, shift off center
+const PUMP_MOTOR_MM = [2.6, 3, 6]; // pump motor half length, half width, height
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -968,6 +970,20 @@ const RECIPES = {
     const [radius, height] = PUMP_DRUM_MM;
     kit.add('steel', cyl(centerX, centerY, floor - SINK_MM, Math.min(floor + height, head - depth), radius, radius, 12));
     kit.add('hazard', cyl(centerX, centerY, Math.min(floor + height, head - depth) - 1, Math.min(floor + height, head - depth), radius, radius, 12));
+  },
+
+  smallpump(kit) {
+    kit.slab('concrete', kit.clear, 0, CURB_MM);
+    const [radius, height, cap, shift] = SMALL_PUMP_MM;
+    const [halfLength, halfWidth, motor] = PUMP_MOTOR_MM;
+    const centerX = kit.W / 2 - shift;
+    const centerY = kit.D / 2;
+    const top = CURB_MM + height;
+    kit.add('steel', cyl(centerX, centerY, CURB_MM - SINK_MM, top, radius, radius, 14));
+    kit.add('hazard', cyl(centerX, centerY, top, top + cap, radius, radius * 0.7, 14));
+    // Motor block against the pump body
+    const motorX = centerX + radius + halfLength - 1;
+    kit.add('soot', box(motorX - halfLength, centerY - halfWidth, CURB_MM - SINK_MM, motorX + halfLength, centerY + halfWidth, CURB_MM + motor));
   },
 
   planted(kit) {
