@@ -156,6 +156,7 @@ const PUMP_BAY_MM = [5, 2, 5, 20]; // pump room bay half width, floor, depth, to
 const PUMP_DRUM_MM = [2, 9]; // pump drum radius and height
 const SMALL_PUMP_MM = [4.5, 11, 1, 2]; // small pump body radius, height, cap, shift off center
 const PUMP_MOTOR_MM = [2.6, 3, 6]; // pump motor half length, half width, height
+const TANK_PUMP_MM = [1.9, 2, 7, 1]; // tank pump radius, corner offset, height, cap
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -984,6 +985,15 @@ const RECIPES = {
     // Motor block against the pump body
     const motorX = centerX + radius + halfLength - 1;
     kit.add('soot', box(motorX - halfLength, centerY - halfWidth, CURB_MM - SINK_MM, motorX + halfLength, centerY + halfWidth, CURB_MM + motor));
+  },
+
+  pumptank(kit) {
+    RECIPES.tank(kit);
+    // Pump on the deck corner, clear of the tank
+    const [radius, offset, height, cap] = TANK_PUMP_MM;
+    const at = kit.clear + offset;
+    kit.add('steel', cyl(at, at, DECK_MM - SINK_MM, DECK_MM + height, radius, radius, 10));
+    kit.add('hazard', cyl(at, at, DECK_MM + height, DECK_MM + height + cap, radius, radius, 10));
   },
 
   planted(kit) {

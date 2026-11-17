@@ -71,6 +71,7 @@ const TABLE = [
   ['planted', 'Eco', 'Planted terrace', 'eco', MID, [1, 1], 0, 0, 0, 0, 0],
   ['pumproom', 'Industrial', 'Pump room', 'industrial', ['1x1', '1x2', '2x2'], [1, 2], 1, 0, 0, 0, 0],
   ['smallpump', 'Roof and services', 'Small pump', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['pumptank', 'Roof and services', 'Pumped tank', 'neutral', ['1x1', '2x2'], [1, 2], 0, 0, 0, 0, 0],
 ];
 
 // Families whose facade sides take side profiles

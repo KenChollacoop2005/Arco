@@ -90,6 +90,7 @@ const SERVICE_SEED = 0x5e771c; // keeps service rolls apart from layout rolls
 const SERVICE_ROUNDS = 6; // most stability repair passes for services
 const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by density: block, mega
 const SMALL_PUMPS = [[0, 1], [1, 2], [1, 4]]; // small pumps per structure by density: block, mega
+const PUMPED_TANK_CHANCE = 0.4; // chance a tank gets a pump
 const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
 const NEAR_CELLS = 2; // reach of near, in cells
 const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
@@ -872,6 +873,10 @@ function services(ctx) {
   for (let room = 0; room < rooms; room++) {
     const family = FAMILIES.pumproom;
     keep(groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)));
+  }
+  // Some tanks get a pump, same footprint and seed
+  for (const instance of world.modules.values()) {
+    if (instance.family === 'tank' && !ctx.locked.has(instance.id) && rng.chance(PUMPED_TANK_CHANCE)) instance.family = 'pumptank';
   }
   const pumps = rng.int(0, SMALL_PUMPS[opts.density][mega]);
   for (let pump = 0; pump < pumps; pump++) keep(roofSpot(ctx, rng, 'smallpump', THIRSTY));

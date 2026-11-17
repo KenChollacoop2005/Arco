@@ -27,6 +27,10 @@ const BED = (low, high) => [
   { type: 'water-in', sides: 'any', each: 'module', zMm: [low, high], along: [0.3, 0.7] },
   { type: 'water-out', sides: 'any', each: 'module', zMm: [low, high], along: [0.3, 0.7] },
 ];
+const TANK = [
+  { type: 'water-out', sides: 'any', each: 'module', zMm: [4, 9], along: [0.4, 0.6] },
+  { type: 'water-in', sides: 'any', each: 'module', z: [0.5, 0.7], along: [0.4, 0.6] },
+];
 const MACHINE = (low, high) => [{ type: 'power', sides: 'any', each: 'module', zMm: [low, high], along: [0.35, 0.65] }];
 
 // Physical string ports per family, resolved on the real surface
@@ -56,10 +60,8 @@ export const MOUNT_PORTS = {
   planted: BED(3.2, 6.5),
   garden: BED(3.2, 6.5),
   greenhouse: BED(0.6, 2.6),
-  tank: [
-    { type: 'water-out', sides: 'any', each: 'module', zMm: [4, 9], along: [0.4, 0.6] },
-    { type: 'water-in', sides: 'any', each: 'module', z: [0.5, 0.7], along: [0.4, 0.6] },
-  ],
+  tank: TANK,
+  pumptank: TANK,
   turbine: [{ type: 'power', sides: 'any', each: 'module', zMm: [5, 12], along: [0.45, 0.55], capacity: 4 }],
   solar: [{ type: 'power', sides: 'any', each: 'module', zMm: [2.8, 4.5], along: [0.3, 0.7], capacity: 4 }],
   plant: MACHINE(4, 15),
