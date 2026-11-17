@@ -77,7 +77,7 @@ function dockRules(modules) {
         const nextX = cellX + SIDES[side][0];
         const nextY = cellY + SIDES[side][1];
         if (mine === 'plug') {
-          // A bridge lands on its dock, and goes in before anything railed above it
+          // Dock first, bridge next, railed parts above last
           const dock = moduleAt(world, nextX, nextY, instance.z);
           if (!dock || dock.id === instance.id) continue;
           after.get(instance.id).add(dock.id);

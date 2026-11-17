@@ -84,13 +84,14 @@ export function profilePlan(variant) {
     const shift = insetKind(kind) ? -inset : bulgeKind(kind) ? bulge : 0;
     const past = kind === INSET_BALCONY_OUT || kind === BULGE_BALCONY || kind === WRAP ? balcony : 0;
     const reach = kind === INSET_BALCONY ? inset : kind === INSET_BALCONY_OUT ? inset + balcony : past;
+    const jetty = kind === JETTY ? jettyPlan(variant, side) : null;
     return {
       kind,
-      jetty: kind === JETTY ? jettyPlan(variant, side) : null,
+      jetty,
       shift,
       pier: (insetKind(kind) ? PIER_IN_SHARE : PIER_OUT_SHARE) * CELL_MM,
       reach,
-      out: kind === JETTY ? jettyPlan(variant, side).out : Math.max(shift, 0) + past,
+      out: jetty ? jetty.out : Math.max(shift, 0) + past,
       levels: reach > 0 ? levels : [],
       wrapped: false,
     };

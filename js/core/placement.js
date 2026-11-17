@@ -21,7 +21,7 @@ export function supportsUnder(world, instance) {
   });
 }
 
-// True when both end faces of a docked bridge meet a dock at its level
+// True when both bridge ends meet a dock
 function hasTwoDocks(world, instance) {
   const cells = instanceCells(instance);
   const own = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);
@@ -102,7 +102,7 @@ function overGap(world, instance) {
   return instance.z > 0 && supportsUnder(world, instance).some((support) => !support);
 }
 
-// True when a module would fill the last open cell under a docked bridge
+// True when a module closes a bridge gap
 function closesGap(world, instance, cells) {
   const top = instance.z + instance.h;
   const mine = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);

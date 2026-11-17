@@ -639,7 +639,7 @@ function pierUnder(ctx, rng, cells, level) {
   return place(ctx, { family: 'pier', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: base, rot: 0 });
 }
 
-// Docked bridge from a cell across an open gap, at one level
+// Docked bridge from a cell across a gap
 function dockSpan(ctx, rng, start, side, level) {
   const { world, opts } = ctx;
   const [stepX, stepY] = SIDES[side];
@@ -693,7 +693,7 @@ function dockBridges(ctx) {
     if (left === 0) return;
     const top = columnTop(world, start[0], start[1], worldHeight(world));
     const under = top > 0 ? moduleAt(world, start[0], start[1], top - 1) : null;
-    // A free top takes a new dock module, the module under it takes a dock
+    // New dock module on a free top
     const levels = under && under.z > 0 ? [top, under.z] : [top];
     for (const level of levels.filter((entry) => entry > 0)) {
       const side = rng.shuffle([0, 1, 2, 3]).find((entry) => dockSpan(ctx, rng, start, entry, level));

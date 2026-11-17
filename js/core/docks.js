@@ -72,7 +72,7 @@ export function plugRails(cells, dock, gap = CONNECTOR_CLEARANCE_MM / 2) {
   return rails;
 }
 
-// A box less a hole, as boxes; the part under the hole comes last
+// A box less a hole, as boxes
 function carveBox(shape, hole) {
   const apart = [0, 1, 2].some((axis) => hole.min[axis] >= shape.max[axis] || hole.max[axis] <= shape.min[axis]);
   if (apart) return [shape];
@@ -95,14 +95,14 @@ function carveBox(shape, hole) {
   return pieces;
 }
 
-// Module colliders with the dock slots open down to their lips
+// Module colliders with open dock slots
 export function dockColliders(shapes, cells, dock, height, gap = CONNECTOR_CLEARANCE_MM / 2) {
   let carved = shapes;
   for (const { hole } of dockSlots(cells, dock, height, gap)) carved = carved.flatMap((shape) => carveBox(shape, hole));
   return carved;
 }
 
-// Bridge colliders: the body above the lip line, plus its rails
+// Bridge colliders: raised body plus rails
 export function plugColliders(shapes, cells, dock, gap = CONNECTOR_CLEARANCE_MM / 2) {
   const raised = shapes.map((shape) => ({ kind: 'box', min: [shape.min[0], shape.min[1], DOCK_LIP_MM], max: shape.max.slice() }));
   return [...raised, ...plugRails(cells, dock, gap)];
