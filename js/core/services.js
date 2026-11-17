@@ -1,6 +1,7 @@
 import { structureMounts } from './mounts.js';
 import { stringContext, makeString } from './strings.js';
 import { planWater } from './water.js';
+import { planPower } from './power.js';
 
 const portKey = (module, index) => module + ':' + index;
 
@@ -17,5 +18,6 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
   const blockedPipes = water.blocked.map((attempt) => ({ ...makeString('pipe', attempt.from, attempt.to, attempt.points), blocked: attempt.blocked }));
   // Overflow sheets, basin to basin or down to the roof or plinth
   const sheets = water.solved.sheets.filter((sheet) => sheet.points).map((sheet) => ({ from: sheet.from, to: sheet.to, units: sheet.units, points: sheet.points }));
-  return { water, pipes, sheets, wires: [], lines: [], blocked: blockedPipes };
+  const power = planPower(modules, seedText, { ports: mounts, context });
+  return { water, power: { links: power.links, powered: power.powered }, pipes, sheets, wires: power.cables, lines: [], blocked: [...blockedPipes, ...power.blocked] };
 }

@@ -25,6 +25,8 @@ const SHEET_OPACITY = 0.45; // overflow sheets are see-through
 const SHEET_WIDE_MM = [2, 0.6, 5]; // sheet width: base, per unit, most
 const SHEET_THICK_MM = 0.25; // sheet thickness
 const LIGHT_SHARE = 0.5; // share of strings drawn on weak devices
+const TAG_COLOR = 0xe2b31c; // yellow cable tag
+const TAG_MM = [1.4, 0.75]; // tag length along the cable, radius
 const VERTICAL_TOL = 0.98; // a segment this upright counts as down a facade
 
 // Ports, pipes, cables, lines and overflow; render only, never picked or exported
@@ -127,6 +129,19 @@ export function createStrings(view) {
       }
     }
     addMesh(tube, looks[type], pieces.length, (mesh) => pieces.forEach(([from, to], order) => mesh.setMatrixAt(order, tubeMatrix(from, to, radius))));
+    // A yellow tag near each end of a power cable
+    if (type === 'wire') {
+      const tags = strings.flatMap((string) => [[string.points[1], string.points[2]], [string.points[string.points.length - 2], string.points[string.points.length - 3]]]);
+      addMesh(tube, metal, tags.length, (mesh) => {
+        tags.forEach(([end, next], order) => {
+          out.set(next[0] - end[0], next[1] - end[1], next[2] - end[2]).normalize();
+          const from = end.map((value, axis) => value + out.getComponent(axis) * 0.4);
+          const to = from.map((value, axis) => value + out.getComponent(axis) * TAG_MM[0]);
+          mesh.setMatrixAt(order, tubeMatrix(from, to, TAG_MM[1]));
+          mesh.setColorAt(order, tint.setHex(TAG_COLOR));
+        });
+      });
+    }
     addMesh(tube, metal, fixings.length, (mesh) => {
       fixings.forEach((fixing, order) => {
         const [collar, height] = fixing.upright ? COLLAR_MM : [BRACKET_MM[1] / 2, BRACKET_MM[0]];

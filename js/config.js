@@ -122,3 +122,16 @@ export const LINE_SAG = [0.03, 0.08]; // plain line sag at mid span, share of th
 export const CURVE_STEPS = 10; // straight pieces per hanging string
 export const CURVE_LIGHT_STEPS = 4; // pieces per hanging string on weak devices
 export const WIRE_OUT_MM = 1.2; // cable ends this far off the bracket
+
+// Strings: power
+export const POWER_SOURCES = ['turbine', 'solar']; // families that make power
+export const POWER_ROOMS = ['powerroom']; // families wires fan out from
+export const ROOM_NEAR_MM = 5 * 25; // a power room this close takes over from a source
+export const JUMPER_MAX_MM = 1.2 * 25; // longest wire between touching modules
+export const WIRE_CROSS_MM = 1.5 * 25; // cost added per wire crossed in plan
+export const WIRE_LINKS_MAX = 70; // most wire links per structure
+export const CABLES_PER_LINK = [1, 3]; // cables strung on one link
+export const CABLE_SHIFT_MM = 0.9; // seeded shift of each cable's ends
+export const CABLE_TILT = 0.35; // most sideways swing of a cable's sag, radians
+export const SPARE_SHARE = 0.15; // share of links with a slack spare cable
+export const SPARE_SAG = [0.22, 0.32]; // spare cable sag, share of the span

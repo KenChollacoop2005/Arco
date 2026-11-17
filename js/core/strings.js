@@ -109,16 +109,16 @@ export function pipeRoute(context, from, to) {
   return { shape: null, points: pipePoints(from, to, 'drop'), length: pathLength(pipePoints(from, to, 'drop')), blocked };
 }
 
-// Points of a hanging string, ends exact, lowest at mid span
-export function sagPoints(from, to, sag, steps) {
+// Points of a hanging string, ends exact, lowest at mid span; tilt swings the sag sideways
+export function sagPoints(from, to, sag, steps, tilt = 0) {
+  const flat = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  const side = flat > 1e-9 ? [-(to[1] - from[1]) / flat, (to[0] - from[0]) / flat] : [0, 0];
+  const drop = [side[0] * Math.sin(tilt), side[1] * Math.sin(tilt), -Math.cos(tilt)];
   const points = [];
   for (let index = 0; index <= steps; index++) {
     const share = index / steps;
-    points.push([
-      from[0] + (to[0] - from[0]) * share,
-      from[1] + (to[1] - from[1]) * share,
-      from[2] + (to[2] - from[2]) * share - 4 * sag * share * (1 - share),
-    ]);
+    const hang = 4 * sag * share * (1 - share);
+    points.push([0, 1, 2].map((axis) => from[axis] + (to[axis] - from[axis]) * share + drop[axis] * hang));
   }
   return points;
 }
@@ -130,11 +130,11 @@ export function makeString(type, from, to, points, extra = {}) {
 }
 
 // A hanging wire or line, checked against modules and its length limit
-export function hangString(context, type, from, to, sag, limit) {
-  const start = standoff(from, WIRE_OUT_MM);
-  const end = standoff(to, WIRE_OUT_MM);
-  const curve = sagPoints(start, end, sag, CURVE_STEPS);
-  const string = makeString(type, from, to, [from.position, ...curve, to.position], { sag });
+export function hangString(context, type, from, to, sag, limit, { tilt = 0, shiftA = [0, 0, 0], shiftB = [0, 0, 0] } = {}) {
+  const start = standoff(from, WIRE_OUT_MM).map((value, axis) => value + shiftA[axis]);
+  const end = standoff(to, WIRE_OUT_MM).map((value, axis) => value + shiftB[axis]);
+  const curve = sagPoints(start, end, sag, CURVE_STEPS, tilt);
+  const string = makeString(type, from, to, [from.position, ...curve, to.position], { sag, tilt });
   if (string.length > limit) string.blocked = { module: null, reason: 'length' };
   else string.blocked = pathBlocked(context, string.points, [from.module, to.module]);
   return string;
