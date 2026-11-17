@@ -27,6 +27,7 @@ const TABLE = [
   ['pilotis', 'Structure', 'Pilotis', 'neutral', ANY, [1, 2], 1, 0, 0, 1, 0],
   ['transfer', 'Structure', 'Transfer slab', 'neutral', ANY, [1, 1], 1, 0, 0, 1, 0],
   ['strut', 'Structure', 'Strut', 'neutral', ['1x1'], [1, 3], 1, 0, 0, 0, 0],
+  ['pier', 'Structure', 'Pier', 'neutral', ['1x1'], [1, 4], 1, 0, 0, 0, 0],
   ['buttress', 'Structure', 'Buttress', 'neutral', SMALL, [1, 4], 0, 1, 0, 0, 0],
   ['housing', 'Living', 'Housing unit', 'neutral', ANY, [1, 4], 1, 0, 0, 1, 1],
   ['studio', 'Living', 'Studio', 'neutral', MID, [1, 2], 1, 0, 0, 1, 1],

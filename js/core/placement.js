@@ -8,7 +8,7 @@ import {
   moduleAt,
   worldHeight,
 } from './grid.js';
-import { FAMILIES, canSupport, defaultPlacement, sideType } from './catalog.js';
+import { FAMILIES, canSupport, defaultPlacement, isDocked, sideType } from './catalog.js';
 
 export const placementOf = (instance) => instance.placement || defaultPlacement(instance);
 
@@ -21,7 +21,26 @@ export function supportsUnder(world, instance) {
   });
 }
 
+// True when both end faces of a docked bridge meet a dock at its level
+function hasTwoDocks(world, instance) {
+  const cells = instanceCells(instance);
+  const own = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);
+  let ends = 0;
+  for (const [cellX, cellY] of cells) {
+    for (let side = 0; side < 4; side++) {
+      const nextX = cellX + SIDES[side][0];
+      const nextY = cellY + SIDES[side][1];
+      if (sideType(instance, side) !== 'plug' || own(nextX, nextY)) continue;
+      const other = moduleAt(world, nextX, nextY, instance.z);
+      if (!other || other.z !== instance.z || sideType(other, (side + 2) & 3) !== 'dock') return false;
+      ends++;
+    }
+  }
+  return ends === 2;
+}
+
 export function hasTwoSupports(world, instance) {
+  if (isDocked(instance)) return hasTwoDocks(world, instance);
   const cells = instanceCells(instance);
   const supports = supportsUnder(world, instance);
   const [sizeX, sizeY] = footprintSize(instance.fp, instance.rot);
@@ -36,20 +55,50 @@ export function hasTwoSupports(world, instance) {
   });
 }
 
+// Draft UI copy
+const SIDE_REASON = 'Facade meets a connector face';
+const DOCK_REASON = 'A dock face only takes a bridge end at its base';
+const PLUG_REASON = 'A docked bridge needs a dock face at both ends, at its own level';
+const GAP_REASON = 'A docked bridge needs an open gap under it';
+
+// Reason two facing sides cannot meet, or ''
+function facingReason(first, firstType, second, secondType) {
+  if (firstType === 'clear' || secondType === 'clear') return '';
+  const types = [firstType, secondType];
+  if (types.includes('plug')) return types.includes('dock') && first.z === second.z ? '' : PLUG_REASON;
+  if (firstType === secondType) return '';
+  if (!types.includes('dock')) return SIDE_REASON;
+  if (types.includes('facade')) return SIDE_REASON;
+  // A rail may only run above the lip
+  const dock = firstType === 'dock' ? first : second;
+  const railed = firstType === 'dock' ? second : first;
+  return railed.z > dock.z ? '' : DOCK_REASON;
+}
+
 function sideConflict(world, instance) {
-  for (const [cellX, cellY] of instanceCells(instance)) {
+  const cells = instanceCells(instance);
+  const own = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);
+  for (const [cellX, cellY] of cells) {
     for (let side = 0; side < 4; side++) {
       const mine = sideType(instance, side);
-      if (mine === 'clear') continue;
+      if (mine === 'clear' || own(cellX + SIDES[side][0], cellY + SIDES[side][1])) continue;
       for (let level = instance.z; level < instance.z + instance.h; level++) {
         const other = moduleAt(world, cellX + SIDES[side][0], cellY + SIDES[side][1], level);
-        if (!other || other.id === instance.id) continue;
-        const theirs = sideType(other, (side + 2) & 3);
-        if (theirs !== 'clear' && theirs !== mine) return other;
+        if (!other || other.id === instance.id) {
+          if (mine === 'plug') return PLUG_REASON;
+          continue;
+        }
+        const reason = facingReason(instance, mine, other, sideType(other, (side + 2) & 3));
+        if (reason) return reason;
       }
     }
   }
-  return null;
+  return '';
+}
+
+// True when no module touches the underside of some cell
+function overGap(world, instance) {
+  return instance.z > 0 && supportsUnder(world, instance).some((support) => !support);
 }
 
 function anythingAbove(world, instance, top) {
@@ -127,14 +176,16 @@ export function checkPlacement(world, instance, options = {}) {
   const reserve = reserveConflict(world, instance, cells);
   if (reserve) return { ok: false, reason: reserve };
   if (family.ground && instance.z !== 0) return { ok: false, reason: 'Ground level only' };
+  const docked = isDocked(instance);
   const supports = supportsUnder(world, instance);
-  if (!supports.some(Boolean)) return { ok: false, reason: 'No support below' };
+  if (docked && !overGap(world, instance)) return { ok: false, reason: GAP_REASON };
+  if (!docked && !supports.some(Boolean)) return { ok: false, reason: 'No support below' };
   for (const support of supports) {
-    if (support && support !== 'plinth' && !canSupport(support)) {
+    if (!docked && support && support !== 'plinth' && !canSupport(support)) {
       return { ok: false, reason: 'Nothing can sit on that part' };
     }
   }
-  if (placementOf(instance) === 'Spanning' && !hasTwoSupports(world, instance)) {
+  if (!docked && placementOf(instance) === 'Spanning' && !hasTwoSupports(world, instance)) {
     return { ok: false, reason: 'Needs support at both ends' };
   }
   const top = worldHeight(world) + 1;
@@ -150,7 +201,8 @@ export function checkPlacement(world, instance, options = {}) {
       }
     }
   }
-  if (sideConflict(world, instance)) return { ok: false, reason: 'Facade meets a connector face' };
+  const sides = sideConflict(world, instance);
+  if (sides) return { ok: false, reason: sides };
   return { ok: true, reason: '' };
 }
 

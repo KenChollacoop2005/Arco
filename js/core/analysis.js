@@ -1,6 +1,6 @@
 import { EXPOSURE_REACH_CELLS } from '../config.js';
 import { SIDES, instanceCells, moduleAt, structureHash, worldFromModules, worldHeight } from './grid.js';
-import { FAMILIES } from './catalog.js';
+import { FAMILIES, sideType } from './catalog.js';
 
 export const FACE_TOP = 4; // face direction after the four sides
 export const FACE_BOTTOM = 5; // face direction under a cell
@@ -79,6 +79,11 @@ export function analyze(modules) {
           if (other) {
             const kind = dir < SIDES.length ? 'side' : 'stack';
             near[dir < SIDES.length ? 'side' : dir === FACE_TOP ? 'above' : 'below'].add(other.id);
+            // A docked bridge is carried by its docks
+            if (dir < SIDES.length && sideType(instance, dir) === 'plug' && sideType(other, (dir + 2) & 3) === 'dock') {
+              near.below.add(other.id);
+              neighbours.get(other.id).above.add(instance.id);
+            }
             if (dir < SIDES.length ? instance.id < other.id : dir === FACE_TOP) {
               const edgeKey = instance.id + ':' + other.id + ':' + kind;
               shared.set(edgeKey, (shared.get(edgeKey) || 0) + 1);

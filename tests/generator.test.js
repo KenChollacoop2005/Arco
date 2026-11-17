@@ -80,7 +80,8 @@ test('every module is a valid catalog variant', () => {
     for (const instance of modules) {
       const family = FAMILIES[instance.family];
       assert.ok(family, instance.family);
-      assert.ok(family.footprints.includes(instance.fp), `${instance.family} ${instance.fp}`);
+      const docked = !!instance.dock && family.dockFootprints.includes(instance.fp);
+      assert.ok(family.footprints.includes(instance.fp) || docked, `${instance.family} ${instance.fp}`);
       assert.ok(instance.h >= family.minStories && instance.h <= family.maxStories, `${instance.family} h ${instance.h}`);
     }
   }

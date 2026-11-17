@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CELL_MM, STORY_MM, MAX_BRIDGE_MM, MAX_OVERHANG_DEG, CONNECTOR_CLEARANCE_MM } from '../js/config.js';
 import { FAMILIES, canSupport, normalizeVariant } from '../js/core/catalog.js';
-import { claimedCells, footprintSize, instanceCells, moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
+import { FOOTPRINTS, claimedCells, footprintSize, instanceCells, moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
+import { dockColliders, plugColliders } from '../js/core/docks.js';
 import { BULGE, BULGE_BALCONY, FLUSH, packProfiles, profileAt, profileColliders, profilePlan } from '../js/core/profiles.js';
 import { checkPlacement, hasTwoSupports, placementOf, supportsUnder, validateStructure } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
@@ -294,7 +295,8 @@ test('the generator bridges one cell gaps between supported cells', () => {
   for (const result of generated) {
     const world = worldFromModules(result.modules);
     for (const instance of result.modules) {
-      if (!SPANS.includes(instance.family)) continue;
+      // Docked bridges have their own tests in docks.test.js
+      if (!SPANS.includes(instance.family) || instance.dock) continue;
       count++;
       families.add(instance.family);
       const label = `${result.seed} ${result.options.scale} ${instance.family} ${instance.id}`;
@@ -311,7 +313,7 @@ test('the generator bridges one cell gaps between supported cells', () => {
   }
   assert.ok(count >= megas.length, `gap bridges in the seed set: ${count}`);
   assert.deepEqual([...families].sort(), ['gantry', 'walkway']);
-  const megaCount = megas.reduce((sum, result) => sum + result.modules.filter((instance) => SPANS.includes(instance.family)).length, 0);
+  const megaCount = megas.reduce((sum, result) => sum + result.modules.filter((instance) => SPANS.includes(instance.family) && !instance.dock).length, 0);
   assert.ok(megaCount >= megas.length / 2, `megastructure gap bridges: ${megaCount}`);
 });
 
@@ -410,9 +412,12 @@ test('decor stays out of the space a bulge reaches into', () => {
 function declaredColliders(variant) {
   const family = FAMILIES[variant.family];
   if (family.colliders) return family.colliders(variant);
-  if (variant.prof) return profileColliders(variant, GAP_MM);
   const [sizeX, sizeY] = footprintSize(variant.fp);
-  return [{ kind: 'box', min: [GAP_MM, GAP_MM, 0], max: [sizeX * CELL_MM - GAP_MM, sizeY * CELL_MM - GAP_MM, variant.h * STORY_MM] }];
+  const plain = variant.prof ? profileColliders(variant, GAP_MM) : [{ kind: 'box', min: [GAP_MM, GAP_MM, 0], max: [sizeX * CELL_MM - GAP_MM, sizeY * CELL_MM - GAP_MM, variant.h * STORY_MM] }];
+  if (!variant.dock) return plain;
+  // Dock rule: slots opened down to the lips, or a bridge raised onto its rails
+  const cells = FOOTPRINTS[variant.fp];
+  return family.rails ? dockColliders(plain, cells, variant.dock, variant.h * STORY_MM, GAP_MM) : plugColliders(plain, cells, variant.dock, GAP_MM);
 }
 
 // Mesh vertices outside every collider box

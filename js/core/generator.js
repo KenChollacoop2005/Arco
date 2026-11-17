@@ -15,7 +15,7 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { FAMILIES, FAMILY_IDS, PLUG_ENDS, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
@@ -79,6 +79,12 @@ const SPAN_TRIES = [1, 2, 3]; // gap bridges by density
 const PENTHOUSE_CHANCE = 0.7; // chance a tower top gets a penthouse
 const PENTHOUSE_CAP_CHANCE = 0.5; // share of those that end the tower
 const SPAN_MEGA = 3; // gap bridge multiplier for megastructures
+const DOCK_TRIES = [1, 2, 3]; // docked bridges by density
+const DOCK_MEGA = 2; // docked bridge multiplier for megastructures
+const DOCK_SPAN = [2, 5]; // docked bridge length range in cells
+const DOCK_SEED = 0xd0c5; // keeps dock rolls apart from layout rolls
+const PIER_SPAN = 4; // spans from this length get a pier
+const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
 
 const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8]];
 const UPPER_MASS = [
@@ -584,7 +590,132 @@ function setMasks(world, locked) {
       }
       if (!joined) mask |= 1 << ((side - instance.rot + 4) & 3);
     }
-    instance.mask = mask;
+    // A dock side stays a connector side
+    instance.mask = mask & ~(instance.dock || 0);
+  }
+}
+
+// Turns one side into a dock; returns an undo, or null
+function openDock(ctx, instance, side) {
+  const local = (side - instance.rot + 4) & 3;
+  const kind = sideType(instance, side);
+  if (kind === 'dock') return () => {};
+  if (ctx.locked.has(instance.id) || !FAMILIES[instance.family].docks || kind !== 'connector') return null;
+  instance.dock = (instance.dock || 0) | (1 << local);
+  const undo = () => {
+    instance.dock &= ~(1 << local);
+    if (!instance.dock) delete instance.dock;
+  };
+  if (checkPlacement(ctx.world, instance).ok) return undo;
+  undo();
+  return null;
+}
+
+// Module that takes a bridge end: one already there, or a new one on a free top
+function dockEnd(ctx, rng, cell, level, side) {
+  const { world } = ctx;
+  const [cellX, cellY] = cell;
+  const existing = moduleAt(world, cellX, cellY, level);
+  if (existing) {
+    const undo = existing.z === level ? openDock(ctx, existing, side) : null;
+    return undo ? { undo } : null;
+  }
+  if (columnTop(world, cellX, cellY, worldHeight(world)) !== level || !supportedAt(world, cellX, cellY, level)) return null;
+  const family = FAMILIES[rng.weighted(DOCK_HOUSES)];
+  const seed = ctx.towers.length > 0 ? nearestTower(ctx, cellX, cellY).seed : ctx.pool[0];
+  const placed = place(ctx, { family: family.id, fp: '1x1', h: family.minStories, seed, x: cellX, y: cellY, z: level, rot: 0, dock: 1 << side });
+  return placed ? { undo: () => removeModule(world, placed.id) } : null;
+}
+
+// Pier in the open cell under the middle of a long span
+function pierUnder(ctx, rng, cells, level) {
+  const [cellX, cellY] = cells[Math.floor(cells.length / 2)];
+  const base = columnTop(ctx.world, cellX, cellY, level - 1);
+  const stories = level - base;
+  if (stories < FAMILIES.pier.minStories || stories > FAMILIES.pier.maxStories || !supportedAt(ctx.world, cellX, cellY, base)) return null;
+  if (base === 0 && !ctx.groundOk(cellX, cellY)) return null;
+  return place(ctx, { family: 'pier', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: base, rot: 0 });
+}
+
+// Docked bridge from a cell across an open gap, at one level
+function dockSpan(ctx, rng, start, side, level) {
+  const { world, opts } = ctx;
+  const [stepX, stepY] = SIDES[side];
+  const topOf = (cellX, cellY) => columnTop(world, cellX, cellY, worldHeight(world));
+  const gap = [];
+  let far = null;
+  for (let step = 1; step <= DOCK_SPAN[1] + 1 && !far; step++) {
+    const cell = [start[0] + stepX * step, start[1] + stepY * step];
+    if (!ctx.inSite.has(cellKey(cell[0], cell[1]))) return null;
+    // The gap floor is lower all the way across
+    if (topOf(cell[0], cell[1]) < level) gap.push(cell);
+    else far = cell;
+  }
+  if (!far || gap.length < DOCK_SPAN[0] || gap.length > DOCK_SPAN[1]) return null;
+  const undos = [];
+  const undoAll = () => undos.reverse().forEach((undo) => undo());
+  for (const [cell, facing] of [[start, side], [far, (side + 2) & 3]]) {
+    const end = dockEnd(ctx, rng, cell, level, facing);
+    if (!end) {
+      undoAll();
+      return null;
+    }
+    undos.push(end.undo);
+  }
+  const industrial = (gap[0][0] + 0.5) * ctx.themeAxis[0] + (gap[0][1] + 0.5) * ctx.themeAxis[1] > 0;
+  const bridge = place(ctx, {
+    family: rng.chance(THEME_SHARE[opts.theme]) && industrial ? 'gantry' : 'walkway',
+    fp: '1x' + gap.length,
+    h: 1,
+    seed: rng.int(1, CAP_SEEDS),
+    dock: PLUG_ENDS,
+    x: Math.min(gap[0][0], gap[gap.length - 1][0]),
+    y: Math.min(gap[0][1], gap[gap.length - 1][1]),
+    z: level,
+    rot: side & 1,
+  });
+  if (bridge) undos.push(() => removeModule(world, bridge.id));
+  const pier = bridge && gap.length >= PIER_SPAN ? pierUnder(ctx, rng, gap, level) : null;
+  if (pier) undos.push(() => removeModule(world, pier.id));
+  if (bridge && (opts.unstable || quickStable(bodiesOf(world)))) return bridge;
+  undoAll();
+  return null;
+}
+
+// Docked walkways and gantries across gaps between buildings
+function dockBridges(ctx) {
+  const { world, opts } = ctx;
+  const rng = makeRng(mixSeed(hashString(opts.seed), DOCK_SEED));
+  let left = DOCK_TRIES[opts.density] * (opts.scale === 'mega' ? DOCK_MEGA : 1);
+  for (const start of rng.shuffle(ctx.site)) {
+    if (left === 0) return;
+    const top = columnTop(world, start[0], start[1], worldHeight(world));
+    const under = top > 0 ? moduleAt(world, start[0], start[1], top - 1) : null;
+    // A free top takes a new dock module, the module under it takes a dock
+    const levels = under && under.z > 0 ? [top, under.z] : [top];
+    for (const level of levels.filter((entry) => entry > 0)) {
+      const side = rng.shuffle([0, 1, 2, 3]).find((entry) => dockSpan(ctx, rng, start, entry, level));
+      if (side === undefined) continue;
+      left--;
+      break;
+    }
+  }
+}
+
+// Drops dock sides that no bridge end meets
+function dropIdleDocks(world, locked) {
+  for (const instance of world.modules.values()) {
+    if (!instance.dock || locked.has(instance.id) || !FAMILIES[instance.family].rails) continue;
+    for (let local = 0; local < 4; local++) {
+      if (((instance.dock >> local) & 1) === 0) continue;
+      const side = (local + instance.rot) & 3;
+      const met = instanceCells(instance).some(([cellX, cellY]) => {
+        const other = moduleAt(world, cellX + SIDES[side][0], cellY + SIDES[side][1], instance.z);
+        return !!other && sideType(other, (side + 2) & 3) === 'plug';
+      });
+      if (!met) instance.dock &= ~(1 << local);
+    }
+    if (!instance.dock) delete instance.dock;
   }
 }
 
@@ -738,6 +869,7 @@ export function generate(options) {
     cantilevers(ctx);
     penthouses(ctx);
     spans(ctx);
+    dockBridges(ctx);
     roofs(ctx);
     dressTops(ctx, CAP_CHANCE[opts.density]);
     dressGround(ctx, GROUND_CHANCE[opts.density]);
@@ -747,6 +879,7 @@ export function generate(options) {
     }
     prune(ctx);
   }
+  dropIdleDocks(world, ctx.locked);
   setMasks(world, ctx.locked);
   setProfiles(ctx);
   if (opts.scale !== 'unit') props(ctx);

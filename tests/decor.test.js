@@ -8,7 +8,7 @@ import { instanceCells, structureHash } from '../js/core/grid.js';
 import { generate } from '../js/core/generator.js';
 import { runChecks } from '../js/core/checks.js';
 
-const MEGA = { seed: 'trellick', scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 };
+const MEGA = { seed: 'barbican', scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 };
 
 test('decor is the same for the same structure and seed', () => {
   const { modules } = generate(MEGA);

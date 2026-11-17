@@ -149,6 +149,8 @@ const STRUT_CORE_SIDES = 8; // strut core and collar facets
 const COLLAR_MM = [3.6, 6.6, 3, 1.2]; // collar radius low, high, cone, band
 const COLLAR_ROOM_MM = [2, 1]; // collar kept off the base and capital
 const BRACE_MM = [8, 1, 0.8, 1.6]; // brace width, end margin, shoe lip, shoe height
+const PIER_MM = [3, 4, 2]; // pier base plate, head plate, plinth step
+const PIER_HALF_MM = [4.5, 6]; // pier shaft half width range
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -361,6 +363,21 @@ const RECIPES = {
     kit.add('concrete', pyramid(middle, middle, capBase, slabBase, width / 2, half));
     kit.add('concrete', prismY([[far, foot], [far + width, foot], [near + width, slabBase + SINK_MM], [near, slabBase + SINK_MM]], middle - width / 2, middle + width / 2));
     kit.add('steel', box(far - lip, middle - width / 2 - lip, foot, far + width + lip, middle + width / 2 + lip, STRUT_BASE_MM + shoe));
+  },
+
+  pier(kit) {
+    const [basePlate, headPlate, step] = PIER_MM;
+    const middle = CELL_MM / 2;
+    const half = middle - kit.clear;
+    const shaft = kit.rng.range(PIER_HALF_MM[0], PIER_HALF_MM[1]);
+    const slabBase = kit.H - headPlate;
+    // 45 degree capital under the head plate
+    const capBase = slabBase - (half - shaft);
+    kit.slab('concrete', kit.clear, 0, basePlate);
+    kit.add('concrete', pyramid(middle, middle, basePlate - SINK_MM, basePlate + step, shaft + step, shaft));
+    kit.add('concrete', box(middle - shaft, middle - shaft, basePlate, middle + shaft, middle + shaft, capBase + SINK_MM));
+    kit.add('concrete', pyramid(middle, middle, capBase, slabBase, shaft, half));
+    kit.slab('concrete', kit.clear, slabBase, kit.H);
   },
 
   buttress(kit) {

@@ -1,6 +1,6 @@
 import { CELL_MM } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
-import { normalizeVariant } from './catalog.js';
+import { isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 
 const UNDO_LIMIT = 100; // most steps kept for undo
@@ -16,6 +16,14 @@ export function snapOrigin(xMm, yMm, footprintId, rot) {
 export function restLevel(world, footprintId, rot, originX, originY) {
   const top = worldHeight(world);
   return Math.max(...footprintCells(footprintId, rot).map(([cellX, cellY]) => columnTop(world, originX + cellX, originY + cellY, top)));
+}
+
+// Lowest level where a docked bridge meets two docks
+export function dockLevel(world, instance) {
+  for (let level = instance.z; level <= worldHeight(world); level++) {
+    if (checkPlacement(world, { ...instance, z: level }).ok) return level;
+  }
+  return instance.z;
 }
 
 export const nextRot = (rot) => (rot + 1) & 3;
@@ -64,6 +72,7 @@ export function createBuild(initial = []) {
       const [originX, originY] = snapOrigin(xMm, yMm, variant.fp, turn);
       const world = worldFromModules(modules);
       const instance = { ...normalizeVariant(variant), x: originX, y: originY, z: restLevel(world, variant.fp, turn, originX, originY), rot: turn };
+      if (isDocked(instance)) instance.z = dockLevel(world, instance);
       const result = checkPlacement(world, instance);
       return { instance, ok: result.ok, reason: result.reason };
     },
