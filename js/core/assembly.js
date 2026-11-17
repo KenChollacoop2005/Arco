@@ -1,10 +1,14 @@
-import { instanceCells, claimedCells } from './grid.js';
+import { SIDES, instanceCells, claimedCells, moduleAt, worldFromModules, worldHeight } from './grid.js';
+import { sideType } from './catalog.js';
 
 // Lowest voxel of a part, by level, then y, then x
 function lowest(part) {
   const compare = (first, second) => first[2] - second[2] || first[1] - second[1] || first[0] - second[0];
   return part.voxels.reduce((best, voxel) => (compare(voxel, best) < 0 ? voxel : best));
 }
+
+// Lowest level a part fills in a sorted column
+const lowIn = (column, id) => column.find((entry) => entry.id === id).level;
 
 // Parts slide straight down, so each goes in after everything under it
 export function assemblyOrder(parts) {
@@ -25,8 +29,16 @@ export function assemblyOrder(parts) {
         if (column[lower].id === column[upper].id || column[lower].level >= column[upper].level) continue;
         // Two claims share a cell in opposite halves: lower first if it can
         const facing = column[lower].claim && column[upper].claim;
-        (facing ? after : under).get(column[upper].id).add(column[lower].id);
+        if (!facing) under.get(column[upper].id).add(column[lower].id);
+        // Claims that start level have no lower one
+        else if (lowIn(column, column[lower].id) < lowIn(column, column[upper].id)) after.get(column[upper].id).add(column[lower].id);
       }
+    }
+  }
+  // Parts that must be in place first, beyond the columns
+  for (const part of parts) {
+    for (const id of part.after || []) {
+      if (under.has(id) && id !== part.id) under.get(part.id).add(id);
     }
   }
   const rank = new Map(parts.map((part) => [part.id, lowest(part)]));
@@ -52,7 +64,43 @@ export function assemblyOrder(parts) {
   return { ok: blocked.length === 0, order, blocked };
 }
 
+// Order rules of docks: lips stop rails, bridge rails need open slots
+function dockRules(modules) {
+  const world = worldFromModules(modules);
+  const top = worldHeight(world);
+  const after = new Map(modules.map((instance) => [instance.id, new Set()]));
+  for (const instance of world.modules.values()) {
+    for (const [cellX, cellY] of instanceCells(instance)) {
+      for (let side = 0; side < 4; side++) {
+        const mine = sideType(instance, side);
+        if (mine !== 'plug' && mine !== 'dock') continue;
+        const nextX = cellX + SIDES[side][0];
+        const nextY = cellY + SIDES[side][1];
+        if (mine === 'plug') {
+          // A bridge lands on its dock, and goes in before anything railed above it
+          const dock = moduleAt(world, nextX, nextY, instance.z);
+          if (!dock || dock.id === instance.id) continue;
+          after.get(instance.id).add(dock.id);
+          for (let level = dock.z + dock.h; level < top; level++) {
+            const above = moduleAt(world, nextX, nextY, level);
+            if (above && sideType(above, (side + 2) & 3) !== 'clear') after.get(above.id).add(instance.id);
+          }
+          continue;
+        }
+        // A rail under a lip goes in before the lip
+        for (let level = 0; level < instance.z; level++) {
+          const below = moduleAt(world, nextX, nextY, level);
+          const facing = below ? sideType(below, (side + 2) & 3) : 'clear';
+          if (facing === 'connector' || facing === 'plug') after.get(instance.id).add(below.id);
+        }
+      }
+    }
+  }
+  return after;
+}
+
 export function partsFromModules(modules) {
+  const rules = modules.some((instance) => instance.dock) ? dockRules(modules) : null;
   return modules.map((instance) => {
     const voxels = [];
     // Claimed cells count: balconies slide down through them
@@ -63,7 +111,7 @@ export function partsFromModules(modules) {
     for (const [cellX, cellY, claim] of columns) {
       for (let level = instance.z; level < instance.z + instance.h; level++) voxels.push([cellX, cellY, level, claim]);
     }
-    return { id: instance.id, voxels };
+    return rules ? { id: instance.id, voxels, after: [...rules.get(instance.id)] } : { id: instance.id, voxels };
   });
 }
 

@@ -10,13 +10,16 @@ function orderIsValid(parts, order) {
   const byId = new Map(parts.map((part) => [part.id, part]));
   const filled = new Map();
   for (const id of order) {
-    for (const [cellX, cellY, level] of byId.get(id).voxels) {
-      const top = filled.get(cellX + ',' + cellY);
-      if (top !== undefined && top > level) return false;
+    for (const [cellX, cellY, level, claim] of byId.get(id).voxels) {
+      // Two claims in one cell fill different parts of it
+      for (const top of filled.get(cellX + ',' + cellY) || []) {
+        if (top.level > level && !(claim && top.claim)) return false;
+      }
     }
-    for (const [cellX, cellY, level] of byId.get(id).voxels) {
+    for (const [cellX, cellY, level, claim] of byId.get(id).voxels) {
       const key = cellX + ',' + cellY;
-      filled.set(key, Math.max(filled.get(key) ?? -1, level));
+      if (!filled.has(key)) filled.set(key, []);
+      filled.get(key).push({ level, claim: !!claim });
     }
   }
   return order.length === parts.length;
