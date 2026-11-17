@@ -11,10 +11,11 @@ const THUMB_MAX_CHARS = 60000; // longest thumbnail kept
 export function variantOf(record) {
   if (!record || typeof record !== 'object') return null;
   const family = FAMILIES[record.family];
-  if (!family || !family.footprints.includes(record.fp)) return null;
+  const docked = !!record.dock && !!family && family.dockFootprints.includes(record.fp);
+  if (!family || !(family.footprints.includes(record.fp) || docked)) return null;
   if (!Number.isInteger(record.h) || record.h < family.minStories || record.h > family.maxStories) return null;
   if (!Number.isFinite(record.seed) || !Number.isFinite(record.mask === undefined ? 0 : record.mask)) return null;
-  return normalizeVariant({ family: record.family, fp: record.fp, h: record.h, seed: record.seed, mask: record.mask || 0, roof: !!record.roof, prof: record.prof });
+  return normalizeVariant({ family: record.family, fp: record.fp, h: record.h, seed: record.seed, mask: record.mask || 0, roof: !!record.roof, prof: record.prof, dock: record.dock });
 }
 
 function cleanThumb(thumb) {

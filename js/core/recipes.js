@@ -1,4 +1,5 @@
-import { CELL_MM, STORY_MM } from '../config.js';
+import { CELL_MM, STORY_MM, DOCK_LIP_MM, DOCK_HEAD_MM } from '../config.js';
+import { isDocked } from './catalog.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
@@ -159,6 +160,29 @@ const span = (alongX, a0, a1, b0, b1, z0, z1) => (alongX ? box(a0, b0, z0, a1, b
 function axes(kit) {
   const alongX = kit.W >= kit.D;
   return { alongX, length: alongX ? kit.W : kit.D, width: alongX ? kit.D : kit.W };
+}
+
+// End blocks of a docked bridge, where its rails root
+function dockHeads(kit, alongX, length, width) {
+  const [headLength, headTop] = DOCK_HEAD_MM;
+  for (const from of [kit.inset, length - kit.inset - headLength]) {
+    kit.add('concrete', span(alongX, from, from + headLength, kit.clear, width - kit.clear, 0, headTop));
+  }
+}
+
+// Raises every shape, for parts that hang on dock lips
+function lift(ops, rise) {
+  for (const { shape } of ops) {
+    if (shape.kind === 'box') {
+      shape.min[2] += rise;
+      shape.max[2] += rise;
+    } else if (shape.kind === 'cyl') {
+      shape.from += rise;
+      shape.to += rise;
+    } else {
+      shape.origin = [shape.origin[0], shape.origin[1], shape.origin[2] + rise];
+    }
+  }
 }
 
 function mass(kit, top = kit.H) {
@@ -433,9 +457,14 @@ const RECIPES = {
   walkway(kit) {
     const { alongX, length, width } = axes(kit);
     const clear = kit.clear;
-    kit.slab('concrete', clear, 0, SPAN_DECK_MM);
-    kit.add('concrete', span(alongX, clear, length - clear, clear, clear + THIN_MM, 0, SPAN_RAIL_MM));
-    kit.add('concrete', span(alongX, clear, length - clear, width - clear - THIN_MM, width - clear, 0, SPAN_RAIL_MM));
+    const docked = isDocked(kit.variant);
+    // Docked ends reach the cell face
+    const end = docked ? kit.inset : clear;
+    if (docked) kit.add('concrete', span(alongX, end, length - end, clear, width - clear, 0, SPAN_DECK_MM));
+    else kit.slab('concrete', clear, 0, SPAN_DECK_MM);
+    kit.add('concrete', span(alongX, end, length - end, clear, clear + THIN_MM, 0, SPAN_RAIL_MM));
+    kit.add('concrete', span(alongX, end, length - end, width - clear - THIN_MM, width - clear, 0, SPAN_RAIL_MM));
+    if (docked) dockHeads(kit, alongX, length, width);
   },
 
   bridge(kit) {
@@ -748,12 +777,15 @@ const RECIPES = {
     const [beamWidth, beamHeight, chord] = GANTRY_MM;
     const near = width / 2 - beamWidth / 2;
     const far = width / 2 + beamWidth / 2;
-    kit.add('steel', span(alongX, clear, length - clear, near, far, 0, beamHeight));
+    const docked = isDocked(kit.variant);
+    const end = docked ? kit.inset : clear;
+    kit.add('steel', span(alongX, end, length - end, near, far, 0, beamHeight));
     // Solid seats at both ends take the sockets
     const [seatLength, seatHeight, seatEdge] = SEAT_MM;
     for (const from of [clear, length - clear - seatLength]) {
       kit.add('concrete', span(alongX, from, from + seatLength, clear + seatEdge, width - clear - seatEdge, 0, seatHeight));
     }
+    if (docked) dockHeads(kit, alongX, length, width);
     const trussEnd = length - clear - seatLength - chord;
     for (let at = clear + seatLength + chord; at + TRUSS_BASE_MM < trussEnd; at += TRUSS_PITCH_MM) {
       kit.cut(cross(alongX, [[at, chord], [at + TRUSS_BASE_MM, chord], [at + TRUSS_BASE_MM / 2, beamHeight - chord]], near - 1, far + 1), 'steel');
@@ -762,9 +794,9 @@ const RECIPES = {
       kit.cut(cross(alongX, [[flipped, beamHeight - chord], [flipped + TRUSS_BASE_MM / 2, chord], [flipped + TRUSS_BASE_MM, beamHeight - chord]], near - 1, far + 1), 'steel');
     }
     const [beltWidth, beltHeight, railWidth, railHeight] = BELT_MM;
-    kit.add('soot', span(alongX, clear, length - clear, width / 2 - beltWidth / 2, width / 2 + beltWidth / 2, beamHeight, beamHeight + beltHeight));
-    kit.add('hazard', span(alongX, clear, length - clear, near, near + railWidth, beamHeight, beamHeight + railHeight));
-    kit.add('hazard', span(alongX, clear, length - clear, far - railWidth, far, beamHeight, beamHeight + railHeight));
+    kit.add('soot', span(alongX, end, length - end, width / 2 - beltWidth / 2, width / 2 + beltWidth / 2, beamHeight, beamHeight + beltHeight));
+    kit.add('hazard', span(alongX, end, length - end, near, near + railWidth, beamHeight, beamHeight + railHeight));
+    kit.add('hazard', span(alongX, end, length - end, far - railWidth, far, beamHeight, beamHeight + railHeight));
   },
 
   chimney(kit) {
@@ -928,5 +960,6 @@ export function buildRecipe(variant, clearance) {
   const kit = createKit(variant, clearance);
   RECIPES[variant.family](kit);
   addBalconies(kit);
+  if (isDocked(variant)) lift(kit.ops, DOCK_LIP_MM);
   return { ops: kit.ops, anchors: kit.anchors, kit };
 }

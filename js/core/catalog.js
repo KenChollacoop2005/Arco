@@ -16,6 +16,7 @@ export const PLACEMENTS = ['Facade', 'Interior', 'Filler', 'Cap', 'Base', 'Spann
 
 const ANY = ['1x1', '1x2', '2x2', '2x3', 'L3', 'L4'];
 const SPAN = ['1x3', '2x3']; // two ends and one cell between
+const DOCK_SPAN = ['1x2', '1x3', '1x4', '1x5']; // docked bridge lengths
 const SMALL = ['1x1', '1x2'];
 const MID = ['1x1', '1x2', '2x2', 'L3'];
 const BOXY = ['1x1', '1x2', '2x2', '2x3'];
@@ -72,6 +73,12 @@ const TABLE = [
 // Families whose facade sides take side profiles
 export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall', 'penthouse', 'shop', 'stair', 'deck', 'brise', 'fins', 'spout', 'panel', 'podium'];
 
+// Bridge families that dock between two buildings
+export const DOCK_BRIDGES = ['walkway', 'gantry'];
+// Railed families without a body at the slot foot
+const NO_DOCK = ['pilotis'];
+export const PLUG_ENDS = 5; // both end sides of a 1xN bridge
+
 export const FAMILIES = {};
 for (const row of TABLE) {
   const [id, group, label, theme, footprints, heights, stack, ground, spanning, rails, roofable] = row;
@@ -89,6 +96,8 @@ for (const row of TABLE) {
     rails: !!rails,
     roofable: !!roofable,
     profiles: PROFILE_FAMILIES.includes(id),
+    docks: !!rails && !NO_DOCK.includes(id),
+    dockFootprints: DOCK_BRIDGES.includes(id) ? DOCK_SPAN : [],
   };
 }
 
@@ -105,9 +114,21 @@ export function hasRails(instance) {
 // Local side type after rotation
 export function sideType(instance, worldSide) {
   const family = FAMILIES[instance.family];
-  if (!family.rails) return 'clear';
   const localSide = (worldSide - instance.rot + 8) & 3;
-  return (instance.mask >> localSide) & 1 ? 'facade' : 'connector';
+  const docked = ((instance.dock || 0) >> localSide) & 1;
+  if (!family.rails) return docked ? 'plug' : 'clear';
+  if ((instance.mask >> localSide) & 1) return 'facade';
+  return docked ? 'dock' : 'connector';
+}
+
+// True for a bridge that hangs between two docks
+export const isDocked = (instance) => !FAMILIES[instance.family].rails && !!instance.dock;
+
+// Dock sides a variant may keep
+function cleanDock(dock, mask, footprintId, family) {
+  if (!Number.isInteger(dock) || dock <= 0) return 0;
+  if (family.dockFootprints.includes(footprintId)) return PLUG_ENDS;
+  return family.docks ? dock & ~mask & 15 : 0;
 }
 
 export function defaultPlacement(instance) {
@@ -132,5 +153,8 @@ export function normalizeVariant(variant) {
   // Flush variants carry no prof field
   const prof = cleanProfiles(variant.prof, record.mask, record.fp, family.profiles);
   if (prof) record.prof = prof;
+  // Variants without docks carry no dock field
+  const dock = cleanDock(variant.dock, record.mask, record.fp, family);
+  if (dock) record.dock = dock;
   return record;
 }

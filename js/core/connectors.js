@@ -7,6 +7,8 @@ import {
   RAIL_DEPTH_MM,
   RAIL_FLANK_DEG,
   RAIL_LEAD_MM,
+  DOCK_LIP_MM,
+  DOCK_HEAD_MM,
   PEG_SIZE_MM,
   PEG_LENGTH_MM,
   SOCKET_CHAMFER_MM,
@@ -16,7 +18,7 @@ import {
   COUPON_SOCKET_BACK_MM,
 } from '../config.js';
 import { FOOTPRINTS, SIDES } from './grid.js';
-import { FAMILIES } from './catalog.js';
+import { FAMILIES, isDocked } from './catalog.js';
 import { box, pyramid } from './kit.js';
 
 const BURY_MM = 0.3; // rail root sunk into the body
@@ -58,19 +60,24 @@ export function femaleProfile(clearance) {
 
 // Cell edges that carry rails, in local mm
 export function railEdges(variant) {
-  if (!FAMILIES[variant.family].rails) return [];
+  const plug = isDocked(variant);
+  if (!FAMILIES[variant.family].rails && !plug) return [];
   const cells = FOOTPRINTS[variant.fp];
   const has = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);
   const edges = [];
   for (let side = 0; side < 4; side++) {
-    if ((variant.mask >> side) & 1) continue;
+    const docked = (((variant.dock || 0) >> side) & 1) === 1;
+    if (plug ? !docked : (variant.mask >> side) & 1) continue;
     const normal = SIDES[side];
     for (const [cellX, cellY] of cells) {
       if (has(cellX + normal[0], cellY + normal[1])) continue;
-      edges.push({
+      const edge = {
         center: [(cellX + 0.5 + normal[0] / 2) * CELL_MM, (cellY + 0.5 + normal[1] / 2) * CELL_MM],
         normal,
-      });
+      };
+      // Bridge ends are plugs, building sides are docks
+      if (docked) edge[plug ? 'plug' : 'dock'] = true;
+      edges.push(edge);
     }
   }
   return edges;
@@ -128,6 +135,38 @@ export function railOps(edge, clearance, fromZ, toZ) {
   return { adds, cuts };
 }
 
+// Dock side: two slots that stop on a floor lip
+export function dockOps(edge, clearance, toZ) {
+  const { origin, normal, tangent } = edgeFrame(edge);
+  const cuts = [-RAIL_OFFSET_MM, RAIL_OFFSET_MM].map((offset) => ({
+    kind: 'prism',
+    origin,
+    axes: [tangent, normal, UP],
+    poly: shifted(femaleProfile(clearance), offset),
+    from: DOCK_LIP_MM,
+    to: toZ + PAST_MM,
+  }));
+  return { adds: [], cuts };
+}
+
+// Bridge end: two square footed rails, no chamfers
+export function plugOps(edge, clearance) {
+  const { origin, normal, tangent } = edgeFrame(edge);
+  const adds = [-RAIL_OFFSET_MM, RAIL_OFFSET_MM].map((offset) => ({
+    kind: 'prism',
+    origin,
+    axes: [tangent, normal, UP],
+    poly: shifted(maleProfile(clearance), offset),
+    from: DOCK_LIP_MM,
+    to: DOCK_LIP_MM + DOCK_HEAD_MM[1],
+  }));
+  return { adds, cuts: [] };
+}
+
+// Half widths of the box stand-ins for a dock slot and a plug rail
+export const dockSlotHalf = (clearance = CONNECTOR_CLEARANCE_MM) => RAIL_NECK_MM / 2 + (RAIL_DEPTH_MM + clearance / 2) * flankTan + clearance / 2 / flankCos;
+export const plugRailHalf = RAIL_NECK_MM / 2;
+
 export const socketHalf = (clearance) => (PEG_SIZE_MM + clearance) / 2;
 export const socketDepth = (clearance) => (PEG_LENGTH_MM + clearance) / 2;
 
@@ -167,7 +206,8 @@ export function connectorPlan(variant, railBase = 0) {
     railBase,
     edges: railEdges(variant),
     top: family.stack && !variant.roof ? centers.map((center, cell) => ({ cell, center })) : [],
-    bottom: family.ground ? [] : centers.map((center, cell) => ({ cell, center })),
+    // A docked bridge hangs on its rails, no pegs
+    bottom: family.ground || isDocked(variant) ? [] : centers.map((center, cell) => ({ cell, center })),
   };
 }
 
@@ -176,7 +216,7 @@ export function connectorOps(plan, clearance = CONNECTOR_CLEARANCE_MM, top = pla
   const adds = [];
   const cuts = [];
   for (const edge of plan.edges) {
-    const rail = railOps(edge, clearance, plan.railBase, plan.height);
+    const rail = edge.dock ? dockOps(edge, clearance, plan.height) : edge.plug ? plugOps(edge, clearance) : railOps(edge, clearance, plan.railBase, plan.height);
     adds.push(...rail.adds);
     cuts.push(...rail.cuts);
   }

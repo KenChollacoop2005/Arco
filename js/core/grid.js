@@ -6,6 +6,8 @@ export const FOOTPRINTS = {
   '1x1': [[0, 0]],
   '1x2': [[0, 0], [1, 0]],
   '1x3': [[0, 0], [1, 0], [2, 0]],
+  '1x4': [[0, 0], [1, 0], [2, 0], [3, 0]],
+  '1x5': [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]],
   '2x2': [[0, 0], [1, 0], [0, 1], [1, 1]],
   '2x3': [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   L3: [[0, 0], [1, 0], [0, 1]],
@@ -186,7 +188,7 @@ export function variantKey(variant) {
     variant.seed >>> 0,
     variant.mask & 15,
     variant.roof ? 1 : 0,
-  ].join(':') + (variant.prof ? ':' + variant.prof : '');
+  ].join(':') + (variant.prof ? ':' + variant.prof : '') + (variant.dock ? ':d' + variant.dock : '');
 }
 
 // Claimed cells; side -1 marks a corner
