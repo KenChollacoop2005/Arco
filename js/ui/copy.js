@@ -10,6 +10,7 @@ export const COPY = {
   viewPersp: 'Perspective',
   viewSkip: 'Skip build animation',
   viewDecor: 'Decor',
+  viewFlows: 'Water and wires',
   viewReset: 'Reset view',
 
   generateTitle: 'Generate',

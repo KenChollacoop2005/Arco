@@ -8,6 +8,7 @@ import { createModuleView } from './render/modules.js';
 import { createDrawing } from './render/drawing.js';
 import { createSection } from './render/section.js';
 import { createDecor } from './render/decor.js';
+import { createFlows } from './render/flows.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
@@ -22,6 +23,7 @@ import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
+import { WATER_LIGHT_PATHS } from './core/flows.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -60,6 +62,7 @@ const inspector = createInspector(query('#inspectorBody'));
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
 const section = createSection(view, modules);
 const decor = createDecor(view);
+const flows = createFlows(view);
 
 export const app = {
   view,
@@ -149,7 +152,7 @@ app.structureListeners.push(async (result, phase) => {
   if (phase !== 'start') return;
   app.analysis = null;
   for (const listener of app.analysisListeners) listener(null, result);
-  const analysis = await analyst.call({ modules: result.modules }).catch(() => null);
+  const analysis = await analyst.call({ modules: result.modules, seed: result.seed }).catch(() => null);
   if (app.structure !== result || !analysis) return;
   app.analysis = freezeDeep(analysis);
   for (const listener of app.analysisListeners) listener(app.analysis, result);
@@ -276,6 +279,22 @@ app.structureListeners.push((result, phase) => {
   refreshDecor();
 });
 query('#physicsToggle').addEventListener('change', refreshDecor);
+
+// Flow networks show on a finished, still structure only
+function refreshFlows() {
+  const still = app.structure && builtResult === app.structure && app.analysis && app.analysis.flows;
+  const paths = still ? app.analysis.flows.water.paths : [];
+  // Weak devices draw fewer paths
+  const kept = toggles.light ? paths.slice(0, WATER_LIGHT_PATHS) : paths;
+  flows.set(kept.flatMap((path) => path.segments));
+  flows.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
+}
+bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });
+toggles.watch('flows', refreshFlows);
+app.analysisListeners.push(refreshFlows);
+app.modeListeners.push(refreshFlows);
+app.structureListeners.push(() => refreshFlows());
+query('#physicsToggle').addEventListener('change', refreshFlows);
 
 query('#resetView').addEventListener('click', () => rig.home(false));
 
