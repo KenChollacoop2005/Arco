@@ -111,8 +111,11 @@ export const BASIN_INPUTS = 2; // most pipes into one consumer
 
 // Strings: geometry
 export const PIPE_MAX_MM = 8 * 25; // longest pipe, port to port
-export const PIPE_STANDOFF_MM = 3; // pipe runs this far off the wall
-export const PIPE_DIAGONAL_MM = 2 * 25; // pipes up to this long may run straight
+export const PIPE_RADIUS_MM = 0.85; // pipe radius
+export const PIPE_GAP_MM = 0.5; // gap between a pipe and the surface it follows
+export const PIPE_CROSS_MAX_MM = 3 * 25; // longest free span across a gap between masses
+export const PIPE_CROSS_FACING = 0.5; // a gap span leaves and meets each wall at least this square on
+export const BODY_MIN_MM = 8; // solids thinner than this in plan are protrusions pipes may pass
 export const STRING_CLEAR_MM = 0.3; // strings keep this far from collider boxes
 export const WIRE_MAX_MM = 6 * 25; // longest power wire, port to port
 export const LINE_MAX_MM = 3 * 25; // longest plain line, port to port

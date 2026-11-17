@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GRAVITY_HEAD, WATER_SOURCES } from '../js/config.js';
+import { GRAVITY_HEAD, WATER_SOURCES, PIPE_RADIUS_MM, PIPE_GAP_MM } from '../js/config.js';
 import { normalizeVariant } from '../js/core/catalog.js';
 import { instanceMounts } from '../js/core/mounts.js';
 import { generate } from '../js/core/generator.js';
@@ -159,7 +159,7 @@ const seedFacing = (family, type, normal) => {
   throw new Error('no seed');
 };
 
-test('a tank feeds a farm two cells away with 1 head left', () => {
+test('a tank feeds a farm two cells away over one gap span, with the head its drawn pipe leaves', () => {
   const modules = [
     part(1, 'core', '1x1', 3, 0, 0, 0),
     part(2, 'tank', '1x1', 1, 0, 0, 3, seedFacing('tank', 'water-out', [1, 0, 0])),
@@ -169,8 +169,17 @@ test('a tank feeds a farm two cells away with 1 head left', () => {
   const plan = planWater(modules, 'seed');
   assert.equal(plan.links.length, 1);
   const [pipe] = plan.links;
-  assert.deepEqual([pipe.from, pipe.to, pipe.flat, pipe.up], ['2', '4', 2, 0]);
-  assert.deepEqual(plan.consumers[4], { received: 0.5, demand: 0.5, headLeft: 1, status: 'full', reason: null, short: 0 });
+  // By hand: stub to the tank body plane (20.7 mm), span to the farm bed plane (54.5 mm), stub in
+  const [from, to] = [pipe.points[0], pipe.points[pipe.points.length - 1]];
+  const off = PIPE_RADIUS_MM + PIPE_GAP_MM;
+  assert.deepEqual(pipe.points, [from, [20.7 + off, from[1], from[2]], [54.5 - off, to[1], to[2]], to]);
+  assert.deepEqual(pipe.spans, [1]);
+  const flat = (20.7 + off - from[0] + Math.hypot(54.5 - 20.7 - 2 * off, to[1] - from[1]) + off) / 25;
+  assert.ok(to[2] < from[2] && Math.abs(pipe.flat - flat) < 1e-6 && pipe.up === 0, `${pipe.flat} against ${flat}`);
+  assert.deepEqual([pipe.from, pipe.to], ['2', '4']);
+  const farm = plan.consumers[4];
+  assert.deepEqual([farm.received, farm.status, farm.reason], [0.5, 'full', null]);
+  assert.ok(Math.abs(farm.headLeft - (GRAVITY_HEAD - pipe.flat)) < 1e-9);
   // The tank pushes the rest over its edge
   assert.deepEqual(plan.solved.totals, { supplied: 4, delivered: 0.5, overflow: 3.5, unused: 0 });
   assert.ok(pipe.points.every((point) => point[2] >= 3 * 25));

@@ -1,11 +1,10 @@
-import { PIPE_STANDOFF_MM, PIPE_DIAGONAL_MM, STRING_CLEAR_MM, CURVE_STEPS, WIRE_OUT_MM } from '../config.js';
+import { STRING_CLEAR_MM, CURVE_STEPS, WIRE_OUT_MM } from '../config.js';
 import { instancePose, variantKey } from './grid.js';
 import { buildRecipe } from './recipes.js';
 import { groupAt, worldColliders } from './mounts.js';
 
 const SOLID_STEP_MM = 0.5; // sample spacing near an end module
 const TURN_COS_SIN = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-export const PIPE_SHAPES = ['drop', 'run', 'direct']; // down then across, across then down, straight
 
 const distance = (first, second) => Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
 export const pathLength = (points) => points.slice(1).reduce((sum, point, index) => sum + distance(points[index], point), 0);
@@ -84,29 +83,33 @@ export function pathBlocked(context, points, ends = []) {
 }
 
 // Point a set distance in front of a port
-export const standoff = (port, reach = PIPE_STANDOFF_MM) => port.position.map((value, axis) => value + port.normal[axis] * reach);
+export const standoff = (port, reach) => port.position.map((value, axis) => value + port.normal[axis] * reach);
 
-// Rigid pipe points for one shape, port to port
-export function pipePoints(from, to, shape) {
-  const start = standoff(from);
-  const end = standoff(to);
-  if (shape === 'direct') return [from.position, start, end, to.position];
-  const bend = shape === 'drop' ? [start[0], start[1], end[2]] : [end[0], end[1], start[2]];
-  return [from.position, start, bend, end, to.position];
+// True when a point is inside the real solid of any module
+export function insideSolid(context, point, shapes = context.boxes) {
+  return shapes.some((shape) => segmentHitsBox(point, point, shape, 0) && groupAt(context.opsOf(context.byId.get(shape.module)), toLocal(context.byId.get(shape.module), point)));
 }
 
-// First clear pipe between two ports, or the reason none runs
-export function pipeRoute(context, from, to) {
-  const ends = [from.module, to.module];
-  let blocked = null;
-  for (const shape of PIPE_SHAPES) {
-    const points = pipePoints(from, to, shape);
-    if (shape === 'direct' && distance(points[1], points[2]) > PIPE_DIAGONAL_MM) continue;
-    const hit = pathBlocked(context, points, ends);
-    if (!hit) return { shape, points, length: pathLength(points), blocked: null };
-    blocked = blocked || hit;
+// Points where a pipe enters a module's real solid, for collars
+export function solidEntries(context, points) {
+  const entries = [];
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1];
+    const to = points[index];
+    const length = distance(from, to);
+    const hits = context.boxes.filter((shape) => segmentHitsBox(from, to, shape, 0));
+    if (hits.length === 0 || length < SOLID_STEP_MM) continue;
+    const steps = Math.ceil(length / SOLID_STEP_MM);
+    const direction = [0, 1, 2].map((axis) => (to[axis] - from[axis]) / length);
+    let inside = null;
+    for (let step = 0; step <= steps; step++) {
+      const point = [0, 1, 2].map((axis) => from[axis] + (to[axis] - from[axis]) * (step / steps));
+      const now = insideSolid(context, point, hits);
+      if (now && inside === false) entries.push({ at: point, direction });
+      inside = now;
+    }
   }
-  return { shape: null, points: pipePoints(from, to, 'drop'), length: pathLength(pipePoints(from, to, 'drop')), blocked };
+  return entries;
 }
 
 // Points of a hanging string, ends exact, lowest at mid span; tilt swings the sag sideways

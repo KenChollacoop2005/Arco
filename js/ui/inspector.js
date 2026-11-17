@@ -7,7 +7,7 @@ import { COPY } from './copy.js';
 
 const RULE_ORDER = ['size', 'base', 'overhang', 'bridge', 'wall', 'solid'];
 const WATER_STATUS = { full: 'waterFull', partial: 'waterPartial', dry: 'waterDry' }; // consumer status to copy key
-const WATER_REASON = { 'no route': 'waterNoRoute', 'blocked by module': 'waterBlocked', 'source empty': 'waterEmpty', 'no free port': 'waterNoPort' }; // solver reason to copy key
+const WATER_REASON = { 'no route': 'waterNoRoute', 'no wall route': 'waterNoWall', 'source empty': 'waterEmpty', 'no free port': 'waterNoPort' }; // solver reason to copy key
 const amount = (value) => String(Number(value.toFixed(2)));
 
 // One plain water line for a consumer, null for other modules
@@ -15,7 +15,7 @@ export function waterText(flows, id) {
   const report = flows && flows.services && flows.services.water.consumers[id];
   if (!report) return null;
   const parts = [`${COPY.water}: ${amount(report.received)} ${COPY.waterOf} ${amount(report.demand)}`, COPY[WATER_STATUS[report.status]]];
-  if (report.reason === 'out of head') parts.push(`${COPY.waterShortBy} ${amount(report.short)}`);
+  if (report.reason === 'out of head') parts.push(report.short === null ? COPY.waterNoHead : `${COPY.waterShortBy} ${amount(report.short)}`);
   else if (report.reason) parts.push(COPY[WATER_REASON[report.reason]]);
   return parts.join(', ');
 }

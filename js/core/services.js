@@ -1,5 +1,5 @@
 import { structureMounts } from './mounts.js';
-import { stringContext, makeString } from './strings.js';
+import { stringContext, makeString, solidEntries } from './strings.js';
 import { planWater } from './water.js';
 import { planPower } from './power.js';
 import { planLines } from './lines.js';
@@ -12,7 +12,7 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
   const portOf = (end) => byKey.get(portKey(end.module, end.index));
   const water = planWater(modules, seedText, { ports: mounts, context });
   const pipes = water.links.map((link) => ({
-    ...makeString('pipe', portOf(link.fromPort), portOf(link.toPort), link.points, { shape: link.shape }),
+    ...makeString('pipe', portOf(link.fromPort), portOf(link.toPort), link.points, { spans: link.spans, collars: solidEntries(context, link.points.slice(1, -1)) }),
     units: water.solved.links[link.id].units,
     link: link.id,
   }));

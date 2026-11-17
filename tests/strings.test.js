@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, WIRE_MAX_MM, PIPE_STANDOFF_MM } from '../js/config.js';
+import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, WIRE_MAX_MM } from '../js/config.js';
 import { normalizeVariant } from '../js/core/catalog.js';
 import { generate } from '../js/core/generator.js';
 import { instanceMounts } from '../js/core/mounts.js';
-import { stringContext, segmentHitsBox, pathBlocked, pipeRoute, sagPoints, hangString, pathLength } from '../js/core/strings.js';
+import { stringContext, segmentHitsBox, pathBlocked, sagPoints, hangString, pathLength } from '../js/core/strings.js';
 import { planServices } from '../js/core/services.js';
 
 const EPS_MM = 1e-6; // rounding slack
@@ -21,24 +21,6 @@ test('a segment hits a box only when it passes through it', () => {
   // Running along a face within the clearance counts as a hit
   assert.ok(segmentHitsBox([-0.1, -5, 5], [-0.1, 15, 5], shape));
   assert.ok(!segmentHitsBox([-1, -5, 5], [-1, 15, 5], shape));
-});
-
-test('a pipe runs between two ports on straight pieces and stops at a module in the way', () => {
-  // Two housing units two cells apart, both facades facing each other
-  const left = part(1, 'housing', '1x1', 2, 0, 0, 0, 3, 0b0001);
-  const right = part(2, 'housing', '1x1', 2, 2, 0, 0, 3, 0b0100);
-  const from = portOf(left, 'water-out') || portOf(left, 'power');
-  const to = portOf(right, 'water-in');
-  const open = pipeRoute(stringContext([left, right]), from, to);
-  assert.equal(open.blocked, null);
-  assert.deepEqual(open.points[0], from.position);
-  assert.deepEqual(open.points[open.points.length - 1], to.position);
-  assert.ok(Math.abs(Math.hypot(...open.points[1].map((value, axis) => value - from.position[axis])) - PIPE_STANDOFF_MM) < EPS_MM);
-  assert.ok(Math.abs(open.length - pathLength(open.points)) < EPS_MM);
-  // A tower between them blocks every shape, and says which module
-  const wall = part(3, 'core', '1x1', 4, 1, 0, 0);
-  const shut = pipeRoute(stringContext([left, right, wall]), from, to);
-  assert.deepEqual(shut.blocked, { module: 3, reason: 'module' });
 });
 
 test('a hanging string sags lowest at mid span, keeps exact ends and counts the sag in its length', () => {
@@ -69,8 +51,9 @@ test('no string of a generated structure passes through a module or below the pl
     const { modules } = generate({ seed, ...MEGA });
     const context = stringContext(modules);
     const plan = planServices(modules, seed, { context });
+    // Pipes follow the walls and may pass thin protrusions; tests/pipes.test.js checks them on the bodies
     for (const string of [...plan.pipes, ...plan.wires, ...plan.lines]) {
-      assert.equal(pathBlocked(context, string.points, [string.from.module, string.to.module]), null, `${seed} ${string.type} ${string.from.module} to ${string.to.module}`);
+      if (string.type !== 'pipe') assert.equal(pathBlocked(context, string.points, [string.from.module, string.to.module]), null, `${seed} ${string.type} ${string.from.module} to ${string.to.module}`);
       assert.ok(string.points.every((point) => point[2] >= 0));
       pipes++;
     }

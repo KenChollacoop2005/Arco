@@ -1,5 +1,5 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { STORY_MM, CELL_MM, CURVE_LIGHT_STEPS } from '../config.js';
+import { STORY_MM, CELL_MM, CURVE_LIGHT_STEPS, PIPE_RADIUS_MM } from '../config.js';
 import { sectionPlanes } from './materials.js';
 
 // Port fittings: color, size across, size up, depth off the wall
@@ -11,7 +11,7 @@ const PORT_LOOK = {
 };
 // String looks: color, radius, radius on weak devices
 const STRING_LOOK = {
-  pipe: [0x737d82, 0.85, 0.6],
+  pipe: [0x737d82, PIPE_RADIUS_MM, 0.6],
   wire: [0x1f1f1f, 0.42, 0.3],
   line: [0x101010, 0.25, 0.2],
 };
@@ -122,13 +122,22 @@ export function createStrings(view) {
     const pieces = [];
     const fixings = [];
     for (const string of strings) {
-      const points = thin(string.points, light);
+      const points = type === 'pipe' ? string.points : thin(string.points, light);
+      const spans = new Set(string.spans || []);
+      if (type === 'pipe' && !light) {
+        for (const collar of string.collars || []) fixings.push({ at: collar.at, from: collar.at, to: collar.at.map((value, axis) => value + collar.direction[axis]), upright: true });
+      }
       for (let index = 1; index < points.length; index++) {
         const from = points[index - 1];
         const to = points[index];
         if (Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]) < 1e-6) continue;
         pieces.push([from, to]);
         if (type !== 'pipe' || light) continue;
+        // A gap span hangs from a bracket on each wall, nothing between
+        if (spans.has(index - 1)) {
+          for (const at of [from, to]) fixings.push({ at, from, to, upright: false });
+          continue;
+        }
         // Brackets along runs, collars on drops down a facade
         const length = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         const upright = Math.abs(to[2] - from[2]) / length > VERTICAL_TOL;

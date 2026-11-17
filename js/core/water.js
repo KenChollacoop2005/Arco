@@ -6,7 +6,8 @@ import { SIDES, instanceCells, worldFromModules, columnTop, moduleAt } from './g
 import { FAMILIES, hasPump } from './catalog.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
 import { structureMounts } from './mounts.js';
-import { stringContext, pipeRoute, pathBlocked } from './strings.js';
+import { stringContext, pathBlocked, pathLength } from './strings.js';
+import { pipeGraph, pipeSearch, pipePath, pathHead, graphParts } from './pipes.js';
 
 const WATER_SEED = 0x7a7e5; // keeps network rolls apart from other rolls
 const STEP = WATER_STEP * WATER_QUARTERS; // split step in quarters
@@ -14,7 +15,9 @@ const SPILL_LIP_MM = 1; // overflow leaves this far past the wall
 const SPILL_LIFT_MM = 0.5; // overflow starts this far above the roof
 const SPILL_CLEAR_MM = 1; // sheet collision test stops this far above the landing
 const SPLIT_ROUNDS_MAX = 1000; // safety cap on split rounds
-export const WATER_REASONS = ['out of head', 'no route', 'blocked by module', 'source empty', 'no free port'];
+const SEARCH_SLACK = 1e-6; // head slack when a search stops early
+const SHORT_REACH = 4; // shortfalls past this much head are reported without a number
+export const WATER_REASONS = ['out of head', 'no route', 'no wall route', 'source empty', 'no free port'];
 
 const toQuarters = (units) => Math.round(units * WATER_QUARTERS);
 const toUnits = (quarters) => quarters / WATER_QUARTERS;
@@ -209,17 +212,6 @@ function rolesOf(instance, roofOpen) {
   return roles;
 }
 
-// Cell of a port, one step inside its wall
-const portCell = (port) => [Math.floor((port.position[0] - port.normal[0] * 0.5) / CELL_MM), Math.floor((port.position[1] - port.normal[1] * 0.5) / CELL_MM)];
-const portStory = (port) => Math.floor(port.position[2] / STORY_MM);
-
-// Level cells and stories of rise between two points
-export function runSize(fromPort, toPort) {
-  const [fromX, fromY] = portCell(fromPort);
-  const [toX, toY] = portCell(toPort);
-  return { flat: Math.round(Math.hypot(toX - fromX, toY - fromY)), up: portStory(toPort) - portStory(fromPort) };
-}
-
 // Where a node's surplus lands: the shortest fall beside it
 function spillOf(world, node, instances, consumerAt, context) {
   const own = new Set(instances.flatMap(instanceCells).map(([cellX, cellY]) => cellX + ',' + cellY));
@@ -267,6 +259,12 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const under = instance.z > 0 ? moduleAt(world, instance.x, instance.y, instance.z - 1) : null;
     mainOf.set(instance.id, under && mainOf.has(under.id) ? mainOf.get(under.id) : instance.id);
   }
+  const waterPorts = [...portsOf.values()].flat();
+  const graph = pipeGraph(modules, waterPorts, context);
+  waterPorts.forEach((port, index) => {
+    port.node = graph.portNodes[index];
+  });
+  const parts = graphParts(graph);
   const nodes = [];
   const consumerAt = new Map();
   for (const instance of modules) {
@@ -302,10 +300,17 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const kept = node.kind === 'consumer' ? node.demand : 0;
     return entry.units - entry.used - kept;
   };
-  // Best clear pipe from any upstream node into this one, or why none
+  // Rise inside a main column from where water enters to the outlet
+  const mainRise = (from, out) => {
+    const entry = estimate.get(from.id).entry;
+    return from.kind === 'main' && entry ? Math.max(0, out.position[2] - entry.position[2]) / STORY_MM : 0;
+  };
+  // Cheapest pipe along the walls from any upstream node into this one, or why none
   function bestLink(node, need) {
-    const tried = { head: Infinity, blocked: false, port: false, empty: false, far: false };
-    const options = [];
+    const tried = { head: Infinity, port: false, empty: false };
+    const inlets = node.ins.filter((inlet) => inlet.left > 0 && inlet.node !== null);
+    if (node.ins.some((inlet) => inlet.left <= 0)) tried.port = true;
+    const candidates = [];
     for (const from of nodes) {
       if (from === node || !['source', 'pump', 'main', 'consumer'].includes(from.kind) || from.outs.length === 0) continue;
       if (spare(from) <= 0) {
@@ -313,41 +318,57 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
         continue;
       }
       if (downstream(from.id, node.id)) continue;
-      const fromState = estimate.get(from.id);
       for (const out of from.outs) {
-        for (const inlet of node.ins) {
-          if (out.left <= 0 || inlet.left <= 0) {
-            tried.port = true;
-            continue;
-          }
-          const size = runSize(from.kind === 'main' && fromState.entry ? fromState.entry : out, inlet);
-          const after = linkHead(fromState.head, fromState.gravity, size);
-          if (after.left < 0) {
-            tried.head = Math.min(tried.head, after.short);
-            continue;
-          }
-          const span = Math.hypot(...[0, 1, 2].map((axis) => inlet.position[axis] - out.position[axis]));
-          if (span > PIPE_MAX_MM) {
-            tried.far = true;
-            continue;
-          }
-          options.push({ from, out, inlet, size, span, cost: linkCost(size) });
+        if (out.left <= 0 || out.node === null) {
+          tried.port = true;
+          continue;
         }
+        if (inlets.some((inlet) => Math.hypot(...[0, 1, 2].map((axis) => inlet.position[axis] - out.position[axis])) <= PIPE_MAX_MM)) candidates.push({ from, out });
       }
     }
-    options.sort((first, second) => first.cost - second.cost || first.span - second.span || first.from.module - second.from.module || first.out.index - second.out.index || first.inlet.index - second.inlet.index);
+    if (inlets.length === 0 || candidates.length === 0) return { fail: { reason: tried.port ? 'no free port' : tried.empty ? 'source empty' : 'no route' } };
+    // One search per head kind, stopped past the most head on offer
+    const targets = inlets.map((inlet) => inlet.node);
+    const searches = {};
+    const searchFor = (gravity, bound) => {
+      const key = gravity + ':' + bound;
+      if (!searches[key]) searches[key] = pipeSearch(graph, targets, gravity, bound);
+      return searches[key];
+    };
+    const bound = (gravity) => Math.max(...candidates.filter(({ from }) => estimate.get(from.id).gravity === gravity).map(({ from, out }) => estimate.get(from.id).head - mainRise(from, out) * HEAD_PER_STORY_UP)) + SEARCH_SLACK;
+    const options = [];
+    for (const { from, out } of candidates) {
+      const fromState = estimate.get(from.id);
+      const search = searchFor(fromState.gravity, bound(fromState.gravity));
+      if (!search.reached(out.node)) continue;
+      const size = { flat: Math.round(search.flat(out.node) * 1e6) / 1e6, up: Math.round((search.up(out.node) + mainRise(from, out)) * 1e6) / 1e6 };
+      const after = linkHead(fromState.head, fromState.gravity, size);
+      if (after.left < 0) continue;
+      options.push({ from, out, size, rank: search.rank(out.node), search });
+    }
+    options.sort((first, second) => first.rank - second.rank || first.from.module - second.from.module || first.out.index - second.out.index);
     for (const option of options) {
-      const route = pipeRoute(context, option.out, option.inlet);
-      if (route.blocked) {
-        tried.blocked = tried.blocked || { from: option.out, to: option.inlet, route };
-        continue;
-      }
-      return { ...option, route, need };
+      const path = pipePath(graph, option.search, option.out.node);
+      const head = pathHead(path.points);
+      const size = { flat: head.flat, up: Math.round((head.up + mainRise(option.from, option.out)) * 1e6) / 1e6 };
+      if (linkHead(estimate.get(option.from.id).head, estimate.get(option.from.id).gravity, size).left < 0) continue;
+      const inlet = waterPorts[path.end];
+      return { ...option, inlet, size, route: { points: path.points, spans: path.spans, length: pathLength(path.points) }, need };
     }
-    if (tried.blocked) return { fail: { reason: 'blocked by module', attempt: tried.blocked } };
+    // Nothing runs: out of head when a wall route exists, else no wall route
+    const joined = (out) => targets.some((target) => parts[target] === parts[out.node]);
+    const reachable = candidates.filter(({ out }) => joined(out));
+    if (reachable.length === 0) return { fail: { reason: 'no wall route', attempt: { from: candidates[0].out, to: inlets[0] } } };
+    const limit = Math.max(...reachable.map(({ from, out }) => estimate.get(from.id).head - mainRise(from, out) * HEAD_PER_STORY_UP)) + SHORT_REACH;
+    const wide = searchFor(false, limit);
+    for (const { from, out } of reachable) {
+      if (!wide.reached(out.node)) continue;
+      const fromState = estimate.get(from.id);
+      const size = { flat: wide.flat(out.node), up: wide.up(out.node) + mainRise(from, out) };
+      tried.head = Math.min(tried.head, Math.round(linkHead(fromState.head, fromState.gravity, size).short * 1e6) / 1e6);
+    }
+    if (tried.head === Infinity) return { fail: { reason: 'out of head', short: null } };
     if (tried.head < Infinity) return { fail: { reason: 'out of head', short: tried.head } };
-    if (tried.port) return { fail: { reason: 'no free port' } };
-    if (tried.empty) return { fail: { reason: 'source empty' } };
     return { fail: { reason: 'no route' } };
   }
   function addLink(option, node) {
@@ -367,7 +388,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     if (!toState.entry) toState.entry = option.inlet;
     option.out.left--;
     option.inlet.left--;
-    links.push({ id: links.length, from: option.from.id, to: node.id, flat: option.size.flat, up: option.size.up, length: option.route.length, port: option.inlet.index, fromPort: { module: option.out.module, index: option.out.index }, toPort: { module: option.inlet.module, index: option.inlet.index }, points: option.route.points, shape: option.route.shape });
+    links.push({ id: links.length, from: option.from.id, to: node.id, flat: option.size.flat, up: option.size.up, length: option.route.length, port: option.inlet.index, fromPort: { module: option.out.module, index: option.out.index }, toPort: { module: option.inlet.module, index: option.inlet.index }, points: option.route.points, spans: option.route.spans });
   }
   // Hubs first, lowest first, then consumers in a seeded order
   const hubs = nodes.filter((node) => (node.kind === 'pump' || node.kind === 'main') && node.ins.length > 0).sort((first, second) => first.level - second.level || first.module - second.module);
@@ -399,12 +420,12 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
   }
   const solved = solveWater({ nodes, links });
   // Pipes that would have run but hit a module
-  const blocked = [...noLink.values()].filter((fail) => fail.attempt).map(({ attempt }) => ({ from: attempt.from, to: attempt.to, points: attempt.route.points, blocked: attempt.route.blocked }));
+  const blocked = [...noLink.values()].filter((fail) => fail.attempt).map(({ attempt }) => ({ from: attempt.from, to: attempt.to, points: [attempt.from.position, attempt.to.position], blocked: { module: null, reason: 'no wall route' } }));
   const report = {};
   for (const node of nodes) {
     if (node.kind !== 'consumer') continue;
     const fail = noLink.get(node.id);
-    report[node.module] = consumerStatus(node, solved, links.filter((link) => link.to === node.id), fail && { reason: fail.reason, short: fail.short || 0 });
+    report[node.module] = consumerStatus(node, solved, links.filter((link) => link.to === node.id), fail && { reason: fail.reason, short: fail.short === undefined ? 0 : fail.short });
   }
   return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report };
 }
