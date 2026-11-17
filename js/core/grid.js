@@ -133,12 +133,16 @@ export function toBody(instance) {
   if (instance.dock) dockSurfaces(instance, body);
   if (!instance.prof) return body;
   const pose = instancePose(instance);
+  const shapes = profileBoxes(instance);
   // Notches, bulges and balconies as signed volumes
-  body.lumps = profileBoxes(instance).map((shape) => {
+  body.lumps = shapes.map((shape) => {
     const size = [0, 1, 2].map((axis) => shape.max[axis] - shape.min[axis]);
     const center = poseApply(pose, (shape.min[0] + shape.max[0]) / 2, (shape.min[1] + shape.max[1]) / 2, 0);
     return { volume: shape.sign * size[0] * size[1] * size[2], x: center[0], y: center[1] };
   });
+  // The top of every protrusion carries, like its collider
+  const ledges = shapes.filter((shape) => shape.sign > 0).map((shape) => ({ z: body.z0 + shape.max[2], rects: [worldRect(pose, shape)] }));
+  body.tops = [...(body.tops || [{ z: body.z1, rects: body.rects }]), ...ledges];
   return body;
 }
 
