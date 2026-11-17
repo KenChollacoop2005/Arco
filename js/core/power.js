@@ -1,6 +1,6 @@
 import {
   WIRE_MAX_MM, WIRE_SAG, POWER_SOURCES, POWER_ROOMS, ROOM_NEAR_MM, JUMPER_MAX_MM, WIRE_CROSS_MM, WIRE_LINKS_MAX,
-  CABLES_PER_LINK, CABLE_SHIFT_MM, CABLE_TILT, SPARE_SHARE, SPARE_SAG,
+  CABLES_PER_LINK, CABLE_SHIFT_MM, CABLE_TILT, SPARE_SHARE, SPARE_SAG, MAX_WIRES_PER_PAIR,
 } from '../config.js';
 import { SIDES, instanceCells } from './grid.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
@@ -51,7 +51,7 @@ function touching(modules) {
 }
 
 // Power wires: sources feed rooms, rooms and sources fan out; seeded, render only
-export function planPower(modules, seedText, { ports, context, crossCost = WIRE_CROSS_MM }) {
+export function planPower(modules, seedText, { ports, context, crossCost = WIRE_CROSS_MM, pairCap = MAX_WIRES_PER_PAIR }) {
   const rng = makeRng(mixSeed(hashString(String(seedText)), POWER_SEED));
   const familyOf = new Map(modules.map((instance) => [instance.id, instance.family]));
   const near = touching(modules);
@@ -117,8 +117,15 @@ export function planPower(modules, seedText, { ports, context, crossCost = WIRE_
     powered.add(best.to.module);
     feeders.push(...live.filter((port) => port.module === best.to.module));
   }
-  // One to three cables per link, each with its own sag, swing and ends
+  // One to three cables per link, each with its own sag, swing and ends; rolls are kept past the pair cap
   const cables = [];
+  const perPair = new Map();
+  const pairOf = (from, to) => [from.module + ':' + from.index, to.module + ':' + to.index].sort().join('|');
+  const room = (link) => (perPair.get(pairOf(...link.ends)) || 0) < pairCap;
+  const hang = (link, wire) => {
+    cables.push(wire);
+    perPair.set(pairOf(...link.ends), (perPair.get(pairOf(...link.ends)) || 0) + 1);
+  };
   for (const link of links) {
     const count = rng.int(CABLES_PER_LINK[0], CABLES_PER_LINK[1]);
     const [from, to] = link.ends;
@@ -128,12 +135,12 @@ export function planPower(modules, seedText, { ports, context, crossCost = WIRE_
       const shift = (port) => tangent(port).map((value, axis) => value * rng.range(-CABLE_SHIFT_MM, CABLE_SHIFT_MM) + (axis === 2 ? rng.range(-CABLE_SHIFT_MM, CABLE_SHIFT_MM) / 2 : 0));
       const options = cable === 0 ? {} : { tilt: rng.range(-CABLE_TILT, CABLE_TILT), shiftA: shift(from), shiftB: shift(to) };
       const wire = cable === 0 ? link.wire : hangString(context, 'wire', from, to, link.length * share, WIRE_MAX_MM, options);
-      if (!wire.blocked) cables.push({ ...wire, link: link.id });
+      if (!wire.blocked && room(link)) hang(link, { ...wire, link: link.id });
     }
     // A few spares hang slack
     if (rng.chance(SPARE_SHARE)) {
       const spare = hangString(context, 'wire', from, to, link.length * rng.range(SPARE_SAG[0], SPARE_SAG[1]), WIRE_MAX_MM, { tilt: rng.range(-CABLE_TILT, CABLE_TILT) });
-      if (!spare.blocked) cables.push({ ...spare, link: link.id, spare: true });
+      if (!spare.blocked && room(link)) hang(link, { ...spare, link: link.id, spare: true });
     }
   }
   const blocked = [...blockedBy.entries()].filter(([module]) => !powered.has(module)).map(([, wire]) => wire);

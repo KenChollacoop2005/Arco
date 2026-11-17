@@ -1,6 +1,6 @@
 import {
   LINE_MAX_MM, LINE_SAG, LINE_RISE_MM, CLOTHESLINES_MAX, LAUNDRY_GAP_MM, LAUNDRY_CHANCE, LAUNDRY_SIZE_MM, LAUNDRY_COLORS,
-  TARP_REACH_MM, TARP_RISE_MM, TARP_MIN_AREA_MM2, TARPS_MAX, TARP_COLORS,
+  TARP_REACH_MM, TARP_RISE_MM, TARP_MIN_AREA_MM2, TARPS_MAX, TARP_COLORS, MAX_LINES_PER_PAIR,
 } from '../config.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
 import { hangString, pathBlocked, standoff } from './strings.js';
@@ -97,14 +97,15 @@ export function planLines(modules, seedText, { ports, context }) {
   const rng = makeRng(mixSeed(hashString(String(seedText)), LINE_SEED));
   const lines = [];
   const laundry = [];
-  const strung = new Set();
+  const strung = new Map();
+  const pairCount = (hookA, hookB) => strung.get(pairKey(hookA, hookB)) || 0;
   const pairKey = (hookA, hookB) => [hookA.module + ':' + hookA.index, hookB.module + ':' + hookB.index].sort().join('-');
   for (const first of rng.shuffle(hooks.slice())) {
     if (lines.length >= CLOTHESLINES_MAX) break;
     if (first.left <= 0) continue;
     // Nearest free hook on another module, about level, with a clear line
     const options = hooks
-      .filter((hook) => hook.module !== first.module && hook.left > 0 && !strung.has(pairKey(first, hook)) && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM)
+      .filter((hook) => hook.module !== first.module && hook.left > 0 && pairCount(first, hook) < MAX_LINES_PER_PAIR && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM)
       .map((hook) => ({ hook, length: distance(hook.position, first.position) }))
       .filter((option) => option.length <= LINE_MAX_MM)
       .sort((optionA, optionB) => optionA.length - optionB.length || optionA.hook.module - optionB.hook.module || optionA.hook.index - optionB.hook.index);
@@ -113,7 +114,7 @@ export function planLines(modules, seedText, { ports, context }) {
       if (line.blocked) continue;
       first.left--;
       hook.left--;
-      strung.add(pairKey(first, hook));
+      strung.set(pairKey(first, hook), pairCount(first, hook) + 1);
       lines.push(line);
       laundry.push(...hangLaundry(line, context, rng).map((piece) => ({ ...piece, line: lines.length - 1 })));
       break;

@@ -126,6 +126,11 @@ export const CURVE_STEPS = 10; // straight pieces per hanging string
 export const CURVE_LIGHT_STEPS = 4; // pieces per hanging string on weak devices
 export const WIRE_OUT_MM = 1.2; // cable ends this far off the bracket
 
+// Strings: pair caps, counted both ways between the same two ports
+export const MAX_WIRES_PER_PAIR = 2; // most power wires between two ports
+export const MAX_PIPES_PER_PAIR = 1; // most pipes between two ports
+export const MAX_LINES_PER_PAIR = 1; // most plain lines between two ports
+
 // Strings: power
 export const POWER_SOURCES = ['turbine', 'solar']; // families that make power
 export const POWER_ROOMS = ['powerroom']; // families wires fan out from

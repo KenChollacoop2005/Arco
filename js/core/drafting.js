@@ -10,6 +10,7 @@ const DASH_GAP_MM = 1.5; // gap between dashes on a blocked string
 const CONSUMER_MARK_MM = 4; // half width of a dry or partial diamond
 const CONSUMER_MARKS = { dry: 'fail', partial: 'warn' }; // consumer status to line status
 const STRING_STATUS = { pipe: 'water', wire: 'power' }; // string type to line status
+const PORT_MARK_MM = 1.2; // half width of an unused port's hollow square
 
 // All results: { positions: number[], statuses: string[] }, one status per segment
 const sheet = () => ({ positions: [], statuses: [] });
@@ -133,8 +134,18 @@ function consumerMark(target, instance, status) {
   segment(target, [centerX - half, centerY + half, top], [centerX + half, centerY - half, top], 'fail');
 }
 
-// Services from the strings: pipes and overflow as 'water', cables as 'power', blocked dashed
-export function serviceLines(services, modules = []) {
+// Hollow square on the wall in front of an unused port
+function portMark(target, port) {
+  const out = port.normal;
+  const across = Math.abs(out[2]) > 0.5 ? [1, 0, 0] : [-out[1], out[0], 0];
+  const up = [out[1] * across[2] - out[2] * across[1], out[2] * across[0] - out[0] * across[2], out[0] * across[1] - out[1] * across[0]];
+  const center = port.position.map((value, axis) => value + out[axis] * LIFT_MM);
+  const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sideA, sideB]) => center.map((value, axis) => value + (across[axis] * sideA + up[axis] * sideB) * PORT_MARK_MM));
+  corners.forEach((corner, index) => segment(target, corner, corners[(index + 1) % 4], 'line'));
+}
+
+// Services from the strings: pipes and overflow as 'water', cables as 'power', blocked dashed; unused ports hollow when given
+export function serviceLines(services, modules = [], unused = []) {
   const target = sheet();
   if (!services) return target;
   for (const pipe of services.pipes) polyline(target, pipe.points, 'water', false);
@@ -146,5 +157,6 @@ export function serviceLines(services, modules = []) {
     const instance = byId.get(Number(id));
     if (instance && CONSUMER_MARKS[report.status]) consumerMark(target, instance, report.status);
   }
+  for (const port of unused) portMark(target, port);
   return target;
 }

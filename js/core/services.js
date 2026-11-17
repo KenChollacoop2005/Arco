@@ -6,6 +6,24 @@ import { planLines } from './lines.js';
 
 const portKey = (module, index) => module + ':' + index;
 
+// Ports with at least one string, pipe, wire, line or tarp on them
+export function usedPorts(services) {
+  const used = new Set();
+  if (!services) return used;
+  for (const string of [...services.pipes, ...services.wires, ...services.lines]) {
+    used.add(portKey(string.from.module, string.from.index));
+    used.add(portKey(string.to.module, string.to.index));
+  }
+  for (const tarp of services.tarps) for (const anchor of tarp.anchors) used.add(portKey(anchor.module, anchor.index));
+  return used;
+}
+
+// Ports drawn in the main view: active (or not marked) and in use
+export function drawnPorts(ports, services) {
+  const used = usedPorts(services);
+  return ports.filter((port) => port.active !== false && used.has(portKey(port.module, port.index)));
+}
+
 // Water, power and plain lines of a structure as strings, seeded and render only
 export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules) } = {}) {
   const byKey = new Map(mounts.map((port) => [portKey(port.module, port.index), port]));

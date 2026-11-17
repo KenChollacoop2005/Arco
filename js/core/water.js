@@ -1,6 +1,6 @@
 import {
   CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, WATER_QUARTERS, WATER_STEP, GRAVITY_HEAD, HEAD_PER_CELL, HEAD_PER_STORY_UP,
-  WATER_SOURCES, SOURCE_FAMILIES, PUMP_KINDS, DEMAND_PER_CELL, DEMAND_PER_MODULE, HUB_INPUTS, BASIN_INPUTS, PIPE_MAX_MM,
+  WATER_SOURCES, SOURCE_FAMILIES, PUMP_KINDS, DEMAND_PER_CELL, DEMAND_PER_MODULE, HUB_INPUTS, BASIN_INPUTS, PIPE_MAX_MM, MAX_PIPES_PER_PAIR,
 } from '../config.js';
 import { SIDES, instanceCells, worldFromModules, columnTop, moduleAt } from './grid.js';
 import { FAMILIES, hasPump } from './catalog.js';
@@ -319,6 +319,8 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
       }
       if (downstream(from.id, node.id)) continue;
       for (const out of from.outs) {
+        // Pair cap, kept per outlet and consumer so a search needs no per pair targets
+        if (links.filter((link) => link.to === node.id && link.fromPort.module === out.module && link.fromPort.index === out.index).length >= MAX_PIPES_PER_PAIR) continue;
         if (out.left <= 0 || out.node === null) {
           tried.port = true;
           continue;

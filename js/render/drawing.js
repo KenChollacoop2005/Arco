@@ -28,6 +28,7 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
   let stale = true;
   let current = { structure: null, checks: null };
   let services = null;
+  let unusedPorts = [];
 
   function setLayerLines(name, positions, statuses, onTop) {
     if (layers[name]) {
@@ -113,7 +114,7 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     const loads = checks ? loadPaths(checks) : { positions: [], statuses: [] };
     setLayerLines('centers', centers.positions, centers.statuses, true);
     setLayerLines('loads', loads.positions, loads.statuses, true);
-    const lines = serviceLines(services, structure.modules);
+    const lines = serviceLines(services, structure.modules, unusedPorts);
     setLayerLines('services', lines.positions, lines.statuses, false);
     fillTitle();
     placeLabel();
@@ -129,9 +130,10 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
       stale = true;
       if (active) rebuild();
     },
-    // Strings plan from the analysis, null while it runs
-    setServices(plan) {
+    // Strings plan from the analysis, null while it runs; unused ports drawn hollow
+    setServices(plan, unused = []) {
       services = plan;
+      unusedPorts = unused;
       stale = true;
       if (active) rebuild();
     },

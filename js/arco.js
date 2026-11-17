@@ -24,6 +24,7 @@ import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
 import { createWorkerClient } from './workers/client.js';
+import { drawnPorts } from './core/services.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -155,7 +156,11 @@ app.structureListeners.push(async (result, phase) => {
   const analysis = await analyst.call({ modules: result.modules, seed: result.seed }).catch(() => null);
   if (app.structure !== result || !analysis) return;
   app.analysis = freezeDeep(analysis);
-  drawing.setServices(app.analysis.flows ? app.analysis.flows.services : null);
+  const flows = app.analysis.flows;
+  if (flows) {
+    const shown = new Set(drawnPorts(flows.ports, flows.services));
+    drawing.setServices(flows.services, flows.ports.filter((port) => port.active !== false && !shown.has(port)));
+  } else drawing.setServices(null);
   showInspector();
   for (const listener of app.analysisListeners) listener(app.analysis, result);
 });
@@ -287,7 +292,7 @@ function refreshFlows() {
   const still = app.structure && builtResult === app.structure && app.analysis && app.analysis.flows;
   const services = still ? app.analysis.flows.services : null;
   const { pipes, wires, lines, sheets, laundry, tarps } = services || {};
-  strings.set(services ? { ports: app.analysis.flows.ports, pipes, wires, lines, sheets, laundry, tarps } : {}, toggles.light);
+  strings.set(services ? { ports: drawnPorts(app.analysis.flows.ports, services), pipes, wires, lines, sheets, laundry, tarps } : {}, toggles.light);
   strings.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
 }
 bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });
