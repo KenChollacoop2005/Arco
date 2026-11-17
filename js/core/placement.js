@@ -60,6 +60,7 @@ const SIDE_REASON = 'Facade meets a connector face';
 const DOCK_REASON = 'A dock face only takes a bridge end at its base';
 const PLUG_REASON = 'A docked bridge needs a dock face at both ends, at its own level';
 const GAP_REASON = 'A docked bridge needs an open gap under it';
+const CLOSE_REASON = 'That would close the gap under a docked bridge';
 
 // Reason two facing sides cannot meet, or ''
 function facingReason(first, firstType, second, secondType) {
@@ -99,6 +100,22 @@ function sideConflict(world, instance) {
 // True when no module touches the underside of some cell
 function overGap(world, instance) {
   return instance.z > 0 && supportsUnder(world, instance).some((support) => !support);
+}
+
+// True when a module would fill the last open cell under a docked bridge
+function closesGap(world, instance, cells) {
+  const top = instance.z + instance.h;
+  const mine = (cellX, cellY) => cells.some((cell) => cell[0] === cellX && cell[1] === cellY);
+  const held = (cellX, cellY) => {
+    const below = moduleAt(world, cellX, cellY, top - 1);
+    return mine(cellX, cellY) || (!!below && below.z + below.h === top);
+  };
+  for (const [cellX, cellY] of cells) {
+    const above = moduleAt(world, cellX, cellY, top);
+    if (!above || above.id === instance.id || above.z !== top || !isDocked(above)) continue;
+    if (instanceCells(above).every(([overX, overY]) => held(overX, overY))) return true;
+  }
+  return false;
 }
 
 function anythingAbove(world, instance, top) {
@@ -201,6 +218,7 @@ export function checkPlacement(world, instance, options = {}) {
       }
     }
   }
+  if (closesGap(world, instance, cells)) return { ok: false, reason: CLOSE_REASON };
   const sides = sideConflict(world, instance);
   if (sides) return { ok: false, reason: sides };
   return { ok: true, reason: '' };

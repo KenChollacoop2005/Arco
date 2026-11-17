@@ -150,7 +150,7 @@ const COLLAR_MM = [3.6, 6.6, 3, 1.2]; // collar radius low, high, cone, band
 const COLLAR_ROOM_MM = [2, 1]; // collar kept off the base and capital
 const BRACE_MM = [8, 1, 0.8, 1.6]; // brace width, end margin, shoe lip, shoe height
 const PIER_MM = [3, 4, 2]; // pier base plate, head plate, plinth step
-const PIER_HALF_MM = [4.5, 6]; // pier shaft half width range
+const PIER_HALF_MM = [5.5, 6.5]; // pier shaft half width range, wide enough for sockets
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
