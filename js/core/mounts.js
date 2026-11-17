@@ -67,6 +67,11 @@ export const MOUNT_PORTS = {
   chimney: MACHINE(1, 4),
   cooling: MACHINE(0.5, 2),
   tankfarm: MACHINE(3, 8),
+  pumproom: [
+    { type: 'water-in', sides: 'any', each: 'side', z: [0.12, 0.5] },
+    { type: 'water-out', sides: 'any', each: 'side', z: [0.12, 0.5] },
+    { type: 'power', sides: 'any', each: 'module', z: [0.6, 0.9] },
+  ],
 };
 
 const inBox = (shape, point) => point.every((value, axis) => value > shape.min[axis] && value < shape.max[axis]);

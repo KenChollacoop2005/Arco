@@ -86,6 +86,9 @@ const DOCK_MEGA = 2; // docked bridge multiplier for megastructures
 const DOCK_SPAN = [2, 5]; // docked bridge length range in cells
 const DOCK_SEED = 0xd0c5; // keeps dock rolls apart from layout rolls
 const PIER_SPAN = 4; // spans from this length get a pier
+const SERVICE_SEED = 0x5e771c; // keeps service rolls apart from layout rolls
+const SERVICE_ROUNDS = 6; // most stability repair passes for services
+const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by density: block, mega
 const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
 
 const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8]];
@@ -823,6 +826,43 @@ function props(ctx) {
   for (const strut of struts) removeModule(world, strut.id);
 }
 
+// Empty ground cell beside a building, footprint turned to fit
+function groundSpot(ctx, rng, family, footprintId, stories) {
+  const { world } = ctx;
+  for (const [cellX, cellY] of rng.shuffle(ctx.site)) {
+    if (!emptyAt(world, cellX, cellY, 0, stories) || !ctx.groundOk(cellX, cellY)) continue;
+    if (!SIDES.some(([stepX, stepY]) => moduleAt(world, cellX + stepX, cellY + stepY, 0))) continue;
+    const fit = fits({ rng }, footprintId, [cellX, cellY], (x, y) => ctx.inSite.has(cellKey(x, y)) && ctx.groundOk(x, y) && emptyAt(world, x, y, 0, stories));
+    if (!fit) continue;
+    const placed = place(ctx, { family, fp: fit.fp, h: stories, seed: rng.int(1, 0x7fffffff), x: fit.x, y: fit.y, z: 0, rot: fit.rot });
+    if (placed) return placed;
+  }
+  return null;
+}
+
+// Pump rooms, pumps, mains and power rooms, on their own rng
+function services(ctx) {
+  const { world, opts } = ctx;
+  const rng = makeRng(mixSeed(hashString(opts.seed), SERVICE_SEED));
+  const mega = opts.scale === 'mega' ? 1 : 0;
+  const added = [];
+  const keep = (instance) => instance && added.push(instance);
+  const rooms = rng.int(0, PUMP_ROOMS[opts.density][mega]);
+  for (let room = 0; room < rooms; room++) {
+    const family = FAMILIES.pumproom;
+    keep(groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)));
+  }
+  if (opts.unstable) return;
+  // New parts go again until the structure passes
+  for (let round = 0; round < SERVICE_ROUNDS && added.length > 0; round++) {
+    const result = checkStability(bodiesOf(world));
+    if (result.status === 'pass') return;
+    const failing = added.filter((instance) => result.modules.get(instance.id).status !== 'pass');
+    for (const instance of failing.length > 0 ? failing : added.splice(0)) removeModule(world, instance.id);
+    for (const instance of failing) added.splice(added.indexOf(instance), 1);
+  }
+}
+
 function unit(ctx) {
   const { rng } = ctx;
   const family = FAMILIES[rng.pick(FAMILY_IDS.filter((id) => !UNIT_SKIP.includes(id)))];
@@ -922,6 +962,7 @@ export function generate(options) {
   setProfiles(ctx);
   if (opts.scale !== 'unit') props(ctx);
   setJetties(ctx);
+  if (opts.scale !== 'unit') services(ctx);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );

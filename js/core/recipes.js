@@ -152,6 +152,8 @@ const COLLAR_ROOM_MM = [2, 1]; // collar kept off the base and capital
 const BRACE_MM = [8, 1, 0.8, 1.6]; // brace width, end margin, shoe lip, shoe height
 const PIER_MM = [3, 4, 2]; // pier base plate, head plate, plinth step
 const PIER_HALF_MM = [5.5, 6.5]; // pier shaft half width range, wide enough for sockets
+const PUMP_BAY_MM = [5, 2, 5, 20]; // pump room bay half width, floor, depth, top
+const PUMP_DRUM_MM = [2, 9]; // pump drum radius and height
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -950,6 +952,22 @@ const RECIPES = {
     const half = (far - near) / 2;
     const tent = [[near, eave], [near + thick, eave], [middle, eave + half - thick], [far - thick, eave], [far, eave], [middle, eave + half]];
     kit.add(kit.rng.pick(TARP_GROUPS), sweep(alongX, tent, start, end));
+  },
+
+  pumproom(kit) {
+    kit.slab('concrete', kit.clear, 0, kit.H);
+    // Pump drum standing in a bay on the longest wall, slits elsewhere
+    const [half, floor, depth, top] = PUMP_BAY_MM;
+    const run = kit.facades.reduce((best, wall) => (wall.length > best.length ? wall : best), kit.facades[0]);
+    const style = makeStyle(kit.styleRng, kit.styleRng.pick(['slit', 'blank']));
+    for (const wall of kit.facades) if (wall !== run) applyFacade(kit, wall, style);
+    const middle = run.length / 2;
+    const head = Math.min(kit.H - floor - depth, top);
+    kit.cut(recess(run, middle - half, middle + half, floor, head, depth));
+    const [centerX, centerY] = run.point(middle, 0, depth / 2);
+    const [radius, height] = PUMP_DRUM_MM;
+    kit.add('steel', cyl(centerX, centerY, floor - SINK_MM, Math.min(floor + height, head - depth), radius, radius, 12));
+    kit.add('hazard', cyl(centerX, centerY, Math.min(floor + height, head - depth) - 1, Math.min(floor + height, head - depth), radius, radius, 12));
   },
 
   planted(kit) {
