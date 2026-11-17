@@ -23,7 +23,7 @@ import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
-import { WATER_LIGHT_PATHS } from './core/flows.js';
+import { WATER_LIGHT_PATHS, WIRE_LIGHT, TARP_LIGHT } from './core/flows.js';
 import { createWorkerClient } from './workers/client.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -284,9 +284,12 @@ query('#physicsToggle').addEventListener('change', refreshDecor);
 function refreshFlows() {
   const still = app.structure && builtResult === app.structure && app.analysis && app.analysis.flows;
   const paths = still ? app.analysis.flows.water.paths : [];
-  // Weak devices draw fewer paths
-  const kept = toggles.light ? paths.slice(0, WATER_LIGHT_PATHS) : paths;
-  flows.set(kept.flatMap((path) => path.segments));
+  const wires = still ? app.analysis.flows.wires : [];
+  const tarps = still ? app.analysis.flows.tarps : [];
+  // Weak devices draw fewer paths, wires and tarps
+  const light = toggles.light;
+  const kept = light ? paths.slice(0, WATER_LIGHT_PATHS) : paths;
+  flows.set(kept.flatMap((path) => path.segments), light ? wires.slice(0, WIRE_LIGHT) : wires, light ? tarps.slice(0, TARP_LIGHT) : tarps, light);
   flows.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
 }
 bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });

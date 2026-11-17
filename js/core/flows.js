@@ -192,3 +192,173 @@ export function waterNetwork(modules, seedText) {
   });
   return { paths };
 }
+
+const WIRE_SEED = 0x77153; // keeps wire rolls apart from water rolls
+export const WIRE_MAX_MM = 5 * CELL_MM; // longest single wire
+const WIRE_CROSS_MM = 1.5 * CELL_MM; // cost added per wire crossed in plan
+export const WIRE_MAX = 40; // most wires per structure
+export const WIRE_LIGHT = 14; // most wires on weak devices
+export const WIRE_SAG_SHARE = 0.12; // sag at mid span, share of the length
+const WIRE_OUT_MM = 1.5; // wire ends this far off the wall
+const SIGHT_STEP_MM = CELL_MM / 3; // spacing of line of sight samples
+const WIRE_SOURCES = ['turbine', 'solar']; // families that give power
+const TARP_REACH_MM = 2.3 * CELL_MM; // longest tarp edge
+const TARP_RISE_MM = STORY_MM; // most height difference between anchors
+const TARP_MIN_AREA_MM2 = 60; // smallest tarp in plan
+export const TARP_MAX = 6; // most tarps per structure
+export const TARP_LIGHT = 2; // most tarps on weak devices
+export const TARP_COLORS = [0xb5694a, 0xc9a23f, 0x5f9c95]; // terracotta, mustard, faded teal
+
+const distance = (first, second) => Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+
+// True when two plan segments cross away from their ends
+export function planCross(firstA, firstB, secondA, secondB) {
+  const turn = (from, to, point) => (to[0] - from[0]) * (point[1] - from[1]) - (to[1] - from[1]) * (point[0] - from[0]);
+  const sideA = turn(firstA, firstB, secondA);
+  const sideB = turn(firstA, firstB, secondB);
+  const sideC = turn(secondA, secondB, firstA);
+  const sideD = turn(secondA, secondB, firstB);
+  return sideA * sideB < 0 && sideC * sideD < 0;
+}
+
+// Links ports outward from the sources: nearest first, crossings cost extra
+export function linkWires(sources, consumers, { maxLength = WIRE_MAX_MM, crossCost = WIRE_CROSS_MM, limit = WIRE_MAX, blocked = () => false } = {}) {
+  const live = sources.map((port) => ({ ...port, left: port.capacity }));
+  const waiting = consumers.map((port) => ({ ...port, left: port.capacity }));
+  const fed = new Set(sources.map((port) => port.module));
+  const wires = [];
+  while (wires.length < limit) {
+    const options = [];
+    for (const from of live) {
+      if (from.left <= 0) continue;
+      for (const to of waiting) {
+        if (fed.has(to.module)) continue;
+        const length = distance(from.position, to.position);
+        if (length <= maxLength) options.push({ from, to, length });
+      }
+    }
+    options.sort((first, second) => first.length - second.length || first.from.module - second.from.module || first.to.module - second.to.module || first.to.port - second.to.port);
+    let best = null;
+    for (const option of options) {
+      if (best && option.length >= best.cost) break;
+      if (blocked(option.from.position, option.to.position)) continue;
+      const crossings = wires.filter((wire) => planCross(option.from.position, option.to.position, wire.a, wire.b)).length;
+      const cost = option.length + crossCost * crossings;
+      if (!best || cost < best.cost) best = { ...option, cost, crossings };
+    }
+    if (!best) break;
+    best.from.left--;
+    best.to.left--;
+    fed.add(best.to.module);
+    live.push(best.to);
+    wires.push({
+      from: { module: best.from.module, port: best.from.port },
+      to: { module: best.to.module, port: best.to.port },
+      a: best.from.position,
+      b: best.to.position,
+      length: best.length,
+      crossings: best.crossings,
+      sag: best.length * WIRE_SAG_SHARE,
+    });
+  }
+  return wires;
+}
+
+// Points along a hanging line, ends exact, lowest at mid span
+export function wirePoints(wire, count) {
+  const points = [];
+  for (let index = 0; index <= count; index++) {
+    const share = index / count;
+    points.push([
+      wire.a[0] + (wire.b[0] - wire.a[0]) * share,
+      wire.a[1] + (wire.b[1] - wire.a[1]) * share,
+      wire.a[2] + (wire.b[2] - wire.a[2]) * share - 4 * wire.sag * share * (1 - share),
+    ]);
+  }
+  return points;
+}
+
+// Wall ports with open air in front, moved just off the wall
+function openPorts(world, modules, type) {
+  const ports = [];
+  for (const instance of modules) {
+    for (const port of instancePorts(instance)) {
+      if (port.type !== type || port.normal[2] !== 0) continue;
+      const frontX = Math.floor((port.position[0] + port.normal[0] * CELL_MM * 0.5) / CELL_MM);
+      const frontY = Math.floor((port.position[1] + port.normal[1] * CELL_MM * 0.5) / CELL_MM);
+      if (moduleAt(world, frontX, frontY, Math.floor(port.position[2] / STORY_MM))) continue;
+      ports.push({
+        module: instance.id,
+        family: instance.family,
+        port: port.index,
+        capacity: port.capacity,
+        normal: port.normal,
+        position: [port.position[0] + port.normal[0] * WIRE_OUT_MM, port.position[1] + port.normal[1] * WIRE_OUT_MM, port.position[2]],
+      });
+    }
+  }
+  return ports;
+}
+
+// True when a straight line between two points passes through a module
+function sightBlocked(world, from, to) {
+  const steps = Math.ceil(distance(from, to) / SIGHT_STEP_MM);
+  for (let index = 1; index < steps; index++) {
+    const share = index / steps;
+    const at = [0, 1, 2].map((axis) => from[axis] + (to[axis] - from[axis]) * share);
+    if (at[2] >= 0 && moduleAt(world, Math.floor(at[0] / CELL_MM), Math.floor(at[1] / CELL_MM), Math.floor(at[2] / STORY_MM))) return true;
+  }
+  return false;
+}
+
+// Render-only power wires from turbines and solar arrays to wire ports
+export function wireNetwork(modules, seedText) {
+  const world = worldFromModules(modules);
+  const rng = makeRng(mixSeed(hashString(String(seedText)), WIRE_SEED));
+  const ports = openPorts(world, modules, 'wire');
+  const sources = ports.filter((port) => WIRE_SOURCES.includes(port.family));
+  // Seeded order breaks ties between equal ports
+  const consumers = rng.shuffle(ports.filter((port) => !WIRE_SOURCES.includes(port.family)));
+  return { wires: linkWires(sources, consumers, { blocked: (from, to) => sightBlocked(world, from, to) }) };
+}
+
+// Render-only tarps stretched between three or four free hooks
+export function tarpNetwork(modules, seedText) {
+  const world = worldFromModules(modules);
+  const rng = makeRng(mixSeed(hashString(String(seedText)), WIRE_SEED + 1));
+  const hooks = openPorts(world, modules, 'hook').map((port) => ({ ...port, left: port.capacity }));
+  const tarps = [];
+  for (const first of rng.shuffle(hooks.slice())) {
+    if (tarps.length >= TARP_MAX) break;
+    if (first.left <= 0) continue;
+    const near = hooks
+      .filter((hook) => hook !== first && hook.left > 0 && Math.abs(hook.position[2] - first.position[2]) <= TARP_RISE_MM && distance(hook.position, first.position) <= TARP_REACH_MM)
+      .sort((hookA, hookB) => distance(hookA.position, first.position) - distance(hookB.position, first.position) || hookA.module - hookB.module || hookA.port - hookB.port);
+    const anchors = [first];
+    const want = rng.int(3, 4);
+    for (const hook of near) {
+      if (anchors.length >= want) break;
+      const fits = anchors.every((anchor) => distance(anchor.position, hook.position) <= TARP_REACH_MM && !sightBlocked(world, anchor.position, hook.position));
+      if (fits) anchors.push(hook);
+    }
+    if (anchors.length < 3) continue;
+    // Corners in order round the middle
+    const middle = [0, 1, 2].map((axis) => anchors.reduce((sum, anchor) => sum + anchor.position[axis], 0) / anchors.length);
+    anchors.sort((hookA, hookB) => Math.atan2(hookA.position[1] - middle[1], hookA.position[0] - middle[0]) - Math.atan2(hookB.position[1] - middle[1], hookB.position[0] - middle[0]));
+    let area = 0;
+    anchors.forEach((anchor, index) => {
+      const next = anchors[(index + 1) % anchors.length];
+      area += (anchor.position[0] * next.position[1] - next.position[0] * anchor.position[1]) / 2;
+    });
+    if (Math.abs(area) < TARP_MIN_AREA_MM2) continue;
+    for (const anchor of anchors) anchor.left--;
+    tarps.push({
+      anchors: anchors.map((anchor) => ({ module: anchor.module, port: anchor.port })),
+      points: anchors.map((anchor) => anchor.position),
+      middle,
+      area: Math.abs(area),
+      color: TARP_COLORS[rng.int(0, TARP_COLORS.length - 1)],
+    });
+  }
+  return { tarps };
+}

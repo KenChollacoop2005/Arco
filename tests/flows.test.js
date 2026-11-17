@@ -7,7 +7,7 @@ import { instancePorts } from '../js/core/ports.js';
 import { analyze } from '../js/core/analysis.js';
 import { generate } from '../js/core/generator.js';
 import { runChecks } from '../js/core/checks.js';
-import { waterNetwork, WATER_ENDS, WATER_MAX_PATHS, FALL_DROP_MM } from '../js/core/flows.js';
+import { waterNetwork, WATER_ENDS, WATER_MAX_PATHS, FALL_DROP_MM, linkWires, planCross, wirePoints, wireNetwork, tarpNetwork, WIRE_MAX, WIRE_MAX_MM, WIRE_SAG_SHARE, TARP_MAX, TARP_COLORS } from '../js/core/flows.js';
 
 const EPS_MM = 1e-6; // rounding slack
 const SEEDS = ['arco', 'habitat', 'nakagin', 'barbican'];
@@ -146,4 +146,99 @@ test('the water network repeats for a seed and leaves the structure alone', () =
   assert.equal(JSON.stringify(runChecks(modules)), checks);
   // The analysis itself carries no flow data
   assert.equal(analyze(modules).flows, undefined);
+});
+
+const port = (module, position, capacity = 1, family = 'housing') => ({ module, port: 0, family, capacity, position });
+
+test('wires feed each consumer once and never pass a port capacity', () => {
+  const sources = [port(1, [0, 0, 10], 2, 'solar')];
+  const consumers = [port(2, [20, 0, 10], 2), port(3, [0, 20, 10], 2), port(4, [40, 0, 10], 2), port(5, [0, 40, 10], 2)];
+  const wires = linkWires(sources, consumers);
+  assert.equal(wires.length, 4);
+  // A used up port passes nothing on
+  assert.equal(linkWires(sources, consumers.map((entry) => ({ ...entry, capacity: 1 }))).length, 2);
+  const fed = wires.map((wire) => wire.to.module);
+  assert.equal(new Set(fed).size, fed.length);
+  const use = new Map();
+  for (const wire of wires) for (const end of [wire.from, wire.to]) use.set(end.module, (use.get(end.module) || 0) + 1);
+  for (const [id, count] of use) assert.ok(count <= 2, `module ${id} used ${count} times`);
+  // Nearest first
+  assert.deepEqual(wires.slice(0, 2).map((wire) => wire.to.module).sort(), [2, 3]);
+});
+
+test('wires stop at the length limit and at blocked lines', () => {
+  const sources = [port(1, [0, 0, 0], 4, 'turbine')];
+  const far = [port(2, [WIRE_MAX_MM + 1, 0, 0])];
+  assert.equal(linkWires(sources, far).length, 0);
+  const near = [port(2, [10, 0, 0])];
+  assert.equal(linkWires(sources, near).length, 1);
+  assert.equal(linkWires(sources, near, { blocked: () => true }).length, 0);
+  assert.equal(linkWires(sources, [port(2, [10, 0, 0]), port(3, [0, 10, 0])], { limit: 1 }).length, 1);
+});
+
+test('a crossing costs extra, so the longer clear wire wins', () => {
+  assert.ok(planCross([0, 0], [10, 10], [0, 10], [10, 0]));
+  assert.ok(!planCross([0, 0], [10, 0], [0, 5], [10, 5]));
+  // Second source would cross the first wire to reach its nearest port
+  const sources = [port(1, [0, 0, 0], 1, 'solar'), port(2, [0, 30, 0], 2, 'solar')];
+  const consumers = [port(3, [30, 0, 0]), port(4, [16, -3, 0]), port(5, [-14, 31, 0])];
+  const crossed = linkWires(sources, consumers, { crossCost: 0 });
+  const clear = linkWires(sources, consumers, { crossCost: 1000 });
+  assert.ok(clear.every((wire) => wire.crossings === 0));
+  assert.ok(clear.reduce((sum, wire) => sum + wire.crossings, 0) <= crossed.reduce((sum, wire) => sum + wire.crossings, 0));
+});
+
+test('a wire hangs lowest at mid span and its ends are exact', () => {
+  const wire = { a: [0, 0, 50], b: [60, 0, 50], sag: 60 * WIRE_SAG_SHARE };
+  const points = wirePoints(wire, 8);
+  assert.deepEqual(points[0], wire.a);
+  assert.deepEqual(points[8], wire.b);
+  assert.ok(Math.abs(points[4][2] - (50 - wire.sag)) < EPS_MM);
+  for (const point of points) assert.ok(point[2] <= 50 + EPS_MM);
+});
+
+test('wires and tarps of generated structures stay legal and repeat for a seed', () => {
+  let wireTotal = 0;
+  let tarpTotal = 0;
+  for (const seed of SEEDS) {
+    for (const options of [{ seed, scale: 'block' }, { seed, ...MEGA }]) {
+      const { modules } = generate(options);
+      const before = JSON.stringify(modules);
+      const byId = new Map(modules.map((instance) => [instance.id, instance]));
+      const capacityOf = (end) => instancePorts(byId.get(end.module)).find((entry) => entry.index === end.port).capacity;
+      const { wires } = wireNetwork(modules, seed);
+      assert.ok(wires.length <= WIRE_MAX);
+      const used = new Map();
+      const fed = new Set();
+      for (const wire of wires) {
+        wireTotal++;
+        assert.ok(wire.length <= WIRE_MAX_MM + EPS_MM);
+        assert.ok(!fed.has(wire.to.module), `${seed} module fed twice`);
+        fed.add(wire.to.module);
+        for (const end of [wire.from, wire.to]) {
+          const key = end.module + ':' + end.port;
+          used.set(key, (used.get(key) || 0) + 1);
+          assert.ok(used.get(key) <= capacityOf(end), `${seed} wire port ${key} over capacity`);
+        }
+      }
+      const { tarps } = tarpNetwork(modules, seed);
+      assert.ok(tarps.length <= TARP_MAX);
+      const hooks = new Map();
+      for (const tarp of tarps) {
+        tarpTotal++;
+        assert.ok(tarp.anchors.length === 3 || tarp.anchors.length === 4);
+        assert.ok(TARP_COLORS.includes(tarp.color));
+        for (const anchor of tarp.anchors) {
+          const key = anchor.module + ':' + anchor.port;
+          hooks.set(key, (hooks.get(key) || 0) + 1);
+          assert.ok(hooks.get(key) <= capacityOf(anchor), `${seed} hook ${key} over capacity`);
+        }
+      }
+      assert.deepEqual(wireNetwork(modules, seed), { wires });
+      assert.deepEqual(tarpNetwork(modules, seed), { tarps });
+      assert.equal(JSON.stringify(modules), before);
+    }
+  }
+  assert.ok(wireTotal >= 20, `wires in the seed set: ${wireTotal}`);
+  assert.ok(tarpTotal >= 1, `tarps in the seed set: ${tarpTotal}`);
 });
