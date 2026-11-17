@@ -84,3 +84,33 @@ export const PORT_RAY_IN_MM = 13; // probe reaches this far inside the cell edge
 export const PORT_RAY_STEP_MM = 0.25; // probe step before refining
 export const PORT_TRIES = 8; // seeded spots tried per port
 export const PORT_FRONT_MM = 2; // space a port needs in front of it
+
+// Strings: water
+export const WATER_QUARTERS = 4; // units are counted in quarters inside the solver
+export const WATER_STEP = 0.5; // units split between branches in steps of this
+export const GRAVITY_HEAD = 3; // head of gravity water, which cannot climb
+export const HEAD_PER_CELL = 1; // head spent per cell of level pipe
+export const HEAD_PER_STORY_UP = 2; // head spent per story of rise; falling is free
+// Water sources: own supply in units, head (null is gravity), throughput (null is none)
+export const WATER_SOURCES = {
+  rain: [1, null, null],
+  spring: [2, null, null],
+  tank: [4, null, null],
+  roof: [0.25, null, null],
+  pumptank: [3, 8, 6],
+  smallpump: [0, 9, 6],
+  plantpump: [0, 9, 6],
+  pumproom: [6, 20, 12],
+};
+export const SOURCE_FAMILIES = { spout: 'rain', tank: 'tank' }; // families that are sources (no family is a spring yet)
+export const PUMP_KINDS = { pumptank: 'pumptank', smallpump: 'smallpump', plant: 'plantpump', pumproom: 'pumproom' }; // family to pump row
+export const DEMAND_PER_CELL = { farm: 0.5, planter: 0.5, greenhouse: 0.5, planted: 0.5 }; // crop beds, units per footprint cell
+export const DEMAND_PER_MODULE = { housing: 0.25, studio: 0.25, penthouse: 0.25, shacks: 0.25, flared: 0.25, garden: 0.5 }; // homes and pools, units per module
+export const HUB_INPUTS = 2; // most pipes into one pump or main
+export const BASIN_INPUTS = 2; // most pipes into one consumer
+
+// Strings: geometry
+export const PIPE_MAX_MM = 8 * 25; // longest pipe, port to port
+export const PIPE_STANDOFF_MM = 3; // pipe runs this far off the wall
+export const PIPE_DIAGONAL_MM = 2 * 25; // pipes up to this long may run straight
+export const STRING_CLEAR_MM = 0.3; // strings keep this far from collider boxes
