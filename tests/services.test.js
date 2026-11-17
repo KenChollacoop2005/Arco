@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FAMILIES, PLANT_PUMP_CHANCE, hasPump, normalizeVariant } from '../js/core/catalog.js';
-import { toBody, variantKey, worldFromModules } from '../js/core/grid.js';
+import { moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
 import { validateStructure } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
 import { checkPrintability } from '../js/core/printability.js';
@@ -18,6 +18,7 @@ const SERVICE_FAMILIES = {
   pumproom: ['water-in', 'water-out', 'power'],
   smallpump: ['water-in', 'water-out'],
   pumptank: ['water-in', 'water-out'],
+  watermain: ['water-in', 'water-out'],
 };
 const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
 const generated = SEEDS.flatMap((seed, index) => [
@@ -48,6 +49,8 @@ test('each service family has a catalog entry, a recipe and its ports', () => {
     }
   }
   assert.ok(FAMILIES.pumproom.stack && !FAMILIES.pumproom.rails && FAMILIES.pumproom.theme === 'industrial');
+  assert.ok(FAMILIES.watermain.stack && FAMILIES.watermain.maxStories === 4);
+  assert.equal(variantMounts(normalizeVariant({ family: 'watermain', fp: '1x1', h: 4, seed: 1, mask: 15 })).filter((port) => port.type === 'water-out').length, 16);
   assert.deepEqual(FAMILIES.pumptank.footprints, FAMILIES.tank.footprints);
   assert.ok(!FAMILIES.smallpump.stack && FAMILIES.smallpump.footprints.join() === '1x1');
   assert.ok(variantMounts(normalizeVariant({ family: 'pumproom', fp: '1x1', h: 1, seed: 1, mask: 15 })).filter((port) => port.type.startsWith('water')).length >= 6);
@@ -86,6 +89,8 @@ test('service families are reachable from Build and save as parts', () => {
     { family: 'core', fp: '1x1', h: 1, seed: 1, mask: 0, roof: false, x: -3, y: 0, z: 2 },
     { family: 'smallpump', fp: '1x1', h: 1, seed: 3, mask: 15, roof: true, x: 0, y: 0, z: 2 },
     { family: 'pumptank', fp: '2x2', h: 2, seed: 4, mask: 15, roof: true, x: 2, y: -3, z: 0 },
+    { family: 'watermain', fp: '1x1', h: 3, seed: 2, mask: 15, roof: false, x: 1, y: 0, z: 0 },
+    { family: 'watermain', fp: '1x1', h: 2, seed: 2, mask: 15, roof: false, x: 1, y: 0, z: 3 },
   ];
   for (const spec of specs) {
     const result = build.place({ ...spec, rot: 0 });
@@ -117,4 +122,17 @@ test('some plant rooms carry a pump by seed, with water ports only then', async 
     }
   }
   assert.ok(generated.some((result) => result.modules.some((instance) => instance.family === 'plant' && hasPump(instance))), 'pumped plant room generated');
+});
+
+test('generated water mains stack from the ground into one column', () => {
+  let columns = 0;
+  for (const result of generated) {
+    const world = worldFromModules(result.modules);
+    for (const instance of result.modules) {
+      if (instance.family !== 'watermain') continue;
+      if (instance.z === 0) columns++;
+      else assert.equal(moduleAt(world, instance.x, instance.y, instance.z - 1).family, 'watermain', `${result.seed} main ${instance.id} on a main`);
+    }
+  }
+  assert.ok(columns >= 3, `main columns: ${columns}`);
 });

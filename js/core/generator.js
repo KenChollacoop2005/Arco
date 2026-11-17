@@ -90,6 +90,8 @@ const SERVICE_SEED = 0x5e771c; // keeps service rolls apart from layout rolls
 const SERVICE_ROUNDS = 6; // most stability repair passes for services
 const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by density: block, mega
 const SMALL_PUMPS = [[0, 1], [1, 2], [1, 4]]; // small pumps per structure by density: block, mega
+const MAINS = [[0, 1], [1, 2], [1, 2]]; // water main columns per structure by density: block, mega
+const MAIN_RISE = [2, 9]; // water main column height range in stories
 const PUMPED_TANK_CHANCE = 0.4; // chance a tank gets a pump
 const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
 const NEAR_CELLS = 2; // reach of near, in cells
@@ -862,6 +864,28 @@ function roofSpot(ctx, rng, family, near) {
   return null;
 }
 
+// Water main column from the ground up beside a building
+function mainColumn(ctx, rng) {
+  const { world } = ctx;
+  const top = worldHeight(world);
+  for (const [cellX, cellY] of rng.shuffle(ctx.site)) {
+    if (!emptyAt(world, cellX, cellY, 0) || !ctx.groundOk(cellX, cellY) || columnTop(world, cellX, cellY, top) !== 0) continue;
+    const beside = Math.max(...SIDES.map(([stepX, stepY]) => columnTop(world, cellX + stepX, cellY + stepY, top)));
+    if (beside < MAIN_RISE[0]) continue;
+    const goal = rng.int(MAIN_RISE[0], Math.min(beside, MAIN_RISE[1]));
+    const column = [];
+    for (let level = 0; level < goal; ) {
+      const stories = rng.int(1, Math.min(FAMILIES.watermain.maxStories, goal - level));
+      const placed = place(ctx, { family: 'watermain', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: level, rot: rng.int(0, 3) });
+      if (!placed) break;
+      column.push(placed);
+      level += stories;
+    }
+    if (column.length > 0) return column;
+  }
+  return [];
+}
+
 // Pump rooms, pumps, mains and power rooms, on their own rng
 function services(ctx) {
   const { world, opts } = ctx;
@@ -874,6 +898,8 @@ function services(ctx) {
     const family = FAMILIES.pumproom;
     keep(groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)));
   }
+  const mains = rng.int(0, MAINS[opts.density][mega]);
+  for (let main = 0; main < mains; main++) mainColumn(ctx, rng).forEach(keep);
   // Some tanks get a pump, same footprint and seed
   for (const instance of world.modules.values()) {
     if (instance.family === 'tank' && !ctx.locked.has(instance.id) && rng.chance(PUMPED_TANK_CHANCE)) instance.family = 'pumptank';

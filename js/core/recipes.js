@@ -158,6 +158,9 @@ const SMALL_PUMP_MM = [4.5, 11, 1, 2]; // small pump body radius, height, cap, s
 const PUMP_MOTOR_MM = [2.6, 3, 6]; // pump motor half length, half width, height
 const TANK_PUMP_MM = [1.9, 2, 7, 1]; // tank pump radius, corner offset, height, cap
 const PLANT_PUMP_MM = [2.3, 2.8, 8, 1]; // plant room pump radius, corner offset, height, cap
+const MAIN_MM = [7, 1.6, 1.2, 2.5]; // water main radius, collar flare, collar band, base plate
+const MAIN_SIDES = 18; // water main facets
+const MAIN_GROUPS = ['steel', 'steel', 'water', 'rust']; // water main pipe colors
 
 const lerp = (low, high, share) => low + (high - low) * share;
 // Profile across the long axis, swept along it
@@ -1001,6 +1004,23 @@ const RECIPES = {
     const at = kit.clear + offset;
     kit.add('steel', cyl(at, at, DECK_MM - SINK_MM, DECK_MM + height, radius, radius, 10));
     kit.add('hazard', cyl(at, at, DECK_MM + height, DECK_MM + height + cap, radius, radius, 10));
+  },
+
+  watermain(kit) {
+    const [radius, flare, band, plate] = MAIN_MM;
+    const centerX = kit.W / 2;
+    const centerY = kit.D / 2;
+    kit.slab('concrete', kit.clear, 0, plate);
+    kit.add(kit.rng.pick(MAIN_GROUPS), cyl(centerX, centerY, plate - SINK_MM, kit.H, radius, radius, MAIN_SIDES));
+    // A 45 degree collar at the middle of every story
+    for (let story = 0; story < kit.stories; story++) {
+      const low = story * STORY_MM + STORY_MM / 2 - flare - band / 2;
+      stack(kit, centerX, centerY, MAIN_SIDES, [
+        ['steel', low, low + flare, radius, radius + flare],
+        ['steel', low + flare, low + flare + band, radius + flare, radius + flare],
+        ['steel', low + flare + band, low + 2 * flare + band, radius + flare, radius],
+      ]);
+    }
   },
 
   planted(kit) {

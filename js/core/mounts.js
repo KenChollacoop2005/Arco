@@ -78,6 +78,10 @@ export const MOUNT_PORTS = {
     { type: 'water-out', sides: 'any', each: 'side', z: [0.12, 0.5] },
     { type: 'power', sides: 'any', each: 'module', z: [0.6, 0.9] },
   ],
+  watermain: [
+    { type: 'water-in', sides: 'any', each: 'side', zMm: [4, 9], along: [0.42, 0.58] },
+    { type: 'water-out', sides: 'any', each: 'story', z: [0.15, 0.3], along: [0.42, 0.58] },
+  ],
   smallpump: [
     { type: 'water-in', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
     { type: 'water-out', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
