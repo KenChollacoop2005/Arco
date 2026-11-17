@@ -3,6 +3,7 @@ import { isDocked } from './catalog.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
+import { addJetties } from './jetty.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const CUT_OVER_MM = 1; // cut overshoot past a face
@@ -977,6 +978,7 @@ export function buildRecipe(variant, clearance) {
   const kit = createKit(variant, clearance);
   RECIPES[variant.family](kit);
   addBalconies(kit);
+  addJetties(kit);
   if (isDocked(variant)) lift(kit.ops, DOCK_LIP_MM);
   return { ops: kit.ops, anchors: kit.anchors, kit };
 }

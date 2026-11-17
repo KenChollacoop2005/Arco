@@ -2,8 +2,8 @@ import { CELL_MM, STORY_MM, CONNECTOR_CLEARANCE_MM, SIDE_CLEAR_MM } from '../con
 import { makeRng, mixSeed } from './rng.js';
 
 // Side profile kinds, stored 3 bits per local side
-export const PROFILE_IDS = ['flush', 'inset', 'insetBalcony', 'insetBalconyOut', 'bulge', 'bulgeBalcony', 'wrap'];
-export const [FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP] = PROFILE_IDS.map((id, kind) => kind);
+export const PROFILE_IDS = ['flush', 'inset', 'insetBalcony', 'insetBalconyOut', 'bulge', 'bulgeBalcony', 'wrap', 'jetty'];
+export const [FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, JETTY] = PROFILE_IDS.map((id, kind) => kind);
 const KIND_BITS = 3; // bits per side in prof
 const KIND_MASK = 7; // one side's bits
 
@@ -21,12 +21,17 @@ export const PARAPET_MM = 1.6; // balcony parapet thickness
 export const BALCONY_FLOOR_MM = 1.6; // balcony floor at its thinnest
 const RAIL_SHARE = 0.16; // parapet height, share of a story
 export const BALCONY_LIP_MM = 0.5; // balcony ends inside a bulge front
+const JETTY_SHARE = [0.12, 0.2]; // jetty depth, share of a cell
+const JETTY_START_SHARE = 0.56; // jetty foot on a one story module, share of a story
+export const JETTY_SUPPORTS = ['corbel', 'brace', 'arch']; // what carries a jetty
+export const JETTY_BRACE_RAKE = 1.5; // brace drop per mm of reach
+const JETTY_SALT = 9; // keeps jetty rolls apart from balcony rolls
 const SEED_SALT = 0x51de0f; // keeps profile rolls apart from style rolls
 const NORMALS = [[1, 0], [0, 1], [-1, 0], [0, -1]]; // side order of the grid
 
 const insetKind = (kind) => kind === INSET || kind === INSET_BALCONY || kind === INSET_BALCONY_OUT;
 const bulgeKind = (kind) => kind === BULGE || kind === BULGE_BALCONY;
-const outKind = (kind) => kind === INSET_BALCONY_OUT || bulgeKind(kind) || kind === WRAP;
+const outKind = (kind) => kind === INSET_BALCONY_OUT || bulgeKind(kind) || kind === WRAP || kind === JETTY;
 
 export const profileAt = (prof, side) => ((prof || 0) >> (KIND_BITS * side)) & KIND_MASK;
 export const packProfiles = (kinds) => kinds.reduce((prof, kind, side) => prof | (kind << (KIND_BITS * side)), 0);
@@ -52,6 +57,16 @@ export function balconyShape(reach) {
   return { floor, top: floor + RAIL_SHARE * STORY_MM };
 }
 
+// Jetty of one side: depth, foot height, support kind and its drop
+function jettyPlan(variant, side) {
+  const rng = makeRng(mixSeed(variant.seed >>> 0, SEED_SALT + JETTY_SALT + side));
+  const out = rng.range(JETTY_SHARE[0], JETTY_SHARE[1]) * CELL_MM;
+  const upper = variant.h > 1 ? rng.int(1, variant.h - 1) : 0;
+  const start = variant.h > 1 ? (variant.h - upper) * STORY_MM : JETTY_START_SHARE * STORY_MM;
+  const support = rng.pick(JETTY_SUPPORTS);
+  return { out, start, support, drop: (support === 'brace' ? JETTY_BRACE_RAKE : 1) * out };
+}
+
 // Per local side: kind, wall shift, pier, balcony reach, distance past the wall
 export function profilePlan(variant) {
   const prof = variant.prof || 0;
@@ -71,10 +86,11 @@ export function profilePlan(variant) {
     const reach = kind === INSET_BALCONY ? inset : kind === INSET_BALCONY_OUT ? inset + balcony : past;
     return {
       kind,
+      jetty: kind === JETTY ? jettyPlan(variant, side) : null,
       shift,
       pier: (insetKind(kind) ? PIER_IN_SHARE : PIER_OUT_SHARE) * CELL_MM,
       reach,
-      out: Math.max(shift, 0) + past,
+      out: kind === JETTY ? jettyPlan(variant, side).out : Math.max(shift, 0) + past,
       levels: reach > 0 ? levels : [],
       wrapped: false,
     };
@@ -139,6 +155,11 @@ export function profileBoxes(variant, gap = CONNECTOR_CLEARANCE_MM / 2) {
     const declare = (part, sign, shape) => boxes.push({ ...shape, sign, part, side: index });
     if (side.shift < 0) declare('notch', -1, frameBox(frame, from, to, wall, -gap, 0, height));
     if (side.shift > 0) declare('bulge', 1, frameBox(frame, from, to, -gap, wall, 0, height));
+    if (side.jetty) {
+      const { out, start, drop } = side.jetty;
+      declare('jetty', 1, frameBox(frame, from, to, -gap, -gap + out, start, height));
+      declare('corbel', 1, frameBox(frame, from, to, -gap, -gap + out, start - drop, start));
+    }
     if (side.reach <= 0) return;
     const { top } = balconyShape(side.reach);
     for (const story of side.levels) {

@@ -135,7 +135,7 @@ function frameRun(run) {
 }
 
 // Middle stretch of a side, moved in or out between its piers
-function zoneRun(run, side) {
+export function zoneRun(run, side) {
   const from = side.pier - run.shift;
   const length = run.length - 2 * from;
   const edge = side.shift < 0 ? ZONE_EDGE_MM : END_MARGIN_MM;

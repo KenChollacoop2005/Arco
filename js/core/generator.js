@@ -19,7 +19,7 @@ import { FAMILIES, FAMILY_IDS, PLUG_ENDS, canSupport, normalizeVariant, sideType
 import { checkPlacement, validateStructure } from './placement.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
-import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, cleanProfiles, packProfiles, profileAt } from './profiles.js';
+import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, JETTY, cleanProfiles, packProfiles, profileAt, profileKinds } from './profiles.js';
 
 export const SCALES = ['unit', 'block', 'mega'];
 
@@ -72,6 +72,8 @@ const INSIDE_KIND = { [INSET_BALCONY_OUT]: INSET_BALCONY, [BULGE]: INSET, [BULGE
 
 // Penthouse balconies, picked per side
 const PENTHOUSE_KINDS = [[INSET_BALCONY_OUT, 2], [BULGE_BALCONY, 2], [WRAP, 1.5]];
+const JETTY_CHANCE = 0.14; // share of facade modules that try a jetty
+const JETTY_SEED = 0x1e77e; // keeps jetty rolls apart from other profile rolls
 const PROP_KINDS = [BULGE, BULGE_BALCONY]; // profiles a strut may stand under
 const PROP_CHANCE = 0.6; // chance a bulge gets a strut
 const PROP_SEED = 0x57a17; // keeps strut rolls apart from layout rolls
@@ -764,6 +766,42 @@ function setProfiles(ctx) {
   if (checkStability(bodiesOf(world)).status !== 'pass') for (const instance of changed) delete instance.prof;
 }
 
+// True when a module sits right over a newly claimed cell
+function roofedClaim(world, instance, before) {
+  const old = new Set(claimedCells({ ...instance, prof: before }).map((claim) => claim.x + ',' + claim.y));
+  return claimedCells(instance).some((claim) => !old.has(claim.x + ',' + claim.y) && moduleAt(world, claim.x, claim.y, instance.z + instance.h));
+}
+
+// Jettied overhangs on a few flush facade sides
+function setJetties(ctx) {
+  const { world, opts } = ctx;
+  const rng = makeRng(mixSeed(hashString(opts.seed), JETTY_SEED));
+  const changed = [];
+  for (const instance of world.modules.values()) {
+    const family = FAMILIES[instance.family];
+    if (ctx.locked.has(instance.id) || !family.profiles || !PROFILE_FOOTPRINTS[instance.fp]) continue;
+    if ((instance.mask & 15) === 0 || !rng.chance(JETTY_CHANCE)) continue;
+    const before = instance.prof || 0;
+    const kinds = profileKinds(before);
+    const free = [0, 1, 2, 3].filter((side) => ((instance.mask >> side) & 1) === 1 && kinds[side] === FLUSH && kinds[(side + 3) & 3] !== WRAP);
+    for (const side of rng.shuffle(free)) {
+      const prof = cleanProfiles(packProfiles(kinds.map((kind, index) => (index === side ? JETTY : kind))), instance.mask, instance.fp, true);
+      instance.prof = prof;
+      if (prof !== before && checkPlacement(world, instance).ok && !roofedClaim(world, instance, before)) {
+        changed.push([instance, before]);
+        break;
+      }
+      if (before) instance.prof = before;
+      else delete instance.prof;
+    }
+  }
+  if (opts.unstable || changed.length === 0 || checkStability(bodiesOf(world)).status === 'pass') return;
+  for (const [instance, before] of changed) {
+    if (before) instance.prof = before;
+    else delete instance.prof;
+  }
+}
+
 // Struts in the open cell under a bulge
 function props(ctx) {
   const { world, opts } = ctx;
@@ -883,6 +921,7 @@ export function generate(options) {
   setMasks(world, ctx.locked);
   setProfiles(ctx);
   if (opts.scale !== 'unit') props(ctx);
+  setJetties(ctx);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );
