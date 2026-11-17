@@ -92,6 +92,8 @@ const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by dens
 const SMALL_PUMPS = [[0, 1], [1, 2], [1, 4]]; // small pumps per structure by density: block, mega
 const MAINS = [[0, 1], [1, 2], [1, 2]]; // water main columns per structure by density: block, mega
 const MAIN_RISE = [2, 9]; // water main column height range in stories
+const POWER_ROOMS = [[0, 1], [1, 2], [1, 3]]; // power rooms per structure by density: block, mega
+const HOMES = ['housing', 'studio', 'shacks', 'flared', 'penthouse', 'hall']; // families a power room goes near
 const PUMPED_TANK_CHANCE = 0.4; // chance a tank gets a pump
 const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
 const NEAR_CELLS = 2; // reach of near, in cells
@@ -893,8 +895,8 @@ function services(ctx) {
   const mega = opts.scale === 'mega' ? 1 : 0;
   const added = [];
   const keep = (instance) => instance && added.push(instance);
-  const rooms = rng.int(0, PUMP_ROOMS[opts.density][mega]);
-  for (let room = 0; room < rooms; room++) {
+  const pumpRooms = rng.int(0, PUMP_ROOMS[opts.density][mega]);
+  for (let room = 0; room < pumpRooms; room++) {
     const family = FAMILIES.pumproom;
     keep(groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)));
   }
@@ -906,6 +908,8 @@ function services(ctx) {
   }
   const pumps = rng.int(0, SMALL_PUMPS[opts.density][mega]);
   for (let pump = 0; pump < pumps; pump++) keep(roofSpot(ctx, rng, 'smallpump', THIRSTY));
+  const rooms = rng.int(0, POWER_ROOMS[opts.density][mega]);
+  for (let room = 0; room < rooms; room++) keep(roofSpot(ctx, rng, 'powerroom', HOMES));
   if (opts.unstable) return;
   // New parts go again until the structure passes
   for (let round = 0; round < SERVICE_ROUNDS && added.length > 0; round++) {

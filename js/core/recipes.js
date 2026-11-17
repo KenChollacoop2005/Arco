@@ -157,9 +157,12 @@ const PUMP_DRUM_MM = [2, 9]; // pump drum radius and height
 const SMALL_PUMP_MM = [4.5, 11, 1, 2]; // small pump body radius, height, cap, shift off center
 const PUMP_MOTOR_MM = [2.6, 3, 6]; // pump motor half length, half width, height
 const TANK_PUMP_MM = [1.9, 2, 7, 1]; // tank pump radius, corner offset, height, cap
-const PLANT_PUMP_MM = [2.3, 2.8, 8, 1]; // plant room pump radius, corner offset, height, cap
+const PLANT_PUMP_MM = [2.3, 2.8, 5.5, 1]; // plant room pump radius, corner offset, height, cap
 const MAIN_MM = [7, 1.6, 1.2, 2.5]; // water main radius, collar flare, collar band, base plate
 const MAIN_SIDES = 18; // water main facets
+const TRANSFORMER_MM = [5.5, 4.5, 10, 1]; // transformer half length, half width, height, top band
+const COOLING_FIN_MM = [1.3, 1.6, 3]; // fin thickness, reach, spacing
+const BUSHING_MM = [1, 4, 3]; // insulator radius, height, spacing
 const MAIN_GROUPS = ['steel', 'steel', 'water', 'rust']; // water main pipe colors
 
 const lerp = (low, high, share) => low + (high - low) * share;
@@ -1020,6 +1023,28 @@ const RECIPES = {
         ['steel', low + flare, low + flare + band, radius + flare, radius + flare],
         ['steel', low + flare + band, low + 2 * flare + band, radius + flare, radius],
       ]);
+    }
+  },
+
+  powerroom(kit) {
+    kit.slab('concrete', kit.clear, 0, CURB_MM);
+    const [halfLength, halfWidth, height, band] = TRANSFORMER_MM;
+    const [finThick, finReach, finGap] = COOLING_FIN_MM;
+    const [bushing, bushingHeight, bushingGap] = BUSHING_MM;
+    const top = CURB_MM + height;
+    for (const [centerX, centerY] of kit.cellCenters()) {
+      kit.add('steel', box(centerX - halfLength, centerY - halfWidth, CURB_MM - SINK_MM, centerX + halfLength, centerY + halfWidth, top - band));
+      kit.add('hazard', box(centerX - halfLength, centerY - halfWidth, top - band, centerX + halfLength, centerY + halfWidth, top));
+      // Cooling fins on the long sides, standing on the curb
+      for (let at = -halfLength + finGap / 2; at + finThick <= halfLength; at += finGap) {
+        for (const sign of [-1, 1]) {
+          const inner = centerY + sign * (halfWidth - SINK_MM);
+          kit.add('dark', box(centerX + at, inner, CURB_MM - SINK_MM, centerX + at + finThick, centerY + sign * (halfWidth + finReach), top - band - 1));
+        }
+      }
+      for (const shift of [-bushingGap, 0, bushingGap]) {
+        kit.add('concrete', cyl(centerX + shift, centerY, top - SINK_MM, top + bushingHeight, bushing, bushing * 0.8, 8));
+      }
     }
   },
 

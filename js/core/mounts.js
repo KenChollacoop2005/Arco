@@ -82,6 +82,7 @@ export const MOUNT_PORTS = {
     { type: 'water-in', sides: 'any', each: 'side', zMm: [4, 9], along: [0.42, 0.58] },
     { type: 'water-out', sides: 'any', each: 'story', z: [0.15, 0.3], along: [0.42, 0.58] },
   ],
+  powerroom: [{ type: 'power', sides: 'any', each: 'cell', zMm: [5.5, 11], along: [0.38, 0.62], capacity: 4 }],
   smallpump: [
     { type: 'water-in', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
     { type: 'water-out', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },

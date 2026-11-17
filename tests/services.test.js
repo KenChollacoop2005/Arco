@@ -19,6 +19,7 @@ const SERVICE_FAMILIES = {
   smallpump: ['water-in', 'water-out'],
   pumptank: ['water-in', 'water-out'],
   watermain: ['water-in', 'water-out'],
+  powerroom: ['power'],
 };
 const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
 const generated = SEEDS.flatMap((seed, index) => [
@@ -49,6 +50,7 @@ test('each service family has a catalog entry, a recipe and its ports', () => {
     }
   }
   assert.ok(FAMILIES.pumproom.stack && !FAMILIES.pumproom.rails && FAMILIES.pumproom.theme === 'industrial');
+  assert.equal(variantMounts(normalizeVariant({ family: 'powerroom', fp: '1x2', h: 1, seed: 1, mask: 15 })).filter((port) => port.type === 'power' && port.capacity >= 4).length, 6);
   assert.ok(FAMILIES.watermain.stack && FAMILIES.watermain.maxStories === 4);
   assert.equal(variantMounts(normalizeVariant({ family: 'watermain', fp: '1x1', h: 4, seed: 1, mask: 15 })).filter((port) => port.type === 'water-out').length, 16);
   assert.deepEqual(FAMILIES.pumptank.footprints, FAMILIES.tank.footprints);
@@ -91,6 +93,7 @@ test('service families are reachable from Build and save as parts', () => {
     { family: 'pumptank', fp: '2x2', h: 2, seed: 4, mask: 15, roof: true, x: 2, y: -3, z: 0 },
     { family: 'watermain', fp: '1x1', h: 3, seed: 2, mask: 15, roof: false, x: 1, y: 0, z: 0 },
     { family: 'watermain', fp: '1x1', h: 2, seed: 2, mask: 15, roof: false, x: 1, y: 0, z: 3 },
+    { family: 'powerroom', fp: '1x2', h: 1, seed: 6, mask: 15, roof: true, x: -3, y: 0, z: 3 },
   ];
   for (const spec of specs) {
     const result = build.place({ ...spec, rot: 0 });
