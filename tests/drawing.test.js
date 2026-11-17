@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three/three.module.min.js';
 import { runChecks } from '../js/core/checks.js';
 import { generate } from '../js/core/generator.js';
-import { waterNetwork, wireNetwork } from '../js/core/flows.js';
+import { planServices } from '../js/core/services.js';
+import { serviceLines } from '../js/core/drafting.js';
+import { waterText, powerText } from '../js/ui/inspector.js';
+import { COPY } from '../js/ui/copy.js';
 
 const LAYERS = ['edges', 'connectors', 'centers', 'loads', 'services'];
 const STATUS_HEX = { '--blue': '#2244aa', '--pass': '#22aa44', '--warn': '#ee7700', '--fail': '#cc2222', '--water': '#1188dd', '--power': '#ddaa00' };
@@ -28,7 +31,7 @@ test('drawing mode builds every line layer, load paths included', async () => {
   const structure = generate({ seed: 'habitat', scale: 'block' });
   const checks = runChecks(structure.modules);
   drawing.update(structure, checks);
-  drawing.setServices({ water: waterNetwork(structure.modules, 'habitat'), wires: wireNetwork(structure.modules, 'habitat').wires });
+  drawing.setServices(planServices(structure.modules, 'habitat'));
   assert.doesNotThrow(() => drawing.setActive(true));
   const group = scene.children[scene.children.length - 1];
   assert.equal(group.visible, true);
@@ -45,4 +48,70 @@ test('drawing mode builds every line layer, load paths included', async () => {
   const services = group.children[LAYERS.indexOf('services')].geometry.getAttribute('color').array;
   const water = new THREE.Color(STATUS_HEX['--water']);
   assert.ok(Math.abs(services[0] - water.r) < 1e-6 && Math.abs(services[2] - water.b) < 1e-6, 'water lines are water blue');
+});
+
+const STATUSES = ['water', 'power', 'warn', 'fail'];
+const pointsIn = (lines, from, to) => lines.positions.slice(from * 6, to * 6);
+
+test('services overlay draws strings, dashed blocked attempts and dry or partial consumers', () => {
+  assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
+  const structure = generate({ seed: 'habitat', scale: 'mega' });
+  const services = planServices(structure.modules, 'habitat');
+  const lines = serviceLines(services, structure.modules);
+  assert.equal(lines.positions.length, lines.statuses.length * 6);
+  assert.ok(lines.statuses.every((status) => STATUSES.includes(status)));
+  // Solid strings first, one segment per point step, in order
+  const steps = (list) => list.reduce((sum, string) => sum + string.points.length - 1, 0);
+  const pipeSteps = steps(services.pipes);
+  const sheetSteps = steps(services.sheets);
+  const wireSteps = steps(services.wires);
+  assert.ok(pipeSteps > 0 && sheetSteps > 0 && wireSteps > 0 && services.blocked.length > 0);
+  assert.deepEqual(pointsIn(lines, 0, 1), [...services.pipes[0].points[0], ...services.pipes[0].points[1]]);
+  assert.ok(lines.statuses.slice(0, pipeSteps + sheetSteps).every((status) => status === 'water'));
+  assert.ok(lines.statuses.slice(pipeSteps + sheetSteps, pipeSteps + sheetSteps + wireSteps).every((status) => status === 'power'));
+  assert.deepEqual(pointsIn(lines, pipeSteps + sheetSteps, pipeSteps + sheetSteps + 1), [...services.wires[0].points[0], ...services.wires[0].points[1]]);
+  // Blocked attempts come as dashes no longer than a dash, in their type color
+  const consumers = Object.values(services.water.consumers);
+  const dry = consumers.filter((report) => report.status === 'dry').length;
+  const partial = consumers.filter((report) => report.status === 'partial').length;
+  assert.ok(dry > 0 && partial > 0);
+  const marks = dry * 6 + partial * 4;
+  const dashStart = pipeSteps + sheetSteps + wireSteps;
+  const dashes = lines.statuses.length - dashStart - marks;
+  assert.ok(dashes > steps(services.blocked), 'blocked strings are cut into dashes');
+  for (let index = dashStart; index < dashStart + dashes; index++) {
+    const [ax, ay, az, bx, by, bz] = pointsIn(lines, index, index + 1);
+    assert.ok(Math.hypot(bx - ax, by - ay, bz - az) <= 2 + 1e-9);
+  }
+  const blockedTypes = new Set(services.blocked.map((string) => (string.type === 'pipe' ? 'water' : 'power')));
+  assert.deepEqual(new Set(lines.statuses.slice(dashStart, dashStart + dashes)), blockedTypes);
+  // Marks: dry red with a cross, partial orange
+  const markStatuses = lines.statuses.slice(dashStart + dashes);
+  assert.equal(markStatuses.filter((status) => status === 'fail').length, dry * 6);
+  assert.equal(markStatuses.filter((status) => status === 'warn').length, partial * 4);
+  const partialId = Number(Object.keys(services.water.consumers).find((id) => services.water.consumers[id].status === 'partial'));
+  const instance = structure.modules.find((module) => module.id === partialId);
+  const warnAt = lines.statuses.indexOf('warn', dashStart + dashes);
+  assert.ok(Math.abs(lines.positions[warnAt * 6 + 2] - ((instance.z + instance.h) * 25 + 0.2)) < 1e-9, 'mark sits on the roof');
+});
+
+test('inspector water and power lines read the solver and the wires', () => {
+  const consumers = { 1: { received: 0.5, demand: 1, headLeft: null, status: 'partial', reason: 'out of head', short: 2 }, 2: { received: 0.25, demand: 0.25, headLeft: 1, status: 'full', reason: null, short: 0 }, 3: { received: 0, demand: 0.5, headLeft: null, status: 'dry', reason: 'no free port', short: 0 } };
+  const flows = { ports: [{ module: 4, type: 'power' }, { module: 5, type: 'water-in' }], services: { water: { consumers }, power: { powered: [1] } } };
+  assert.equal(waterText(flows, 1), `${COPY.water}: 0.5 ${COPY.waterOf} 1, ${COPY.waterPartial}, ${COPY.waterShortBy} 2`);
+  assert.equal(waterText(flows, 2), `${COPY.water}: 0.25 ${COPY.waterOf} 0.25, ${COPY.waterFull}`);
+  assert.equal(waterText(flows, 3), `${COPY.water}: 0 ${COPY.waterOf} 0.5, ${COPY.waterDry}, ${COPY.waterNoPort}`);
+  assert.equal(waterText(flows, 4), null);
+  assert.equal(waterText(null, 1), null);
+  assert.equal(powerText(flows, 1), COPY.powered);
+  assert.equal(powerText(flows, 4), COPY.notPowered);
+  assert.equal(powerText(flows, 5), null);
+  // Every solver reason has a line
+  const structure = generate({ seed: 'barbican', scale: 'mega', density: 'high' });
+  const services = planServices(structure.modules, 'barbican');
+  for (const [id, report] of Object.entries(services.water.consumers)) {
+    const text = waterText({ services, ports: [] }, Number(id));
+    assert.ok(!text.includes('undefined'), text);
+    assert.equal(text.split(', ').length, report.status === 'full' ? 2 : 3);
+  }
 });

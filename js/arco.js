@@ -101,7 +101,7 @@ const saveModule = (instance) => collectionPanel.save(instance, modules.partOf(v
 function showInspector() {
   const lastId = app.selection[app.selection.length - 1];
   const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
-  inspector.render({ structure: app.structure, checks: app.checks, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
+  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
 }
 
 // Click selects, shift click adds or removes
@@ -155,7 +155,8 @@ app.structureListeners.push(async (result, phase) => {
   const analysis = await analyst.call({ modules: result.modules, seed: result.seed }).catch(() => null);
   if (app.structure !== result || !analysis) return;
   app.analysis = freezeDeep(analysis);
-  drawing.setServices(app.analysis.flows || null);
+  drawing.setServices(app.analysis.flows ? app.analysis.flows.services : null);
+  showInspector();
   for (const listener of app.analysisListeners) listener(app.analysis, result);
 });
 

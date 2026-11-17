@@ -113,7 +113,7 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     const loads = checks ? loadPaths(checks) : { positions: [], statuses: [] };
     setLayerLines('centers', centers.positions, centers.statuses, true);
     setLayerLines('loads', loads.positions, loads.statuses, true);
-    const lines = serviceLines(services);
+    const lines = serviceLines(services, structure.modules);
     setLayerLines('services', lines.positions, lines.statuses, false);
     fillTitle();
     placeLabel();
@@ -129,9 +129,9 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
       stale = true;
       if (active) rebuild();
     },
-    // Flow networks from the analysis, null while it runs
-    setServices(flows) {
-      services = flows;
+    // Strings plan from the analysis, null while it runs
+    setServices(plan) {
+      services = plan;
       stale = true;
       if (active) rebuild();
     },

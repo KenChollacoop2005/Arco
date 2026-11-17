@@ -1,12 +1,15 @@
 import { CELL_MM, STORY_MM, PEG_SIZE_MM, RAIL_OFFSET_MM } from '../config.js';
 import { SIDES, instanceCells, instancePose, poseApply } from './grid.js';
 import { FAMILIES, canSupport, sideType } from './catalog.js';
-import { wirePoints } from './flows.js';
 
 const CENTER_MARK_MM = 3; // half length of a center of mass cross
 const SEAT_MARK_MM = 2.5; // half width of a plinth seat tick
 const LIFT_MM = 0.2; // marks sit off the surface
-const SERVICE_WIRE_STEPS = 8; // straight pieces per drawn wire
+const DASH_MM = 2; // dash length on a blocked string
+const DASH_GAP_MM = 1.5; // gap between dashes on a blocked string
+const CONSUMER_MARK_MM = 4; // half width of a dry or partial diamond
+const CONSUMER_MARKS = { dry: 'fail', partial: 'warn' }; // consumer status to line status
+const STRING_STATUS = { pipe: 'water', wire: 'power' }; // string type to line status
 
 // All results: { positions: number[], statuses: string[] }, one status per segment
 const sheet = () => ({ positions: [], statuses: [] });
@@ -98,16 +101,50 @@ export function edgeLines(modules, edgesOf) {
   return positions;
 }
 
-// Services: water paths as 'water', wires as 'power'
-export function serviceLines(flows) {
-  const target = sheet();
-  if (!flows) return target;
-  for (const path of flows.water.paths) {
-    for (let index = 1; index < path.points.length; index++) segment(target, path.points[index - 1], path.points[index], 'water');
+// One polyline, solid or dashed
+function polyline(target, points, status, dashed) {
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1];
+    const to = points[index];
+    if (!dashed) {
+      segment(target, from, to, status);
+      continue;
+    }
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
+    const at = (share) => from.map((value, axis) => value + (to[axis] - value) * share);
+    for (let start = 0; start < length; start += DASH_MM + DASH_GAP_MM) {
+      segment(target, at(start / length), at(Math.min(length, start + DASH_MM) / length), status);
+    }
   }
-  for (const wire of flows.wires) {
-    const points = wirePoints(wire, SERVICE_WIRE_STEPS);
-    for (let index = 1; index < points.length; index++) segment(target, points[index - 1], points[index], 'power');
+}
+
+// Diamond on a consumer's roof, crossed when dry
+function consumerMark(target, instance, status) {
+  const cells = instanceCells(instance);
+  const centerX = (cells.reduce((sum, cell) => sum + cell[0], 0) / cells.length + 0.5) * CELL_MM;
+  const centerY = (cells.reduce((sum, cell) => sum + cell[1], 0) / cells.length + 0.5) * CELL_MM;
+  const top = (instance.z + instance.h) * STORY_MM + LIFT_MM;
+  const size = CONSUMER_MARK_MM;
+  const corners = [[size, 0], [0, size], [-size, 0], [0, -size]].map(([offsetX, offsetY]) => [centerX + offsetX, centerY + offsetY, top]);
+  corners.forEach((corner, index) => segment(target, corner, corners[(index + 1) % 4], CONSUMER_MARKS[status]));
+  if (status !== 'dry') return;
+  const half = size / 2;
+  segment(target, [centerX - half, centerY - half, top], [centerX + half, centerY + half, top], 'fail');
+  segment(target, [centerX - half, centerY + half, top], [centerX + half, centerY - half, top], 'fail');
+}
+
+// Services from the strings: pipes and overflow as 'water', cables as 'power', blocked dashed
+export function serviceLines(services, modules = []) {
+  const target = sheet();
+  if (!services) return target;
+  for (const pipe of services.pipes) polyline(target, pipe.points, 'water', false);
+  for (const overflow of services.sheets) polyline(target, overflow.points, 'water', false);
+  for (const wire of services.wires) polyline(target, wire.points, 'power', false);
+  for (const string of services.blocked) polyline(target, string.points, STRING_STATUS[string.type], true);
+  const byId = new Map(modules.map((instance) => [instance.id, instance]));
+  for (const [id, report] of Object.entries(services.water.consumers)) {
+    const instance = byId.get(Number(id));
+    if (instance && CONSUMER_MARKS[report.status]) consumerMark(target, instance, report.status);
   }
   return target;
 }

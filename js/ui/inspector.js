@@ -6,6 +6,26 @@ import { placementOf } from '../core/placement.js';
 import { COPY } from './copy.js';
 
 const RULE_ORDER = ['size', 'base', 'overhang', 'bridge', 'wall', 'solid'];
+const WATER_STATUS = { full: 'waterFull', partial: 'waterPartial', dry: 'waterDry' }; // consumer status to copy key
+const WATER_REASON = { 'no route': 'waterNoRoute', 'blocked by module': 'waterBlocked', 'source empty': 'waterEmpty', 'no free port': 'waterNoPort' }; // solver reason to copy key
+const amount = (value) => String(Number(value.toFixed(2)));
+
+// One plain water line for a consumer, null for other modules
+export function waterText(flows, id) {
+  const report = flows && flows.services && flows.services.water.consumers[id];
+  if (!report) return null;
+  const parts = [`${COPY.water}: ${amount(report.received)} ${COPY.waterOf} ${amount(report.demand)}`, COPY[WATER_STATUS[report.status]]];
+  if (report.reason === 'out of head') parts.push(`${COPY.waterShortBy} ${amount(report.short)}`);
+  else if (report.reason) parts.push(COPY[WATER_REASON[report.reason]]);
+  return parts.join(', ');
+}
+
+// Powered or not, for modules with a power bracket
+export function powerText(flows, id) {
+  if (!flows || !flows.services) return null;
+  if (flows.services.power.powered.includes(id)) return COPY.powered;
+  return flows.ports.some((port) => port.module === id && port.type === 'power') ? COPY.notPowered : null;
+}
 
 function node(tag, className, text) {
   const element = document.createElement(tag);
@@ -70,7 +90,7 @@ export function createInspector(body) {
     body.append(list);
   }
 
-  function moduleView({ checks, printOf, socketsOf, fit, onExport, onSave }, instance) {
+  function moduleView({ checks, flows, printOf, socketsOf, fit, onExport, onSave }, instance) {
     const family = FAMILIES[instance.family];
     const [sizeX, sizeY] = footprintSize(instance.fp, instance.rot);
     body.append(node('p', 'inspector-name', family.label), node('p', 'inspector-sub', family.group));
@@ -100,6 +120,9 @@ export function createInspector(body) {
     else if (!fit) list.append(checkLine(COPY.connectorFit, '', COPY.checking));
     else list.append(checkLine(COPY.connectorFit, fitStatus(fit.gap, fit.clearance), `${fit.gap.toFixed(2)} mm`, `${COPY.fitMeasured} ${fit.clearance.toFixed(2)} mm`));
     body.append(list);
+    for (const text of [waterText(flows, instance.id), powerText(flows, instance.id)]) {
+      if (text) body.append(node('p', 'inspector-service', text));
+    }
     const save = node('button', 'primary', COPY.save);
     save.addEventListener('click', () => onSave(instance));
     const button = node('button', 'plain', COPY.exportStl);
