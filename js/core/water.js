@@ -1,6 +1,6 @@
 import {
   CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, WATER_QUARTERS, WATER_STEP, GRAVITY_HEAD, HEAD_PER_CELL, HEAD_PER_STORY_UP,
-  WATER_SOURCES, SOURCE_FAMILIES, PUMP_KINDS, DEMAND_PER_CELL, DEMAND_PER_MODULE, HUB_INPUTS, BASIN_INPUTS, PIPE_MAX_MM, MAX_PIPES_PER_PAIR,
+  WATER_SOURCES, SOURCE_FAMILIES, PUMP_KINDS, DEMAND_PER_CELL, DEMAND_PER_MODULE, HUB_INPUTS, BASIN_INPUTS, PIPE_MAX_MM, MAX_PIPES_PER_PAIR, TRICKLE_ON,
 } from '../config.js';
 import { SIDES, instanceCells, worldFromModules, columnTop, moduleAt } from './grid.js';
 import { FAMILIES, hasPump } from './catalog.js';
@@ -302,7 +302,8 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
       if (role.kind === 'consumer') consumerAt.set(instance.id, node.id);
     }
   }
-  for (const node of nodes) node.spill = spillOf(world, node, node.members.map((id) => byId.get(id)), consumerAt, context);
+  // Trickle off: surplus stays unused, nothing falls
+  for (const node of nodes) node.spill = !TRICKLE_ON ? [] : spillOf(world, node, node.members.map((id) => byId.get(id)), consumerAt, context);
   // Estimated water and head at each node while building
   const estimate = new Map(nodes.map((node) => [node.id, { units: node.kind === 'source' ? node.supply : node.kind === 'pump' ? node.supply : 0, head: node.kind === 'pump' ? node.head : GRAVITY_HEAD, gravity: node.kind !== 'pump', used: 0, entry: null }]));
   const links = [];

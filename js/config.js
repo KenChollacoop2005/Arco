@@ -119,6 +119,7 @@ export const DEMAND_PER_CELL = { farm: 0.5, planter: 0.5, greenhouse: 0.5, plant
 export const DEMAND_PER_MODULE = { housing: 0.25, studio: 0.25, penthouse: 0.25, shacks: 0.25, flared: 0.25, garden: 0.5 }; // homes and pools, units per module
 export const HUB_INPUTS = 2; // most pipes into one pump or main
 export const BASIN_INPUTS = 2; // most pipes into one consumer
+export const TRICKLE_ON = false; // surplus falls to lower basins as drawn sheets
 
 // Strings: geometry
 export const PIPE_MAX_MM = 8 * 25; // longest pipe, port to port
