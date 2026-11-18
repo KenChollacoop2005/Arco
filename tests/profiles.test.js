@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CELL_MM, STORY_MM, CONNECTOR_CLEARANCE_MM } from '../js/config.js';
-import { FAMILIES, PROFILE_FAMILIES, normalizeVariant } from '../js/core/catalog.js';
+import { FAMILIES, PROFILE_FAMILIES, OPEN_SIDE_FAMILIES, normalizeVariant } from '../js/core/catalog.js';
 import { claimedCells, instanceCells, moduleAt, toBody, variantKey, worldFromModules } from '../js/core/grid.js';
 import {
   PROFILE_IDS,
@@ -22,7 +22,7 @@ import {
   profileKinds,
   sideFrame,
 } from '../js/core/profiles.js';
-import { checkPlacement, validateStructure } from '../js/core/placement.js';
+import { checkPlacement, validateStructure, outwardMask } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
 import { createBuild, growOptions } from '../js/core/build.js';
 import { generate, openingOptions } from '../js/core/generator.js';
@@ -290,7 +290,16 @@ test('grow keeps profiled modules and stays out of their reserved cells', () => 
     const base = generate({ seed, scale: 'block', ...choices });
     const grown = generate(growOptions({ seed: 'grow-' + seed, scale: 'mega', ...choices }, base.modules));
     const after = new Map(grown.modules.map((instance) => [instance.id, instance]));
-    for (const instance of base.modules) assert.deepEqual(after.get(instance.id), instance);
+    // Kept as they were; only a platform's open sides follow its new neighbours
+    const world = worldFromModules(grown.modules);
+    for (const instance of base.modules) {
+      const kept = after.get(instance.id);
+      if (!OPEN_SIDE_FAMILIES.includes(instance.family)) assert.deepEqual(kept, instance);
+      else {
+        assert.deepEqual({ ...kept, mask: instance.mask }, instance);
+        assert.equal(kept.mask, outwardMask(world, kept), `${instance.family} ${instance.id} open sides`);
+      }
+    }
     assert.ok(grown.modules.length > base.modules.length);
     assert.deepEqual(trespassers(grown.modules), [], `${seed} reserved cells`);
     assert.deepEqual(validateStructure(worldFromModules(grown.modules)), [], `${seed} rules`);
