@@ -1,6 +1,8 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
 import { STORY_MM, CELL_MM, CURVE_LIGHT_STEPS, PIPE_RADIUS_MM } from '../config.js';
 import { sectionPlanes } from './materials.js';
+import { flowMaterial, quadGeometry, STREAM_COLOR, STREAM_OPACITY } from './waterworks.js';
+import { sheetQuads } from '../core/falls.js';
 
 // Port fittings: color, size across, size up, depth off the wall
 const PORT_LOOK = {
@@ -20,10 +22,6 @@ const BRACKET_EVERY_MM = 1.5 * CELL_MM; // pipe bracket spacing along a run
 const BRACKET_MM = [1.2, 2.4]; // bracket length along the pipe, width
 const COLLAR_EVERY_MM = STORY_MM / 2; // collar spacing on a pipe down a facade
 const COLLAR_MM = [1.6, 0.8]; // collar radius and height
-const SHEET_COLOR = 0x6fd3e3; // overflow water cyan
-const SHEET_OPACITY = 0.45; // overflow sheets are see-through
-const SHEET_WIDE_MM = [2, 0.6, 5]; // sheet width: base, per unit, most
-const SHEET_THICK_MM = 0.25; // sheet thickness
 const LIGHT_SHARE = 0.5; // share of strings drawn on weak devices
 const TAG_COLOR = 0xe2b31c; // yellow cable tag
 const TAG_MM = [1.4, 0.75]; // tag length along the cable, radius
@@ -43,7 +41,7 @@ export function createStrings(view) {
   const metal = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.1, clippingPlanes: sectionPlanes });
   const looks = {};
   for (const [type, [color]] of Object.entries(STRING_LOOK)) looks[type] = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, clippingPlanes: sectionPlanes });
-  const water = new THREE.MeshStandardMaterial({ color: SHEET_COLOR, roughness: 0.15, metalness: 0, transparent: true, opacity: SHEET_OPACITY, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: sectionPlanes });
+  const water = flowMaterial(STREAM_COLOR, STREAM_OPACITY, true);
   const cloth = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, side: THREE.DoubleSide, clippingPlanes: sectionPlanes });
   const canvas = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: TARP_OPACITY, clippingPlanes: sectionPlanes });
   const meshes = [];
@@ -58,6 +56,7 @@ export function createStrings(view) {
   const up = new THREE.Vector3();
   const axisY = new THREE.Vector3(0, 1, 0);
   const tint = new THREE.Color();
+  let falling = false;
 
   function clear() {
     for (const mesh of meshes.splice(0)) {
@@ -105,7 +104,8 @@ export function createStrings(view) {
         const [color, wide, tall, deep] = PORT_LOOK[port.type];
         out.set(port.normal[0], port.normal[1], port.normal[2]).normalize();
         up.set(0, 0, 1);
-        across.crossVectors(up, out).normalize();
+        // Right-handed basis, so the fitting turns to face its wall
+        across.crossVectors(out, up).normalize();
         basis.makeBasis(across, out, up);
         turn.setFromRotationMatrix(basis);
         middle.set(port.position[0] + (out.x * deep) / 2, port.position[1] + (out.y * deep) / 2, port.position[2]);
@@ -174,26 +174,12 @@ export function createStrings(view) {
     });
   }
 
-  // Thin falling sheets of overflow water
+  // Overflow spouts and straight falls, fading like the stream's fall
   function setSheets(sheets) {
-    addMesh(cube, water, sheets.length, (mesh) => {
-      sheets.forEach((sheet, order) => {
-        const [lip, foot] = sheet.points;
-        const wide = Math.min(SHEET_WIDE_MM[2], SHEET_WIDE_MM[0] + SHEET_WIDE_MM[1] * sheet.units);
-        out.set(foot[0] - lip[0], foot[1] - lip[1], foot[2] - lip[2]);
-        const length = Math.max(out.length(), 0.01);
-        out.normalize();
-        across.set(-lip[1], lip[0], 0);
-        if (across.lengthSq() < 1e-9) across.set(1, 0, 0);
-        across.normalize();
-        up.crossVectors(out, across).normalize();
-        basis.makeBasis(across, out, up);
-        turn.setFromRotationMatrix(basis);
-        middle.set((lip[0] + foot[0]) / 2, (lip[1] + foot[1]) / 2, (lip[2] + foot[2]) / 2);
-        size.set(wide, length, SHEET_THICK_MM);
-        mesh.setMatrixAt(order, matrix.compose(middle, turn, size));
-      });
-    });
+    if (sheets.length === 0) return;
+    const mesh = new THREE.Mesh(quadGeometry(sheets.flatMap(sheetQuads)), water);
+    group.add(mesh);
+    plain.push(mesh);
   }
 
   // Washing on the lines, flat pieces facing across the line
@@ -251,6 +237,7 @@ export function createStrings(view) {
       setStrings('wire', keep(wires), light);
       setStrings('line', keep(lines), light);
       setSheets(sheets);
+      falling = sheets.length > 0;
       setLaundry(keep(laundry));
       setTarps(light ? tarps.slice(0, TARP_LIGHT) : tarps);
       view.requestRender();
@@ -259,5 +246,7 @@ export function createStrings(view) {
       group.visible = on;
       view.requestRender();
     },
+    // True when overflow water is on screen
+    flowing: () => falling && group.visible,
   };
 }

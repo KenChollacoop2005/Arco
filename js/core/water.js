@@ -12,12 +12,14 @@ import { pipeGraph, pipeSearch, pipePath, pathHead, graphParts } from './pipes.j
 const WATER_SEED = 0x7a7e5; // keeps network rolls apart from other rolls
 const STEP = WATER_STEP * WATER_QUARTERS; // split step in quarters
 const SPILL_LIP_MM = 1; // overflow leaves this far past the wall
+const SPILL_ROOT_MM = 3; // spout starts this far inside the cell edge
 const SPILL_LIFT_MM = 0.5; // overflow starts this far above the roof
 const SPILL_CLEAR_MM = 1; // sheet collision test stops this far above the landing
 const SPLIT_ROUNDS_MAX = 1000; // safety cap on split rounds
 const SEARCH_SLACK = 1e-6; // head slack when a search stops early
 const SHORT_REACH = 4; // shortfalls past this much head are reported without a number
 export const WATER_REASONS = ['out of head', 'no route', 'no wall route', 'source empty', 'no free port'];
+export const NO_FALL = 'no clear fall'; // overflow with no straight drop beside it
 const UNPOWERED_TANKS = ['pumptank']; // pumped tanks that drain by gravity when off
 const WHEEL_JUNCTIONS = ['wheelup']; // families water passes through to turn a wheel
 
@@ -157,7 +159,7 @@ export function solveWater({ nodes: given, links }) {
     if (entry.overflow <= 0) continue;
     const target = (node.spill || [])[0] || null;
     const receiver = target && target.node !== null ? state.get(target.node) : null;
-    sheets.push({ from: node.id, to: receiver ? target.node : null, units: toUnits(entry.overflow), points: target ? target.points : null });
+    sheets.push({ from: node.id, to: receiver ? target.node : null, units: toUnits(entry.overflow), points: target ? target.points : null, reason: target ? null : NO_FALL });
     if (!receiver) {
       ground += entry.overflow;
       entry.spilled = entry.overflow;
@@ -241,15 +243,16 @@ function spillOf(world, node, instances, consumerAt, context) {
       if (landing >= level) continue;
       const below = landing > 0 ? moduleAt(world, nextX, nextY, landing - 1) : null;
       const target = below ? consumerAt.get(below.id) || null : null;
-      // Lip on the shared edge, fall to the landing, held inside the rim
-      const lip = [(cellX + 0.5 + stepX * 0.5) * CELL_MM + stepX * SPILL_LIP_MM, (cellY + 0.5 + stepY * 0.5) * CELL_MM + stepY * SPILL_LIP_MM, level * STORY_MM + SPILL_LIFT_MM];
-      const rim = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2;
-      const out = Math.hypot(lip[0], lip[1]);
-      const foot = out > rim ? [(lip[0] * rim) / out, (lip[1] * rim) / out] : [lip[0], lip[1]];
-      const option = { node: target, landing, points: [lip, [foot[0], foot[1], landing * STORY_MM]], key: (target ? 0 : 1) * 1000 - landing };
+      // Short level spout over the edge, then a straight drop
+      const edgeAt = (reach) => [(cellX + 0.5 + stepX * 0.5) * CELL_MM + stepX * reach, (cellY + 0.5 + stepY * 0.5) * CELL_MM + stepY * reach, level * STORY_MM + SPILL_LIFT_MM];
+      const root = edgeAt(-SPILL_ROOT_MM);
+      const lip = edgeAt(SPILL_LIP_MM);
+      // Water past the rim would fall off the plinth, not onto it
+      if (Math.hypot(lip[0], lip[1]) > (PLINTH_DIAMETER_CELLS * CELL_MM) / 2) continue;
+      const option = { node: target, landing, points: [root, lip, [lip[0], lip[1], landing * STORY_MM]], key: (target ? 0 : 1) * 1000 - landing };
       // A sheet may not start in or fall through a module
       if (best && option.key >= best.key) continue;
-      if (pathBlocked(context, [lip, [foot[0], foot[1], landing * STORY_MM + SPILL_CLEAR_MM]], node.members)) continue;
+      if (pathBlocked(context, [root, lip, [lip[0], lip[1], landing * STORY_MM + SPILL_CLEAR_MM]], node.members)) continue;
       best = option;
     }
   }

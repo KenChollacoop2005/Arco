@@ -286,7 +286,7 @@ function applyEffects() {
 }
 toggles.watch('effects', applyEffects);
 applyEffects();
-view.onFrame(() => sharedUniforms.uEffects.value > 0 && (waterworks.flowing() || (!!app.structure && app.structure.modules.some((instance) => SPINNING.includes(instance.family)))));
+view.onFrame(() => sharedUniforms.uEffects.value > 0 && (waterworks.flowing() || strings.flowing() || (!!app.structure && app.structure.modules.some((instance) => SPINNING.includes(instance.family)))));
 
 // Stream, pours and junction boxes follow the structure and its analysis
 app.structureListeners.push((result, phase) => {

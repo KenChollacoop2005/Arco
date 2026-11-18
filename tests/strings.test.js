@@ -6,6 +6,7 @@ import { generate } from '../js/core/generator.js';
 import { instanceMounts } from '../js/core/mounts.js';
 import { stringContext, segmentHitsBox, pathBlocked, sagPoints, hangString, pathLength } from '../js/core/strings.js';
 import { planServices } from '../js/core/services.js';
+import { sheetQuads } from '../js/core/falls.js';
 
 const EPS_MM = 1e-6; // rounding slack
 const MEGA = { scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 };
@@ -60,7 +61,7 @@ test('no string of a generated structure passes through a module or below the pl
     for (const string of plan.blocked) assert.ok(string.blocked && string.blocked.reason, `${seed} blocked string has a reason`);
     const rim = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2;
     for (const sheet of plan.sheets) {
-      const [lip, foot] = sheet.points;
+      const [lip, foot] = sheet.points.slice(-2);
       assert.ok(foot[2] >= 0 && foot[2] < lip[2], `${seed} sheet falls`);
       assert.ok(Math.hypot(foot[0], foot[1]) <= rim + EPS_MM, `${seed} sheet stops at the rim`);
       assert.equal(foot[2] % STORY_MM, 0);
@@ -81,11 +82,44 @@ test('overflow sheets never start in or fall through a module', () => {
     const plan = planServices(modules, seed, { context });
     const members = new Map(plan.water.nodes.map((node) => [node.id, node.members]));
     for (const sheet of plan.sheets) {
-      const [lip, foot] = sheet.points;
-      const fall = [lip, [foot[0], foot[1], foot[2] + 1]];
+      const foot = sheet.points[sheet.points.length - 1];
+      const fall = [...sheet.points.slice(0, -1), [foot[0], foot[1], foot[2] + 1]];
       assert.equal(pathBlocked(context, fall, members.get(sheet.from)), null, `${seed} ${scale} ${density} sheet from ${sheet.from}`);
       sheets++;
     }
   }
   assert.ok(sheets >= 10, `sheets ${sheets}`);
+});
+
+test('overflow is drawn as a short level spout and straight falls, clear of every module', () => {
+  const SPOUT_MAX_MM = 4.5; // longest spout over a roof edge
+  const cases = [['barbican', 'mega', 2], ['habitat', 'mega', 2], ['arco', 'mega', 0], ['brunswick', 'mega', 2], ['barbican', 'block', 0], ['golden', 'mega', 1]];
+  let falls = 0;
+  for (const [seed, scale, density] of cases) {
+    const { modules } = generate({ seed, scale, density });
+    const context = stringContext(modules);
+    const plan = planServices(modules, seed, { context });
+    const members = new Map(plan.water.nodes.map((node) => [node.id, node.members]));
+    for (const sheet of plan.sheets) {
+      const name = `${seed} ${scale} sheet from ${sheet.from}`;
+      const foot = sheet.points[sheet.points.length - 1];
+      const [spout, ...drops] = sheetQuads(sheet);
+      // The spout is level and short
+      assert.ok(spout.every((corner) => Math.abs(corner.point[2] - spout[0].point[2]) < EPS_MM), `${name} spout level`);
+      assert.ok(Math.hypot(spout[2].point[0] - spout[1].point[0], spout[2].point[1] - spout[1].point[1]) <= SPOUT_MAX_MM, `${name} spout short`);
+      for (const [from, to] of [[spout[0], spout[3]], [spout[1], spout[2]]]) assert.equal(pathBlocked(context, [from.point, to.point], members.get(sheet.from)), null, `${name} spout through a module`);
+      assert.ok(drops.length > 0);
+      for (const quad of drops) {
+        // Each side of a fall piece is upright, top over bottom
+        for (const [high, low] of [[quad[0], quad[3]], [quad[1], quad[2]]]) {
+          assert.ok(Math.hypot(high.point[0] - low.point[0], high.point[1] - low.point[1]) < EPS_MM, `${name} falls straight down`);
+          assert.ok(high.point[2] > low.point[2] && high.fade >= low.fade, `${name} falls and fades`);
+          const stop = Math.max(low.point[2], foot[2] + 1);
+          if (high.point[2] > stop) assert.equal(pathBlocked(context, [high.point, [low.point[0], low.point[1], stop]], members.get(sheet.from)), null, `${name} edge through a module`);
+        }
+        falls++;
+      }
+    }
+  }
+  assert.ok(falls >= 20, `fall pieces ${falls}`);
 });

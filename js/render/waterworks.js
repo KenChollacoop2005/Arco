@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.min.js';
 import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
 import { instancePose, poseApply, worldFromModules, columnTop, cellInPlinth } from '../core/grid.js';
 import { buildRecipe } from '../core/recipes.js';
-import { sharedUniforms } from './materials.js';
+import { sharedUniforms, sectionPlanes } from './materials.js';
 
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
 const CHANNEL_MM = 14; // stream width
@@ -14,25 +14,30 @@ const POUR_WIDE_MM = 2.2; // pour ribbon width
 const POUR_OUT_MM = 1.5; // pour leaves the outlet this far out
 const FLOW_SPEED = 0.9; // ripple speed, cycles per second
 const RIPPLE_MM = 9; // ripple spacing along the flow
-const STREAM_COLOR = 0x6fa7bd; // stream water
-const STREAM_OPACITY = 0.85; // stream water opacity
+export const STREAM_COLOR = 0x6fa7bd; // stream water
+export const STREAM_OPACITY = 0.85; // stream water opacity
 const POUR_LOOK = { runoff: [0xcfe6ee, 0.75], disposal: [0x6b6840, 0.85] }; // pour color and opacity
 const BANK_COLOR = 0x8a857b; // stream bank strips
 const BOX_LOOK = [0x5d635b, 3, 3.8, 2.2]; // junction box color, width, height, depth
 const POURING = ['runoff', 'disposal']; // families that pour
 
-// Flowing water: ripples move with Effects on
-function flowMaterial(color, opacity) {
+// Flowing water: ripples move with Effects on; clip follows the section cut
+export function flowMaterial(color, opacity, clip = false) {
   return new THREE.ShaderMaterial({
+    clipping: clip,
+    clippingPlanes: clip ? sectionPlanes : null,
     uniforms: { uTime: sharedUniforms.uTime, uEffects: sharedUniforms.uEffects, uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
     vertexShader: `attribute float aAlong;
 attribute float aFade;
 varying float vAlong;
 varying float vFade;
+#include <clipping_planes_pars_vertex>
 void main() {
   vAlong = aAlong;
   vFade = aFade;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  #include <clipping_planes_vertex>
+  gl_Position = projectionMatrix * mvPosition;
 }`,
     fragmentShader: `uniform float uTime;
 uniform float uEffects;
@@ -40,7 +45,9 @@ uniform vec3 uColor;
 uniform float uOpacity;
 varying float vAlong;
 varying float vFade;
+#include <clipping_planes_pars_fragment>
 void main() {
+  #include <clipping_planes_fragment>
   float ripple = 0.5 + 0.5 * sin((vAlong / ${RIPPLE_MM.toFixed(1)} - uTime * ${FLOW_SPEED.toFixed(2)} * uEffects) * 6.2831853);
   gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.2 * ripple), uOpacity * vFade);
 }`,
@@ -51,7 +58,7 @@ void main() {
 }
 
 // Quads with along and fade per corner
-function quadGeometry(quads) {
+export function quadGeometry(quads) {
   const positions = [];
   const along = [];
   const fade = [];
