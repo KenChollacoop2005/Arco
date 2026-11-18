@@ -41,6 +41,9 @@ const STUB_COUNT = [2, 5]; // stubs on the outlet face, by seed
 const STUB_FLOWING = [1, 2]; // stubs that pour, by seed
 const STUB_BAND_MM = [2.5, 3]; // stubs keep this far off the floor and the top
 const STUB_GAP_MM = 1.2; // clear space between two stubs
+const STUB_PAST_MM = [0, 7]; // render only stub length past the body face, by seed
+const STUB_POUR_PAST_MM = [1.5, 4]; // a flowing stub ends this far past the cell edge
+const STUB_SHOWN = { steel: 'steelStub', rust: 'rustStub' }; // render only group for a stub's outer length
 const BASIN_INSET_MM = [2, 1.6, 0.6]; // runoff roof basin inset, depth, water below the top
 const DISPOSAL_TANK_MM = [5, 4]; // disposal roof tank radius and height
 const ARCH_MM = [7.5, 6, 1.15]; // arch half width, springing height, crown rise per mm of half width
@@ -224,7 +227,24 @@ function outletBody(kit, stubGroup, top) {
   spots.forEach(([centerY, centerZ], index) => {
     kit.add(stubGroup, prismX(teardrop(centerY, centerZ, half, keel), face - SINK_MM, kit.W - kit.clear));
     kit.cut(prismX([[centerY + bore, centerZ], [centerY, centerZ + bore], [centerY - bore, centerZ], [centerY, centerZ - bore]], face + SINK_MM, kit.W - kit.clear + 1), stubGroup);
-    if (pouring.includes(index)) kit.anchors.outlet.push({ at: [kit.W - kit.clear, centerY, centerZ - bore / 2], dir: [1, 0, 0] });
+  });
+  // Seeded outer lengths, render only; flowing stubs clear the cell edge and the stubs under them
+  const past = spots.map(() => kit.rng.range(STUB_PAST_MM[0], STUB_PAST_MM[1]));
+  const edge = kit.clear; // body face to cell edge
+  const order = spots.map((spot, index) => index).sort((first, second) => spots[first][1] - spots[second][1]);
+  for (const index of order) {
+    if (!pouring.includes(index)) continue;
+    const [centerY, centerZ] = spots[index];
+    const under = spots.map((spot, other) => (spot[1] < centerZ && Math.abs(spot[0] - centerY) < 2 * half + STUB_GAP_MM ? past[other] : 0));
+    past[index] = Math.max(edge + kit.rng.range(STUB_POUR_PAST_MM[0], STUB_POUR_PAST_MM[1]), ...under.map((length) => length + STUB_GAP_MM));
+  }
+  spots.forEach(([centerY, centerZ], index) => {
+    const end = kit.W - kit.clear + past[index];
+    if (past[index] > 0) {
+      kit.add(STUB_SHOWN[stubGroup], prismX(teardrop(centerY, centerZ, half, keel), kit.W - kit.clear - SINK_MM, end));
+      kit.cut(prismX([[centerY + bore, centerZ], [centerY, centerZ + bore], [centerY - bore, centerZ], [centerY, centerZ - bore]], kit.W - kit.clear - 1, end + 1), STUB_SHOWN[stubGroup]);
+    }
+    if (pouring.includes(index)) kit.anchors.outlet.push({ at: [end, centerY, centerZ - bore / 2], dir: [1, 0, 0] });
   });
   return face;
 }

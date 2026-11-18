@@ -14,6 +14,8 @@ export const GROUPS = {
   glass: [0x2a3038, KIND_GLASS, false],
   steel: [0x7b8087, KIND_DETAIL, true],
   rust: [0x9c4b2a, KIND_DETAIL, true],
+  steelStub: [0x7b8087, KIND_DETAIL, false],
+  rustStub: [0x9c4b2a, KIND_DETAIL, false],
   soot: [0x2d2b2a, KIND_DETAIL, true],
   hazard: [0xe0ae1a, KIND_DETAIL, true],
   solar: [0x1a2540, KIND_DETAIL, true],

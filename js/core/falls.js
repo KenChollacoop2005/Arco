@@ -2,17 +2,18 @@ import { STORY_MM, CELL_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
 import { instancePose, poseApply } from './grid.js';
 import { buildRecipe } from './recipes.js';
 import { pathBlocked } from './strings.js';
+import { makeRng, mixSeed, hashString } from './rng.js';
 
 export const SHEET_WIDE_MM = [2, 0.6, 5]; // sheet width: base, per unit, most
 export const FALL_FADE_MM = 70; // falling water fades out over this drop
 export const SHEET_FADE_MIN = 0.15; // overflow still shows where it lands
 const FALL_PIECE_MM = STORY_MM / 2; // fall drawn in pieces this tall
 export const POURING = ['runoff', 'disposal']; // families whose stubs pour
-export const POUR_WIDE_MM = 2.2; // pour ribbon width
-const POUR_START_MM = 0.4; // a pour starts this far past the stub mouth
-const POUR_CURVE = 1 / 12; // arc drop per mm squared of reach
-const POUR_STEP_MM = 2; // arc sampled about this often along its length
-const POUR_PAST_MM = 60; // off the plinth a pour falls this far as it fades
+export const POUR_WIDE_MM = 1.2; // outlet flow sheet width
+const POUR_START_MM = 0.4; // a flow starts this far past the stub tip
+export const FLOW_LENGTH_MM = [1.5 * STORY_MM, 4 * STORY_MM]; // falling flow total length, seeded
+export const FLOW_FADE_SHARE = [0.2, 0.6]; // fade starts at this share of the length
+const FLOW_SEED = 0x5f17; // keeps flow rolls apart from shape rolls
 const HIT_STEPS = 12; // halvings to find where a pour lands
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
 
@@ -65,58 +66,56 @@ export function sheetQuads(sheet) {
   return [spout, ...dropQuads(lip, side, wide, lip[2] - foot[2], reach, SHEET_FADE_MIN)];
 }
 
-// Point on a pour's arc a reach out from its start
-const arcAt = (start, dir, reach) => [start[0] + dir[0] * reach, start[1] + dir[1] * reach, start[2] - POUR_CURVE * reach * reach];
+// Seeded length and fade start of one falling flow
+export function flowShape(seed) {
+  const rng = makeRng(mixSeed(seed >>> 0, FLOW_SEED));
+  const length = rng.range(FLOW_LENGTH_MM[0], FLOW_LENGTH_MM[1]);
+  return { length, fadeStart: length * rng.range(FLOW_FADE_SHARE[0], FLOW_FADE_SHARE[1]) };
+}
 
-// One pour: arcs out of the stub, falls, stops where it lands or fades out
-function pourArc(context, instance, start, dir) {
-  const points = [start];
-  const along = [0];
-  let reach = 0;
-  for (;;) {
-    const last = points[points.length - 1];
-    // Step along the arc by about the same length each time
-    reach += POUR_STEP_MM / Math.sqrt(1 + (2 * POUR_CURVE * reach) ** 2);
-    let next = arcAt(start, dir, reach);
-    const onPlinth = Math.hypot(next[0], next[1]) <= RIM_MM;
-    const floor = onPlinth ? 0 : -POUR_PAST_MM;
-    let landed = false;
-    // Leaving the plinth below its top: it lands on the top first
-    if (!onPlinth && next[2] < 0 && Math.hypot(last[0], last[1]) <= RIM_MM) {
-      const share = last[2] / (last[2] - next[2]);
-      const touch = last.map((value, axis) => value + (next[axis] - value) * share);
-      if (Math.hypot(touch[0], touch[1]) <= RIM_MM) {
-        next = touch;
-        landed = true;
-      }
-    }
-    if (!landed && next[2] <= floor) {
-      // Lands on the plinth top, or falls past the rim to the end
-      const share = (last[2] - floor) / (last[2] - next[2]);
-      next = last.map((value, axis) => value + (next[axis] - value) * share);
-      landed = true;
-    }
-    const clear = (point) => (point[2] < 0 && !onPlinth) || !pathBlocked(context, [last, point], [instance.id]);
-    if (!clear(next)) {
-      // Halve back to where it meets a module
-      let low = 0;
-      let high = 1;
-      for (let step = 0; step < HIT_STEPS; step++) {
-        const middle = (low + high) / 2;
-        if (clear(last.map((value, axis) => value + (next[axis] - value) * middle))) low = middle;
-        else high = middle;
-      }
-      next = last.map((value, axis) => value + (next[axis] - value) * low);
-      landed = true;
-    }
-    const length = along[along.length - 1] + Math.hypot(next[0] - last[0], next[1] - last[1], next[2] - last[2]);
-    if (length > along[along.length - 1]) {
-      points.push(next);
-      along.push(length);
-    }
-    if (landed || length >= FALL_FADE_MM) break;
+// Full down to the fade start, then linear to zero at the length
+export const flowFade = (drop, shape) => (drop <= shape.fadeStart ? 1 : Math.max(0, 1 - (drop - shape.fadeStart) / (shape.length - shape.fadeStart)));
+
+// Straight fall in pieces, broken at the fade start so the fade is exact
+export function fallQuads(top, side, wide, drop, shape, startAlong = 0) {
+  const marks = [0];
+  for (let fallen = FALL_PIECE_MM; fallen < drop; fallen += FALL_PIECE_MM) marks.push(fallen);
+  if (shape.fadeStart > 0 && shape.fadeStart < drop) marks.push(shape.fadeStart);
+  marks.push(drop);
+  marks.sort((first, second) => first - second);
+  const at = (fallen) => [top[0], top[1], top[2] - fallen];
+  const quads = [];
+  for (let index = 1; index < marks.length; index++) {
+    const [high, low] = [marks[index - 1], marks[index]];
+    if (low - high <= 0) continue;
+    quads.push([
+      corner(shift(at(high), side, -wide / 2), startAlong + high, flowFade(high, shape)),
+      corner(shift(at(high), side, wide / 2), startAlong + high, flowFade(high, shape)),
+      corner(shift(at(low), side, wide / 2), startAlong + low, flowFade(low, shape)),
+      corner(shift(at(low), side, -wide / 2), startAlong + low, flowFade(low, shape)),
+    ]);
   }
-  return { module: instance.id, family: instance.family, points, along, dir: [dir[0], dir[1], 0] };
+  return quads;
+}
+
+// One outlet flow: straight down from the stub tip to where it lands, at most its length
+function outletFall(context, instance, start, dir, shape) {
+  const onPlinth = Math.hypot(start[0], start[1]) <= RIM_MM;
+  const lowest = onPlinth ? Math.max(0, start[2] - shape.length) : start[2] - shape.length;
+  let drop = start[2] - lowest;
+  const below = (fallen) => [start[0], start[1], start[2] - fallen];
+  if (onPlinth && pathBlocked(context, [start, below(drop)], [instance.id])) {
+    // Halve back to where it meets a module
+    let low = 0;
+    let high = drop;
+    for (let step = 0; step < HIT_STEPS; step++) {
+      const middle = (low + high) / 2;
+      if (pathBlocked(context, [start, below(middle)], [instance.id])) high = middle;
+      else low = middle;
+    }
+    drop = low;
+  }
+  return { module: instance.id, family: instance.family, points: [start, below(drop)], drop, dir: [dir[0], dir[1], 0], length: shape.length, fadeStart: shape.fadeStart };
 }
 
 // Pours from every flowing stub of the runoff and disposal modules
@@ -125,34 +124,21 @@ export function pourPaths(modules, context) {
   for (const instance of modules) {
     if (!POURING.includes(instance.family)) continue;
     const pose = instancePose(instance);
-    for (const outlet of buildRecipe(instance).anchors.outlet) {
+    buildRecipe(instance).anchors.outlet.forEach((outlet, index) => {
       const dir = poseApply({ turns: pose.turns, x: 0, y: 0, z: 0 }, ...outlet.dir).map(Math.round);
       const mouth = poseApply(pose, ...outlet.at);
-      pours.push(pourArc(context, instance, mouth.map((value, axis) => value + dir[axis] * POUR_START_MM), dir));
-    }
+      // Each flow gets its own length and fade, seeded by where it is
+      const shape = flowShape(mixSeed(instance.seed >>> 0, hashString(`${instance.x},${instance.y},${instance.z}:${index}`)));
+      pours.push(outletFall(context, instance, mouth.map((value, axis) => value + dir[axis] * POUR_START_MM), dir, shape));
+    });
   }
   return pours;
 }
 
-// Two crossed ribbons along a pour, fading with the length fallen
+// Two crossed thin sheets falling from the stub tip
 export function pourQuads(pour) {
+  if (pour.drop <= 0) return [];
   const side = [-pour.dir[1], pour.dir[0], 0];
-  const quads = [];
-  for (let index = 1; index < pour.points.length; index++) {
-    const from = pour.points[index - 1];
-    const to = pour.points[index];
-    const run = minus(to, from);
-    const length = Math.hypot(...run) || 1;
-    // Second ribbon lies in the fall plane, across the flow
-    const flat = [pour.dir[0] * -run[2] / length, pour.dir[1] * -run[2] / length, Math.hypot(run[0], run[1]) / length];
-    for (const across of [side, flat]) {
-      quads.push([
-        corner(shift(from, across, -POUR_WIDE_MM / 2), pour.along[index - 1], fallFade(pour.along[index - 1])),
-        corner(shift(from, across, POUR_WIDE_MM / 2), pour.along[index - 1], fallFade(pour.along[index - 1])),
-        corner(shift(to, across, POUR_WIDE_MM / 2), pour.along[index], fallFade(pour.along[index])),
-        corner(shift(to, across, -POUR_WIDE_MM / 2), pour.along[index], fallFade(pour.along[index])),
-      ]);
-    }
-  }
-  return quads;
+  const shape = { length: pour.length, fadeStart: pour.fadeStart };
+  return [side, pour.dir].flatMap((across) => fallQuads(pour.points[0], across, POUR_WIDE_MM, pour.drop, shape));
 }

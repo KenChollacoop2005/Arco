@@ -1,13 +1,13 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
 import { CELL_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
-import { pourQuads } from '../core/falls.js';
+import { pourQuads, flowShape, flowFade } from '../core/falls.js';
+import { hashString } from '../core/rng.js';
 import { sharedUniforms, sectionPlanes } from './materials.js';
 
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
 const CHANNEL_MM = 14; // stream width
 const STREAM_LIFT_MM = 0.35; // water sits this far over the plinth top
 const BANK_MM = [1.4, 0.7]; // bank strip width and height
-const RIM_FALL_MM = 70; // a fall off the rim drops this far as it fades
 const FLOW_SPEED = 0.9; // ripple speed, cycles per second
 const RIPPLE_MM = 9; // ripple spacing along the flow
 export const STREAM_COLOR = 0x6fa7bd; // stream water
@@ -124,8 +124,13 @@ export function createWaterworks(view) {
       const lengthAt = (across) => Math.abs(rimAt(across) - upstream);
       const corner = (across, onRim, z, fade, extra) => ({ point: point(onRim ? rimAt(across) : upstream, across, z), along: (onRim ? lengthAt(across) : 0) + extra, fade });
       const quads = [[corner(-half, false, STREAM_LIFT_MM, 1, 0), corner(-half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, STREAM_LIFT_MM, 1, 0), corner(half, false, STREAM_LIFT_MM, 1, 0)]];
-      // Off the rim: a sheet that falls and fades into nothing
-      quads.push([corner(-half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, -RIM_FALL_MM, 0, RIM_FALL_MM), corner(-half, true, -RIM_FALL_MM, 0, RIM_FALL_MM)]);
+      // Off the rim: a sheet that falls, full to its fade start, then to nothing at its seeded length
+      const shape = flowShape(hashString(`stream:${record.line}:${record.flow}:${record.cells.length}`));
+      const marks = [0, shape.fadeStart, shape.length];
+      for (let index = 1; index < marks.length; index++) {
+        const [high, low] = [marks[index - 1], marks[index]];
+        quads.push([corner(-half, true, STREAM_LIFT_MM - high, flowFade(high, shape), high), corner(half, true, STREAM_LIFT_MM - high, flowFade(high, shape), high), corner(half, true, STREAM_LIFT_MM - low, flowFade(low, shape), low), corner(-half, true, STREAM_LIFT_MM - low, flowFade(low, shape), low)]);
+      }
       keep('stream', new THREE.Mesh(quadGeometry(quads), streamMaterial));
       const banks = new THREE.InstancedMesh(cube, bankMaterial, 2);
       const matrix = new THREE.Matrix4();
