@@ -293,3 +293,61 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
   kit.facades = kit.walls.filter((run) => run.facade);
   return kit;
 }
+
+export const inBox = (shape, point) => point.every((value, axis) => value > shape.min[axis] && value < shape.max[axis]);
+
+// Even-odd test on a closed outline
+function inPolygon(poly, pointA, pointB) {
+  let inside = false;
+  for (let index = 0, last = poly.length - 1; index < poly.length; last = index++) {
+    const [fromA, fromB] = poly[index];
+    const [toA, toB] = poly[last];
+    if (fromB > pointB !== toB > pointB && pointA < ((toA - fromA) * (pointB - fromB)) / (toB - fromB) + fromA) inside = !inside;
+  }
+  return inside;
+}
+
+// Faceted frustum, first corner at the turn angle
+function inCylinder(shape, point) {
+  if (point[2] <= shape.from || point[2] >= shape.to) return false;
+  const share = (point[2] - shape.from) / (shape.to - shape.from);
+  const radius = shape.radiusLow + (shape.radiusHigh - shape.radiusLow) * share;
+  const apothem = radius * Math.cos(Math.PI / shape.sides);
+  const localX = point[0] - shape.center[0];
+  const localY = point[1] - shape.center[1];
+  const turn = (shape.turnDeg * Math.PI) / 180;
+  for (let face = 0; face < shape.sides; face++) {
+    const angle = turn + ((face + 0.5) * 2 * Math.PI) / shape.sides;
+    if (localX * Math.cos(angle) + localY * Math.sin(angle) >= apothem) return false;
+  }
+  return true;
+}
+
+function inPrism(shape, point) {
+  const offset = [point[0] - shape.origin[0], point[1] - shape.origin[1], point[2] - shape.origin[2]];
+  const dot = (axis) => offset[0] * axis[0] + offset[1] * axis[1] + offset[2] * axis[2];
+  const sweep = dot(shape.axes[2]);
+  if (sweep <= shape.from || sweep >= shape.to) return false;
+  return inPolygon(shape.poly, dot(shape.axes[0]), dot(shape.axes[1]));
+}
+
+// True when a point is inside one kit shape
+export function inShape(shape, point) {
+  if (shape.kind === 'box') return inBox(shape, point);
+  if (shape.kind === 'cyl') return inCylinder(shape, point);
+  return inPrism(shape, point);
+}
+
+// Group of the solid at a point, adds and cuts in order per group
+export function groupAt(ops, point) {
+  const inside = new Map();
+  for (const op of ops) {
+    if (op.cut) {
+      if (inside.get(op.group) && inShape(op.shape, point)) inside.set(op.group, false);
+    } else if (!inside.get(op.group) && inShape(op.shape, point)) {
+      inside.set(op.group, true);
+    }
+  }
+  for (const [group, filled] of inside) if (filled) return group;
+  return null;
+}

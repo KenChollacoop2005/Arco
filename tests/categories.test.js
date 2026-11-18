@@ -12,6 +12,7 @@ import { createBuild } from '../js/core/build.js';
 import { variantOf } from '../js/core/collection.js';
 import { AMENITY_KINDS } from '../js/core/amenities.js';
 import { getSolids } from './helpers.js';
+import { inShape, groupAt } from '../js/core/mounts.js';
 
 const LISTED = {
   social: ['market', 'shop', 'hall', ...AMENITY_KINDS],
@@ -46,6 +47,50 @@ test('amenities: a recipe, a type tag, a render-only sign and a detail of their 
   }
   assert.ok(shapes.size >= 15, `distinct amenity shapes: ${shapes.size}`);
   for (const id of ['market', 'shop', 'hall']) assert.equal(FAMILIES[id].amenity, id);
+});
+
+// Sign contact: points of each sign within this of a wall or post
+const SIGN_TOUCH_MM = 0.1;
+const SIGN_SAMPLES = 7;
+
+// True when a sign has a point touching the solid that holds it
+function signTouches(ops, sign) {
+  const holders = ops.filter((op) => op.group !== 'signSocial' && op.group !== 'glass');
+  const shape = sign.shape;
+  const low = shape.kind === 'box' ? shape.min : [shape.center[0] - shape.radiusLow, shape.center[1] - shape.radiusLow, shape.from];
+  const high = shape.kind === 'box' ? shape.max : [shape.center[0] + shape.radiusLow, shape.center[1] + shape.radiusLow, shape.to];
+  const nudges = [[0, 0, 0]];
+  for (let axis = 0; axis < 3; axis++) for (const step of [-SIGN_TOUCH_MM, SIGN_TOUCH_MM]) nudges.push([0, 1, 2].map((other) => (other === axis ? step : 0)));
+  for (let a = 0; a < SIGN_SAMPLES; a++) for (let b = 0; b < SIGN_SAMPLES; b++) for (let c = 0; c < SIGN_SAMPLES; c++) {
+    const point = [a, b, c].map((step, axis) => low[axis] + ((step + 0.5) / SIGN_SAMPLES) * (high[axis] - low[axis]));
+    if (!inShape(shape, point)) continue;
+    if (nudges.some((nudge) => groupAt(holders, point.map((value, axis) => value + nudge[axis])))) return true;
+  }
+  return false;
+}
+
+test('amenity signs sit flush on a wall of their own module or on a post', () => {
+  let signs = 0;
+  const floating = [];
+  for (const kind of AMENITY_KINDS) {
+    const family = FAMILIES[kind];
+    for (const fp of family.footprints) {
+      for (let h = family.minStories; h <= family.maxStories; h++) {
+        for (const seed of [1, 2, 3, 4]) {
+          for (const mask of [15, 1, 2, 4, 8, 5, 10, 0]) {
+            const variant = normalizeVariant({ family: kind, fp, h, seed, mask, roof: family.roofable && seed % 2 === 0 });
+            const ops = buildRecipe(variant).ops;
+            for (const sign of ops.filter((op) => op.group === 'signSocial')) {
+              signs++;
+              if (!signTouches(ops, sign)) floating.push(variantKey(variant));
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(floating, [], `${floating.length} of ${signs} signs float`);
+  assert.ok(signs > 500, `signs checked: ${signs}`);
 });
 
 test('amenities print, with and without connectors', async () => {

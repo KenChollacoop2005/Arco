@@ -1,5 +1,5 @@
 import { STORY_MM } from '../config.js';
-import { box, prismX, prismY, cyl, pyramid, octagon } from './kit.js';
+import { box, prismX, prismY, cyl, pyramid, octagon, groupAt } from './kit.js';
 import { openSides } from './catalog.js';
 import { makeStyle, applyFacades } from './facade.js';
 
@@ -8,6 +8,9 @@ const SHOP_SILL_MM = 3; // shopfront sill
 const SHOP_HEAD_MM = 6.5; // shopfront sign band
 const SIGN_MM = [6, 2.6, 0.5, 0.25, 5.5]; // sign width, height, out from the face, into it, top below the story line
 const CAP_SIGN_MM = [5, 2.4, 0.8, 6]; // cap sign width, height, thickness, bottom
+const SIGN_POST_MM = 1; // sign post square side, render only
+const SIGN_STEP_MM = 1; // wall sign search step, along and down
+const SIGN_PROBES = 5; // wall points checked behind a sign, per axis
 const GYM_LOUVRE_MM = [3, 1.2, 2.4]; // gym louvre grooves, depth, spacing
 const CROSS_MM = [3.5, 1.2, 1.4]; // facade cross half length, half width, depth
 const CLOCK_MM = [3, 1.6]; // school clock recess apothem and depth
@@ -36,21 +39,59 @@ const FRONTS = {
   arcade: 'blank', barber: 'shop', pharmacy: 'shop', workshop: 'blank', courier: 'blank', canteen: 'strip',
 };
 
-// Small sign on the first outward wall, render only
-function wallSign(kit) {
-  const run = kit.facades[0];
-  if (!run) return;
-  const [wide, tall, out, into, below] = SIGN_MM;
-  const middle = run.length / 2;
-  const top = STORY_MM - below;
-  kit.add('signSocial', run.box(middle - wide / 2, middle + wide / 2, top - tall, top, -out, into));
+// True when the wall behind a sign is solid and the front is clear
+function signSpot(kit, run, from, to, low, high, depth, front) {
+  for (let along = 0; along < SIGN_PROBES; along++) {
+    for (let up = 0; up < SIGN_PROBES; up++) {
+      const spot = { along: from + ((along + 0.5) / SIGN_PROBES) * (to - from), up: low + ((up + 0.5) / SIGN_PROBES) * (high - low) };
+      const point = run.point(spot.along, spot.up, depth);
+      const group = groupAt(kit.ops, point);
+      if (!group || group === 'glass') return false;
+      if (groupAt(kit.ops, run.point(spot.along, spot.up, -front))) return false;
+    }
+  }
+  return true;
 }
 
-// Sign plate on a cap, kept inside the cell, render only
-function capSign(kit) {
-  const [wide, tall, thick, bottom] = CAP_SIGN_MM;
+// Spots along a wall, middle first, then outward both ways
+function alongSpots(length, wide) {
+  const spots = [length / 2];
+  for (let shift = SIGN_STEP_MM; length / 2 - shift - wide / 2 >= 0; shift += SIGN_STEP_MM) spots.push(length / 2 - shift, length / 2 + shift);
+  return spots;
+}
+
+// Small sign flush on solid outward wall, story heads first, render only
+function wallSign(kit) {
+  const [wide, tall, out, into, below] = SIGN_MM;
+  const tops = [];
+  for (let story = 1; story <= kit.stories; story++) tops.push(story * STORY_MM - below);
+  for (let story = 1; story <= kit.stories; story++) {
+    for (let top = story * STORY_MM - below - SIGN_STEP_MM; top - tall >= (story - 1) * STORY_MM; top -= SIGN_STEP_MM) tops.push(top);
+  }
+  for (const run of kit.facades) {
+    for (const top of tops) {
+      for (const middle of alongSpots(run.length, wide)) {
+        if (!signSpot(kit, run, middle - wide / 2, middle + wide / 2, top - tall, top, into / 2, out / 2)) continue;
+        kit.add('signSocial', run.box(middle - wide / 2, middle + wide / 2, top - tall, top, -out, into));
+        return;
+      }
+    }
+  }
+}
+
+// Cap sign flush on a wall face looking down -y, render only
+function faceSign(kit, middle, faceY, bottom) {
+  const [wide, tall, thick] = CAP_SIGN_MM;
+  kit.add('signSocial', box(middle - wide / 2, faceY - thick, bottom, middle + wide / 2, faceY + SINK_MM, bottom + tall));
+}
+
+// Cap sign on a small post standing on the floor, render only
+function postSign(kit, floor) {
+  const [, tall, thick, bottom] = CAP_SIGN_MM;
   const middle = kit.W / 2;
-  kit.add('signSocial', box(middle - wide / 2, kit.clear, bottom, middle + wide / 2, kit.clear + thick, bottom + tall));
+  const back = kit.clear + thick;
+  kit.add('steelStub', box(middle - SIGN_POST_MM / 2, back, floor - SINK_MM, middle + SIGN_POST_MM / 2, back + SIGN_POST_MM, bottom + tall));
+  faceSign(kit, middle, back, bottom);
 }
 
 // Plain wall each kind keeps for its detail: a band under the top, or up to a door head
@@ -123,7 +164,7 @@ const FACE_DETAILS = {
   },
   barber(kit, run) {
     const [radius, tall, band] = POLE_MM;
-    const at = run.point(run.length - 3, 0, -radius - 0.4);
+    const at = run.point(run.length - 3, 0, -radius + SINK_MM);
     for (let level = 3; level + band <= 3 + tall; level += band * 2) {
       kit.add('signSocial', cyl(at[0], at[1], level, level + band, radius, radius, 8));
       kit.add('glass', cyl(at[0], at[1], level + band, level + band * 2, radius, radius, 8));
@@ -132,7 +173,7 @@ const FACE_DETAILS = {
   foodstall(kit, run) {
     const [half, drop] = LANTERN_SIGN_MM;
     for (const along of [3, run.length - 3]) {
-      const at = run.point(along, 0, -half - 0.4);
+      const at = run.point(along, 0, -half + SINK_MM);
       kit.add('signSocial', cyl(at[0], at[1], STORY_MM - 6 - drop, STORY_MM - 6, half, half, 8));
     }
   },
@@ -178,7 +219,8 @@ const CAPS = {
       kit.add('dark', pyramid(x, y, level + 3 - SINK_MM, level + 3 + rise, half - 1.5 + rise, half - 1.5));
       level += 3 + rise;
     }
-    capSign(kit);
+    // Sign on the front of the base
+    faceSign(kit, x, y - base, (baseTall - CAP_SIGN_MM[1]) / 2);
   },
   playground(kit) {
     kit.slab('paintTeal', kit.clear, 0, 1.4);
@@ -190,7 +232,7 @@ const CAPS = {
     const [post, tall, gap] = BARS_MM;
     for (const side of [-gap / 2, gap / 2]) kit.add('steel', box(x + 6 - post, y + side - post, 1.4 - SINK_MM, x + 6 + post, y + side + post, tall));
     for (let level = 3; level < tall; level += 3) kit.add('steel', box(x + 6 - post, y - gap / 2, level - 0.6, x + 6 + post, y + gap / 2, level + 0.6));
-    capSign(kit);
+    postSign(kit, 1.4);
   },
   teahouse(kit) {
     kit.slab('wood', kit.clear, 0, 1.6);
@@ -207,7 +249,7 @@ const CAPS = {
     // Roof widens at 45 degrees to its eaves along the long sides, a thick edge at the tips
     const edge = TEA_EDGE_MM;
     kit.add('dark', prismX([[low, eave - SINK_MM], [highY, eave - SINK_MM], [highY + flare, eave + flare], [highY + flare, eave + flare + edge], [low - flare, eave + flare + edge], [low - flare, eave + flare]], low, highX));
-    capSign(kit);
+    postSign(kit, 1.6);
   },
   lookout(kit) {
     const [x, y] = kit.cellCenters()[0];
@@ -225,7 +267,8 @@ const CAPS = {
     if (railed(3)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.clear + rail, kit.H));
     if (railed(1)) kit.add('steel', box(kit.clear, kit.D - kit.clear - rail, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
     if (railed(2)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.clear + rail, kit.D - kit.clear, kit.H));
-    capSign(kit);
+    // Sign on the column, under the corbel
+    faceSign(kit, x, y - post, CAP_SIGN_MM[3]);
   },
 };
 
