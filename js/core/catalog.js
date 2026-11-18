@@ -105,13 +105,15 @@ const TABLE = [
 ];
 
 // Categories the Generate panel can switch off; everything else is always on
-export const CATEGORIES = ['social', 'nature', 'industrial', 'walled'];
+export const CATEGORIES = ['social', 'nature', 'industrial', 'walled', 'utilities'];
+export const UTILITIES = 'utilities'; // services category, its own URL field
 const AMENITY_IDS = ['gym', 'clinic', 'school', 'shrine', 'bathhouse', 'foodstall', 'laundromat', 'library', 'arcade', 'playground', 'teahouse', 'barber', 'pharmacy', 'workshop', 'courier', 'canteen', 'lookout'];
 const CATEGORY_LISTS = {
   social: ['market', 'shop', 'hall', ...AMENITY_IDS],
   nature: ['farm', 'garden', 'greenhouse', 'planted'],
   industrial: ['smokestack', 'chimney', 'tankfarm', 'gantry', 'cooling', 'generator', 'disposal'],
   walled: ['shacks', 'flared'],
+  utilities: ['pumproom', 'smallpump', 'pumptank', 'watermain', 'powerroom', 'turbine', 'solar', 'generator', 'well', 'spring', 'raincatcher', 'wheel', 'wheelup', 'runoff', 'disposal'],
 };
 // What a resident might walk to: one type per amenity, for the walking network
 const AMENITY_TYPES = { market: 'market', shop: 'shop', hall: 'hall', ...Object.fromEntries(AMENITY_IDS.map((id) => [id, id])) };
@@ -170,13 +172,14 @@ for (const row of TABLE) {
     docks: !!rails && !NO_DOCK.includes(id),
     dockFootprints: DOCK_BRIDGES.includes(id) ? DOCK_SPAN : [],
     category: CATEGORIES.find((name) => CATEGORY_LISTS[name].includes(id)) || 'base',
+    categories: CATEGORIES.filter((name) => CATEGORY_LISTS[name].includes(id)),
     amenity: AMENITY_TYPES[id] || null,
     disabled: DISABLED_FAMILIES.includes(id),
   };
 }
 
 // True when a family may be generated with these categories on
-export const categoryOn = (familyId, categories) => !FAMILIES[familyId].disabled && (FAMILIES[familyId].category === 'base' || categories.includes(FAMILIES[familyId].category));
+export const categoryOn = (familyId, categories) => !FAMILIES[familyId].disabled && FAMILIES[familyId].categories.every((name) => categories.includes(name));
 
 export const FAMILY_IDS = Object.keys(FAMILIES);
 

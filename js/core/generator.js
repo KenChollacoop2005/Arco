@@ -18,7 +18,7 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { CATEGORIES, OPEN_SIDE_FAMILIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { CATEGORIES, UTILITIES, OPEN_SIDE_FAMILIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure, outwardMask } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
@@ -92,6 +92,7 @@ const DOCK_SPAN = [2, 5]; // docked bridge length range in cells
 const DOCK_SEED = 0xd0c5; // keeps dock rolls apart from layout rolls
 const PIER_SPAN = 4; // spans from this length get a pier
 const SERVICE_SEED = 0x5e771c; // keeps service rolls apart from layout rolls
+const UTILITIES_OFF_TEXT = 'noutil'; // seed text mark when utilities are off
 const SERVICE_ROUNDS = 6; // most stability repair passes for services
 const PUMP_ROOMS = [[0, 1], [1, 2], [1, 3]]; // pump rooms per structure by density: block, mega
 const SMALL_PUMPS = [[0, 1], [1, 2], [1, 4]]; // small pumps per structure by density: block, mega
@@ -1089,6 +1090,7 @@ function mainColumn(ctx, rng) {
 // Pump rooms, pumps, mains and power rooms, on their own rng
 function services(ctx) {
   const { world, opts } = ctx;
+  if (!opts.categories.includes(UTILITIES)) return;
   const rng = makeRng(mixSeed(hashString(opts.seed), SERVICE_SEED));
   const mega = opts.scale === 'mega' ? 1 : 0;
   const added = [];
@@ -1231,7 +1233,7 @@ function cover(consumers, sources, need, reachOf, left) {
 function fillServices(ctx) {
   const { world, opts } = ctx;
   const share = PLANNER_SHARE[opts.services];
-  if (!share) return;
+  if (!share || !opts.categories.includes(UTILITIES)) return;
   const rng = makeRng(mixSeed(hashString(opts.seed), PLANNER_SEED));
   const added = [];
   const keep = (instance) => {
@@ -1371,7 +1373,10 @@ export function openingOptions(seed) {
 export function generate(options) {
   const opts = normalizeOptions(options);
   // Categories join the seed only when some are off, so all on keeps the layout
-  const choiceText = [opts.scale, opts.density, opts.height, opts.daring, opts.theme, opts.unstable ? 1 : 0, opts.budget].join(':') + (opts.categories.length < CATEGORIES.length ? ':' + opts.categories.join(',') : '');
+  // Theme categories as before, so old links keep their layout; utilities off adds a mark
+  const themes = CATEGORIES.filter((name) => name !== UTILITIES);
+  const themesOn = opts.categories.filter((name) => themes.includes(name));
+  const choiceText = [opts.scale, opts.density, opts.height, opts.daring, opts.theme, opts.unstable ? 1 : 0, opts.budget].join(':') + (themesOn.length < themes.length ? ':' + themesOn.join(',') : '') + (opts.categories.includes(UTILITIES) ? '' : ':' + UTILITIES_OFF_TEXT);
   const rng = makeRng(mixSeed(hashString(opts.seed), hashString(choiceText)));
   const world = worldFromModules(opts.locked);
   const ctx = {

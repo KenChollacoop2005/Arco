@@ -1,5 +1,5 @@
 import { normalizeOptions, openingOptions, categoryList } from '../core/generator.js';
-import { CATEGORIES } from '../core/catalog.js';
+import { CATEGORIES, UTILITIES } from '../core/catalog.js';
 import { randomSeedText } from '../core/rng.js';
 import { COPY } from './copy.js';
 import { readSetting, writeSetting } from './legend.js';
@@ -13,8 +13,10 @@ function readUrl() {
   const params = new URLSearchParams(window.location.search);
   if (!params.get('seed')) return null;
   const options = { seed: params.get('seed'), unstable: params.get('unstable') === '1' };
-  // Old links have no categories: all on
-  if (params.has('cats')) options.categories = params.get('cats');
+  // Old links have no categories: all on; utilities has its own field, on unless 0
+  const themes = CATEGORIES.filter((name) => name !== UTILITIES);
+  const named = params.has('cats') ? params.get('cats').split(',').filter((name) => themes.includes(name)) : themes;
+  options.categories = params.get(UTILITIES) === '0' ? named : [...named, UTILITIES];
   for (const [field, name] of Object.entries(URL_KEYS)) {
     if (params.has(name)) options[field] = params.get(name);
   }
@@ -26,7 +28,9 @@ function writeUrl(options, budget) {
   params.set('seed', options.seed);
   for (const [field, name] of Object.entries(URL_KEYS)) params.set(name, options[field]);
   if (options.unstable) params.set('unstable', '1');
-  if (options.categories.length < CATEGORIES.length) params.set('cats', options.categories.join(','));
+  const themesOn = options.categories.filter((name) => name !== UTILITIES);
+  if (themesOn.length < CATEGORIES.length - 1) params.set('cats', themesOn.join(','));
+  if (!options.categories.includes(UTILITIES)) params.set(UTILITIES, '0');
   for (const [name, value] of Object.entries(budgetParams(budget))) params.set(name, value);
   window.history.replaceState(null, '', '?' + params.toString());
 }

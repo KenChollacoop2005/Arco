@@ -32,6 +32,7 @@ export const COPY = {
   catNature: 'Nature',
   catIndustrial: 'Industrial',
   catWalled: 'Walled City',
+  catUtilities: 'Utilities',
   seed: 'Seed',
   newSeed: 'New seed',
   allowUnstable: 'Allow unstable',
