@@ -25,6 +25,8 @@ export const COPY = {
   low: 'Low',
   mid: 'Mid',
   high: 'High',
+  off: 'Off',
+  services: 'Services',
   seed: 'Seed',
   newSeed: 'New seed',
   allowUnstable: 'Allow unstable',

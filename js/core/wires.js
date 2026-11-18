@@ -11,7 +11,6 @@ const SEE_THROUGH = new Set(['glass', 'pane']); // groups that do not count as w
 const CAT_ITER = 80; // bisection rounds for the catenary shape
 const CAT_B_MAX = 30; // widest catenary shape factor tried
 const BUNDLE_SLOTS = 1; // most offsets to one side of a shared run
-const PARALLEL = 0.9; // shifts this aligned count as one
 const WALL_DEPTHS_MM = [0.4, 1.2, 2, 2.8, 3.2]; // probe depths behind a wall face: panels end by 3, windows hold glass or nothing
 const ROOF_DEPTHS_MM = [0.4, 1.5, 2.6, 3.5]; // probe depths under a roof face, past a sunken tray
 const END_INSET_MM = 0.5; // wall checks start this far in from a run's ends
@@ -172,25 +171,12 @@ export function wirePath(graph, search, start) {
     const to = forward ? edge.b : edge.a;
     const points = [graph.nodes[at].p, ...(forward ? edge.via : [...edge.via].reverse()), graph.nodes[to].p];
     const normal = graph.checked.has(edgeId) ? graph.checked.get(edgeId).normal : null;
-    const last = pieces[pieces.length - 1];
     const kind = edge.kind === 'cross' ? 'span' : edge.kind === 'run' ? 'run' : edge.kind === 'wrap' ? 'wrap' : 'stub';
-    // Merge straight runs on one wall
-    if (last && kind === 'run' && last.kind === 'run' && sameLine(last.points[0], last.points[1], points[1]) && sameNormal(last.normal, normal)) last.points[1] = points[1];
-    else pieces.push({ kind, points, normal });
+    // Runs stay as the graph checked them, one edge each
+    pieces.push({ kind, points, normal });
     at = to;
   }
   return { pieces, end: graph.nodes[at].port, length: pieces.reduce((sum, piece) => sum + pathLength(piece.points), 0) };
-}
-
-const sameNormal = (first, second) => !!first && !!second && first.every((value, axis) => Math.abs(value - second[axis]) < EPS_MM);
-
-// True when three points lie on one straight line, heading on
-function sameLine(first, middle, last) {
-  const before = [0, 1, 2].map((axis) => middle[axis] - first[axis]);
-  const after = [0, 1, 2].map((axis) => last[axis] - middle[axis]);
-  const cross = [before[1] * after[2] - before[2] * after[1], before[2] * after[0] - before[0] * after[2], before[0] * after[1] - before[1] * after[0]];
-  const dot = before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
-  return Math.hypot(...cross) <= EPS_MM * Math.hypot(...before) * Math.hypot(...after) && dot > 0;
 }
 
 // A direct drape between two ports: stub out, one free span, stub in
@@ -301,28 +287,21 @@ export function bundleCables(cables, fits = () => true) {
         }
       }
     }
-    // Wraps follow the run before them; joints combine both neighbours
+    // Wraps follow the run before them
     pieces.forEach((piece, index) => {
       if (piece.kind === 'wrap') piece.shift = (pieces[index - 1] && pieces[index - 1].shift) || (pieces[index + 1] && pieces[index + 1].shift) || null;
     });
-    const combine = (first, second) => {
-      if (!first || !second) return first || second || null;
-      const dot = first.reduce((sum, value, axis) => sum + value * second[axis], 0);
-      return Math.abs(dot) > PARALLEL * Math.hypot(...first) * Math.hypot(...second) ? first : first.map((value, axis) => value + second[axis]);
-    };
     const moved = pieces.map((piece) => piece.points.map((point) => (piece.shift && piece.kind !== 'span' ? add(point, piece.shift) : [...point])));
-    // Runs keep their shift; one wall's runs share a mitre
+    // Runs keep their shift; other pieces meet them
     pieces.forEach((piece, index) => {
       if (index === 0) return;
       const before = pieces[index - 1];
       const corner = piece.points[0];
       const at = (shift) => (shift ? add(corner, shift) : [...corner]);
       if (before.kind === 'run' && piece.kind === 'run') {
-        if (sameNormal(before.normal, piece.normal)) moved[index - 1][moved[index - 1].length - 1] = moved[index][0] = at(combine(before.shift, piece.shift));
-        else {
-          moved[index - 1][moved[index - 1].length - 1] = at(before.shift);
-          moved[index][0] = at(piece.shift);
-        }
+        // Each run keeps its own shift; the short step between them stays at the joint
+        moved[index - 1][moved[index - 1].length - 1] = at(before.shift);
+        moved[index][0] = at(piece.shift);
       } else if (before.kind === 'run') moved[index][0] = moved[index - 1][moved[index - 1].length - 1] = at(before.shift);
       else if (piece.kind === 'run') moved[index - 1][moved[index - 1].length - 1] = moved[index][0] = at(piece.shift);
       else moved[index - 1][moved[index - 1].length - 1] = moved[index][0] = at(before.kind === 'span' ? piece.shift : before.shift);

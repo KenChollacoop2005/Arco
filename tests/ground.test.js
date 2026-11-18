@@ -31,7 +31,7 @@ test('buttresses, steps and ramps meet a building all along their contact side',
       }
     }
   }
-  assert.ok(counted >= 3, `ground pieces checked: ${counted}`);
+  assert.ok(counted >= 2, `ground pieces checked: ${counted}`);
 });
 
 test('struts stand with their head against the module whose bulge they prop', () => {

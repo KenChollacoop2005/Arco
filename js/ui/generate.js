@@ -6,7 +6,7 @@ import { BUDGET_HARD_CAP, BUDGET_CUSTOM_MIN, BUDGET_CUSTOM_DEFAULT, FANTASY_GROW
 import { makeBudget, budgetCap, generateLimits, budgetParams, budgetFromParams } from '../core/budget.js';
 
 const SKIP_KEY = 'arco.skipAnimation'; // remembered animation setting
-const URL_KEYS = { scale: 'scale', density: 'density', height: 'height', daring: 'cantilevers', theme: 'theme' };
+const URL_KEYS = { scale: 'scale', density: 'density', height: 'height', daring: 'cantilevers', theme: 'theme', services: 'services' };
 
 function readUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -75,13 +75,14 @@ export function setupGenerate(form, skipInput, generate) {
       height: data.get('height'),
       daring: data.get('daring'),
       theme: data.get('theme'),
+      services: data.get('services'),
       unstable: data.get('unstable') === 'on',
     });
   }
 
   function writeForm(options) {
     seedInput.value = options.seed;
-    for (const name of ['scale', 'density', 'height', 'daring', 'theme']) {
+    for (const name of ['scale', 'density', 'height', 'daring', 'theme', 'services']) {
       const input = form.querySelector(`input[name="${name}"][value="${options[name]}"]`);
       if (input) input.checked = true;
     }

@@ -7,7 +7,8 @@ import { validateStructure } from '../js/core/placement.js';
 import { runChecks } from '../js/core/checks.js';
 
 const CHOICES = { density: 1, height: 1, daring: 1, theme: 1 };
-const BASE_SEEDS = ['habitat', 'nakagin', 'trellick', 'barbican'];
+// barbican's block is full of caps once the services planner runs, so arco stands in
+const BASE_SEEDS = ['habitat', 'nakagin', 'trellick', 'arco'];
 const byId = (modules) => new Map(modules.map((instance) => [instance.id, instance]));
 
 function assertKept(grown, locked) {

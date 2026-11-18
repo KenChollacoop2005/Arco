@@ -23,8 +23,8 @@ const SERVICE_FAMILIES = {
 };
 const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
 const generated = SEEDS.flatMap((seed, index) => [
-  generate({ seed, scale: 'block', density: index % 3, height: (index + 1) % 3, daring: (index + 2) % 3, theme: 2 }),
-  generate({ seed, scale: 'mega', density: index % 3, height: (index + 1) % 3, daring: (index + 2) % 3, theme: 2 }),
+  generate({ seed, scale: 'block', density: index % 3, height: (index + 1) % 3, daring: (index + 2) % 3, theme: index % 3 }),
+  generate({ seed, scale: 'mega', density: index % 3, height: (index + 1) % 3, daring: (index + 2) % 3, theme: index % 3 }),
 ]);
 
 // Every footprint and height of a family over a few seeds

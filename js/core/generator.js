@@ -1,4 +1,6 @@
-import { MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX, BUDGET_HARD_CAP } from '../config.js';
+import {
+  MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX, BUDGET_HARD_CAP, POWER_SUPPLY, POWER_RELAYS, POWER_DEMAND, DEMAND_PER_CELL, DEMAND_PER_MODULE, SOURCE_FAMILIES, PUMP_KINDS, WATER_SOURCES,
+} from '../config.js';
 import {
   SIDES,
   FOOTPRINTS,
@@ -16,7 +18,7 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
@@ -106,6 +108,21 @@ const RUNOFFS = [[0, 1], [0, 1], [0, 1]]; // runoff outlets by density: block, m
 const DISPOSALS = [[0, 1], [0, 1], [0, 1]]; // disposal outlets by density: block, mega
 const STREAM_WHEELS = [1, 2, 2]; // most stream wheels by density
 const JUNCTION_CHANCE = 0.12; // share of wall-bearing modules with a junction box
+const PLANNER_SEED = 0x91a11e; // keeps planner rolls apart from other rolls
+export const SERVICE_LEVELS = ['off', 'low', 'high']; // services planner choices
+const PLANNER_SHARE = { off: 0, low: 0.35, high: 0.9 }; // share of unserved consumers the planner serves
+const PLANNER_WATER_REACH = 3; // cells a rain catcher or pump is put within
+const PLANNER_POWER_REACH = 4; // cells a new power source is put within
+const PLANNER_SOURCES = [['solar', 3], ['turbine', 2]]; // power sources the planner adds, weighted
+const PLANNER_SOURCES_HIGH = [['generator', 3], ['turbine', 2], ['solar', 1]]; // power sources on High, weighted
+const PLANNER_PUMP_REACH = 5; // cells within which a pump or source already serves a consumer
+const PLANNER_PUMP_ROOM_SHARE = 0.5; // share of water fixes that try a pump room first
+const PLANNER_ROOF_WATER = [['raincatcher', 3], ['pumptank', 1]]; // roof water fixes, weighted
+const PLANNER_GROUND_WATER = [['pumproom', 3], ['well', 1]]; // ground water fixes, weighted
+const PLANNER_TANK_SHARE = 0.25; // share of dry consumers given a pumped tank before power is planned
+const PLANNER_ROUTE_FACTOR = 1.6; // real wire and pipe routes run about this much longer than a straight guess
+const PLANNER_TRIES = 6; // nearest roof cells tried per piece
+const PLANNER_WHEEL_GUESS = 1; // power guessed for a raised wheel before the water runs
 const PUMPED_TANK_CHANCE = 0.4; // chance a tank gets a pump
 const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
 const NEAR_CELLS = 2; // reach of near, in cells
@@ -1086,6 +1103,149 @@ function services(ctx) {
   for (const instance of pumped) instance.family = 'tank';
 }
 
+// Plan centre of a module in cells, and the story of its top
+const centreOf = (instance) => {
+  const cells = instanceCells(instance);
+  return [cells.reduce((sum, cell) => sum + cell[0] + 0.5, 0) / cells.length, cells.reduce((sum, cell) => sum + cell[1] + 0.5, 0) / cells.length, instance.z + instance.h];
+};
+// Wire run between two modules as cells across plus stories between: a short guess at the real route
+const runBetween = (first, second) => {
+  const [ax, ay, az] = centreOf(first);
+  const [bx, by, bz] = centreOf(second);
+  return (Math.hypot(ax - bx, ay - by) + Math.abs(az - bz)) * PLANNER_ROUTE_FACTOR;
+};
+// Power and water role of a module from the tables, without the solvers
+function roleOf(instance) {
+  const family = instance.family;
+  if (POWER_SUPPLY[family] || family === 'wheelup') return { power: 'source', supply: (POWER_SUPPLY[family] || POWER_SUPPLY.wheelup)[0] || PLANNER_WHEEL_GUESS, reach: (POWER_SUPPLY[family] || POWER_SUPPLY.wheelup)[1] };
+  if (POWER_RELAYS[family]) return { power: 'relay', reach: POWER_RELAYS[family][0] };
+  const demand = family === 'plant' ? (hasPump(instance) ? POWER_DEMAND.plantpump : 0) : POWER_DEMAND[family] || 0;
+  return { power: demand > 0 ? 'consumer' : null, demand };
+}
+const thirst = (instance) => (DEMAND_PER_CELL[instance.family] || 0) * instanceCells(instance).length + (DEMAND_PER_MODULE[instance.family] || 0);
+
+// Open roof cell near a module, the nearest first, at or above a story when asked
+function roofNear(ctx, rng, family, target, reach, lowest = 0) {
+  const { world } = ctx;
+  const top = worldHeight(world);
+  const [x, y] = centreOf(target);
+  const cells = ctx.site
+    .map(([cellX, cellY]) => ({ cellX, cellY, level: columnTop(world, cellX, cellY, top), gap: Math.hypot(cellX + 0.5 - x, cellY + 0.5 - y) }))
+    .filter(({ cellX, cellY, level, gap }) => level > 0 && level >= lowest && gap <= reach && supportedAt(world, cellX, cellY, level))
+    .sort((first, second) => first.gap - second.gap || first.cellX - second.cellX || first.cellY - second.cellY);
+  for (const { cellX, cellY, level } of cells.slice(0, PLANNER_TRIES)) {
+    const placed = place(ctx, { family, fp: '1x1', h: FAMILIES[family].minStories, seed: rng.int(1, 0x7fffffff), x: cellX, y: cellY, z: level, rot: rng.int(0, 3) });
+    if (placed) return placed;
+  }
+  return null;
+}
+
+// Empty ground cell beside a building near a module, the nearest first
+function groundNear(ctx, rng, family, target, reach) {
+  const { world } = ctx;
+  const [x, y] = centreOf(target);
+  const spec = FAMILIES[family];
+  // A megastructure may use open plinth beside it; a block keeps to its site
+  const cells = (ctx.opts.scale === 'mega' ? plinthCells() : ctx.site)
+    .map(([cellX, cellY]) => ({ cellX, cellY, gap: Math.hypot(cellX + 0.5 - x, cellY + 0.5 - y) }))
+    .filter(({ cellX, cellY, gap }) => gap <= reach && ctx.groundOk(cellX, cellY) && !onStream(ctx.stream, cellX, cellY) && emptyAt(world, cellX, cellY, 0, spec.maxStories) && SIDES.some(([stepX, stepY]) => moduleAt(world, cellX + stepX, cellY + stepY, 0)))
+    .sort((first, second) => first.gap - second.gap || first.cellX - second.cellX || first.cellY - second.cellY);
+  for (const { cellX, cellY } of cells.slice(0, PLANNER_TRIES)) {
+    const placed = place(ctx, { family, fp: '1x1', h: spec.minStories, seed: rng.int(1, 0x7fffffff), x: cellX, y: cellY, z: 0, rot: rng.int(0, 3) });
+    if (placed) return placed;
+  }
+  return null;
+}
+
+// Water a module holds of its own, in units, from the source table
+function ownWater(instance) {
+  if (SOURCE_FAMILIES[instance.family]) return WATER_SOURCES[SOURCE_FAMILIES[instance.family]][0];
+  return hasPump(instance) && PUMP_KINDS[instance.family] ? WATER_SOURCES[PUMP_KINDS[instance.family]][0] : 0;
+}
+
+// Greedy cover: each consumer takes from the nearest source in reach that has enough left
+function cover(consumers, sources, need, reachOf, left) {
+  const unserved = [];
+  for (const consumer of consumers) {
+    const options = sources.filter((source) => left.get(source.id) >= need(consumer) && runBetween(source, consumer) <= reachOf(source, consumer)).sort((first, second) => runBetween(first, consumer) - runBetween(second, consumer) || first.id - second.id);
+    if (options.length === 0) unserved.push(consumer);
+    else left.set(options[0].id, left.get(options[0].id) - need(consumer));
+  }
+  return unserved;
+}
+
+// Services planner: powers pumps, adds pumps and sources near consumers left without, a share by level; never removes
+function fillServices(ctx) {
+  const { world, opts } = ctx;
+  const share = PLANNER_SHARE[opts.services];
+  if (!share) return;
+  const rng = makeRng(mixSeed(hashString(opts.seed), PLANNER_SEED));
+  const added = [];
+  const keep = (instance) => {
+    if (instance) added.push(instance);
+    return instance;
+  };
+  const all = () => [...world.modules.values()];
+  // A source near a module: on a roof when one is free, else on the ground beside a building
+  const powerNear = (target) => {
+    const family = rng.weighted(opts.services === 'high' ? PLANNER_SOURCES_HIGH : PLANNER_SOURCES);
+    return keep(roofNear(ctx, rng, family, target, PLANNER_POWER_REACH)) || keep(groundNear(ctx, rng, family, target, PLANNER_POWER_REACH));
+  };
+  // Water: dry consumers get a pump room beside them now; rain catchers wait until power has its roofs
+  const order = rng.shuffle(all().filter((instance) => thirst(instance) > 0));
+  const waterLeft = new Map(all().map((instance) => [instance.id, ownWater(instance)]));
+  const waterReach = (source, consumer) => (hasPump(source) || source.z + source.h >= consumer.z + consumer.h ? PLANNER_PUMP_REACH : 0);
+  const stillDry = [];
+  for (const consumer of cover(order, all().filter((instance) => ownWater(instance) > 0), thirst, waterReach, waterLeft)) {
+    if (!rng.chance(share)) continue;
+    const piece = rng.chance(PLANNER_PUMP_ROOM_SHARE) ? keep(groundNear(ctx, rng, rng.weighted(PLANNER_GROUND_WATER), consumer, PLANNER_PUMP_REACH)) : null;
+    if (!piece) {
+      stillDry.push(consumer);
+      continue;
+    }
+    waterLeft.set(piece.id, ownWater(piece) - thirst(consumer));
+    // Later consumers may share the new piece
+    for (const other of all()) if (!waterLeft.has(other.id)) waterLeft.set(other.id, ownWater(other));
+  }
+  // Power: pumps first, then the rest; each source serves up to its supply
+  for (const consumer of stillDry) {
+    const piece = rng.chance(PLANNER_TANK_SHARE) ? keep(roofNear(ctx, rng, 'pumptank', consumer, PLANNER_WATER_REACH, consumer.z + consumer.h)) : null;
+    if (piece) stillDry.splice(stillDry.indexOf(consumer), 1);
+  }
+  const powerLeft = new Map(all().map((instance) => [instance.id, roleOf(instance).power === 'source' ? roleOf(instance).supply : 0]));
+  const consumers = all().filter((instance) => roleOf(instance).power === 'consumer');
+  const pumpsFirst = [...rng.shuffle(consumers.filter((instance) => hasPump(instance))), ...rng.shuffle(consumers.filter((instance) => !hasPump(instance)))];
+  const relayReach = (instance) => (POWER_RELAYS[instance.family] ? POWER_RELAYS[instance.family][0] : instance.jb ? POWER_RELAYS.junction[0] : 0);
+  // A source reaches straight or through a relay within both reaches
+  const powerReach = (source, consumer) => Math.max(roleOf(source).reach, ...all().filter((relay) => relayReach(relay) > 0 && runBetween(source, relay) <= roleOf(source).reach && runBetween(relay, consumer) <= relayReach(relay)).map(() => Infinity));
+  for (const consumer of cover(pumpsFirst, all().filter((instance) => roleOf(instance).power === 'source'), (instance) => roleOf(instance).demand, powerReach, powerLeft)) {
+    if (!rng.chance(share)) continue;
+    // A junction box when a source with power to spare is near, else a source of its own
+    const spare = all().find((source) => powerLeft.get(source.id) >= roleOf(consumer).demand && runBetween(source, consumer) <= roleOf(source).reach + POWER_RELAYS.junction[0]);
+    if (spare && JUNCTION_FAMILIES.includes(consumer.family) && !consumer.jb && !ctx.locked.has(consumer.id)) {
+      consumer.jb = 1;
+      powerLeft.set(spare.id, powerLeft.get(spare.id) - roleOf(consumer).demand);
+      continue;
+    }
+    const source = powerNear(consumer);
+    if (source) powerLeft.set(source.id, roleOf(source).supply - roleOf(consumer).demand);
+  }
+  // Rain catchers on the roofs left, above consumers still dry
+  for (const consumer of stillDry) {
+    const piece = keep(roofNear(ctx, rng, rng.weighted(PLANNER_ROOF_WATER), consumer, PLANNER_WATER_REACH, consumer.z + consumer.h));
+    if (!piece) keep(groundNear(ctx, rng, rng.weighted(PLANNER_GROUND_WATER), consumer, PLANNER_PUMP_REACH));
+  }
+  if (opts.unstable || added.length === 0) return;
+  // New parts go again until the structure passes, as the services pass does
+  for (let round = 0; round < SERVICE_ROUNDS && added.length > 0; round++) {
+    const result = checkStability(bodiesOf(world));
+    if (result.status === 'pass') return;
+    const failing = added.filter((instance) => result.modules.get(instance.id).status !== 'pass');
+    for (const instance of failing.length > 0 ? failing : added.splice(0)) removeModule(world, instance.id);
+    for (const instance of failing) added.splice(added.indexOf(instance), 1);
+  }
+}
+
 function unit(ctx) {
   const { rng } = ctx;
   const family = FAMILIES[rng.pick(FAMILY_IDS.filter((id) => !UNIT_SKIP.includes(id)))];
@@ -1124,6 +1284,8 @@ export function normalizeOptions(options = {}) {
     // Module cap from the budget control; a plain limit, not part of the seed
     cap: options.cap ? Math.min(BUDGET_HARD_CAP, Math.max(1, Math.round(options.cap))) : 0,
     rise: !!options.rise,
+    // Services planner level; its own rolls, so the layout stays the same
+    services: SERVICE_LEVELS.includes(options.services) ? options.services : 'low',
     locked: options.locked || [],
   };
 }
@@ -1178,6 +1340,8 @@ export function generate(options) {
     spans(ctx);
     dockBridges(ctx);
     roofs(ctx);
+    // The planner goes before dressing, while roofs and ground are still free
+    fillServices(ctx);
     dressTops(ctx, CAP_CHANCE[opts.density]);
     dressGround(ctx, GROUND_CHANCE[opts.density]);
     for (let round = 0; round < TOPUP_ROUNDS && world.modules.size < opts.budgetMin; round++) {

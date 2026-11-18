@@ -136,7 +136,8 @@ function fakeView(modules) {
 
 test('switching physics off restores every pose exactly', async () => {
   const RAPIER = await getRapier();
-  const { modules } = generate({ seed: 'x9', scale: 'block', density: 0, height: 1, daring: 2, theme: 0, unstable: true });
+  // An unstable block where parts tip
+  const { modules } = generate({ seed: 'lumen', scale: 'block', density: 0, height: 1, daring: 2, theme: 0, unstable: true });
   const before = structuredClone(modules);
   const rest = restPoses(modules);
   const view = fakeView(modules);
