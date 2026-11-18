@@ -1,3 +1,4 @@
+import { streamReason } from './stream.js';
 import { MAX_MODULES } from '../config.js';
 import {
   SIDES,
@@ -189,6 +190,11 @@ export function checkPlacement(world, instance, options = {}) {
       const other = moduleAt(world, cellX, cellY, level);
       if (other && other.id !== instance.id) return { ok: false, reason: 'Overlaps another module' };
     }
+  }
+  // The stream takes only wheels and arches, turned with the flow
+  if (options.stream !== undefined) {
+    const wet = streamReason(options.stream, instance, cells);
+    if (wet) return { ok: false, reason: wet };
   }
   const reserve = reserveConflict(world, instance, cells);
   if (reserve) return { ok: false, reason: reserve };

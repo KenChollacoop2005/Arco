@@ -4,7 +4,7 @@ import { stringContext } from '../core/strings.js';
 import { planServices } from '../core/services.js';
 
 // Active string ports, only what the renderer needs
-const portView = (port) => ({ module: port.module, index: port.index, type: port.type, position: port.position, normal: port.normal });
+const portView = (port) => ({ module: port.module, index: port.index, type: port.type, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
 
 self.onmessage = (event) => {
   const { id, modules, seed } = event.data;

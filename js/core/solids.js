@@ -1,5 +1,5 @@
 import { CONNECTOR_CLEARANCE_MM } from '../config.js';
-import { GROUPS, KIND_SPIN, KIND_SWAY } from './palette.js';
+import { GROUPS, KIND_SPIN, KIND_SPIN_X, KIND_SPIN_Y, KIND_SWAY } from './palette.js';
 import { buildRecipe } from './recipes.js';
 import { creaseEdges, meshStats, weldMesh } from './meshtools.js';
 import { connectorPlan, connectorOps, socketProbe } from './connectors.js';
@@ -157,6 +157,15 @@ export function createSolids(wasm) {
         if (kind === KIND_SPIN && anchors.spin) {
           meta[at + 1] = anchors.spin[0];
           meta[at + 2] = anchors.spin[1];
+        } else if ((kind === KIND_SPIN_X && anchors.spinX) || (kind === KIND_SPIN_Y && anchors.spinY)) {
+          // Nearest axle of this kind, in the plane it turns in
+          const [first, second] = kind === KIND_SPIN_X ? [1, 2] : [0, 2];
+          const point = [mesh.positions[vertex * 3], mesh.positions[vertex * 3 + 1], mesh.positions[vertex * 3 + 2]];
+          const axles = kind === KIND_SPIN_X ? anchors.spinX : anchors.spinY;
+          const near = (axle) => Math.hypot(point[first] - axle[0], point[second] - axle[1]);
+          const nearest = axles.reduce((best, axle) => (near(axle) < near(best) ? axle : best));
+          meta[at + 1] = nearest[0];
+          meta[at + 2] = nearest[1];
         } else if (kind === KIND_SWAY) {
           meta[at + 1] = 1;
         }

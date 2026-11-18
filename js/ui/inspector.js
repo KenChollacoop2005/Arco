@@ -20,11 +20,39 @@ export function waterText(flows, id) {
   return parts.join(', ');
 }
 
-// Powered or not, for modules with a power bracket
+const POWER_REASON = { 'no route': 'powerNoRoute', 'source empty': 'powerEmpty', 'relay at throughput': 'powerRelayFull', 'no free port': 'powerNoPort', 'blocked by module': 'powerBlocked' }; // solver reason to copy key
+
+// Why power is short, as plain words
+function powerReason(report) {
+  if (report.reason === 'out of reach') return report.short ? `${COPY.powerShortBy} ${amount(report.short)}` : COPY.powerOutOfReach;
+  return report.reason ? COPY[POWER_REASON[report.reason]] : '';
+}
+
+// Power lines for a module: what it makes, takes or relays, and whether a pump runs
 export function powerText(flows, id) {
-  if (!flows || !flows.services) return null;
-  if (flows.services.power.powered.includes(id)) return COPY.powered;
-  return flows.ports.some((port) => port.module === id && port.type === 'power') ? COPY.notPowered : null;
+  const power = flows && flows.services && flows.services.power;
+  if (!power || !power.consumers) return null;
+  const lines = [];
+  const source = (power.nodes || []).find((node) => node.module === id && node.kind === 'source');
+  if (source) lines.push(`${COPY.powerMakes} ${amount(source.supply)} ${COPY.powerUnits}`);
+  const report = power.consumers[id];
+  if (report && !report.relay) {
+    if (report.status === 'dry') lines.push(`${COPY.notPowered}: ${powerReason(report)}`);
+    else {
+      const parts = [`${COPY.power}: ${amount(report.received)} ${COPY.powerOf} ${amount(report.demand)}`];
+      if (report.status === 'partial') parts.push(COPY.powerPartial, powerReason(report));
+      lines.push(parts.filter(Boolean).join(', '));
+    }
+    const pump = flows.services.water && flows.services.water.pumps && flows.services.water.pumps[id];
+    if (pump) lines.push(pump.runs ? COPY.pumpRuns : COPY.pumpOff);
+  }
+  for (const key of [String(id), `${id}:box`]) {
+    const relay = power.consumers[key];
+    if (!relay || !relay.relay) continue;
+    const node = (power.nodes || []).find((entry) => entry.id === key);
+    lines.push(relay.fed ? `${COPY.relayPasses} ${amount(relay.received)} ${COPY.powerOf} ${amount(node ? node.throughput : 0)}` : [COPY.relayIdle, relay.reason && COPY[POWER_REASON[relay.reason]]].filter(Boolean).join(', '));
+  }
+  return lines.length > 0 ? lines.join('. ') : null;
 }
 
 function node(tag, className, text) {

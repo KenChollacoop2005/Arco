@@ -1,6 +1,6 @@
 import { CELL_MM, STORY_MM, PORT_RAY_OUT_MM, PORT_RAY_IN_MM, PORT_RAY_STEP_MM, PORT_TRIES, PORT_FRONT_MM } from '../config.js';
 import { FOOTPRINTS, SIDES, instancePose, poseApply, variantKey, worldFromModules, moduleAt, instanceCells } from './grid.js';
-import { FAMILIES, hasPump } from './catalog.js';
+import { FAMILIES, hasPump, JUNCTION_FAMILIES } from './catalog.js';
 import { PORT_TYPES } from './ports.js';
 import { buildRecipe } from './recipes.js';
 import { variantColliders } from './physics.js';
@@ -11,7 +11,7 @@ const REFINE_STEPS = 14; // halvings after the probe hits
 const ALONG = [0.15, 0.85]; // default spot along a cell edge, share
 const WIDE_Z = [0.08, 0.96]; // height range of the fallback tries, share
 // Groups a bracket never sits on
-const NO_MOUNT = new Set(['glass', 'pane', 'plant', 'plantDark', 'plantLight', 'soil', 'rotor', 'tarpTerracotta', 'tarpMustard', 'tarpTeal']);
+const NO_MOUNT = new Set(['glass', 'pane', 'plant', 'plantDark', 'plantLight', 'soil', 'rotor', 'blade', 'wheel', 'tarpTerracotta', 'tarpMustard', 'tarpTeal']);
 export const MOUNT_EACH = ['module', 'side', 'cell', 'story'];
 
 // Rule presets: type, sides, each, height share (z) or mm (zMm), along, capacity, roof
@@ -32,6 +32,7 @@ const TANK = [
   { type: 'water-in', sides: 'any', each: 'module', z: [0.5, 0.7], along: [0.4, 0.6] },
 ];
 const MACHINE = (low, high) => [{ type: 'power', sides: 'any', each: 'module', zMm: [low, high], along: [0.35, 0.65] }];
+const JUNCTION = { type: 'power', sides: 'facade', each: 'module', z: [0.3, 0.6], along: [0.25, 0.75], capacity: 4, relay: true, when: 'jbox' };
 
 // Physical string ports per family, resolved on the real surface
 export const MOUNT_PORTS = {
@@ -86,8 +87,28 @@ export const MOUNT_PORTS = {
   smallpump: [
     { type: 'water-in', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
     { type: 'water-out', sides: 'any', each: 'module', zMm: [5, 13], along: [0.4, 0.5] },
+    ...MACHINE(1.5, 3.5),
   ],
+  generator: [{ type: 'power', sides: 'any', each: 'side', z: [0.2, 0.5], along: [0.3, 0.7], capacity: 4 }],
+  spring: [{ type: 'water-out', sides: 'any', each: 'module', zMm: [5.3, 5.8], along: [0.35, 0.65] }],
+  raincatcher: [{ type: 'water-out', sides: 'any', each: 'module', zMm: [3, 9], along: [0.4, 0.6] }],
+  well: [
+    { type: 'water-out', sides: 'any', each: 'module', zMm: [1.5, 5.5], along: [0.4, 0.6] },
+    { type: 'power', sides: 'any', each: 'module', zMm: [7, 10], along: [0.3, 0.7] },
+  ],
+  wheel: [{ type: 'power', sides: 'any', each: 'module', zMm: [4, 10], along: [0.2, 0.4], capacity: 4 }],
+  wheelup: [
+    { type: 'water-in', sides: 'any', each: 'module', zMm: [21.5, 23], along: [0.25, 0.4] },
+    { type: 'water-out', sides: 'any', each: 'module', zMm: [1.5, 3.5], along: [0.4, 0.6] },
+    { type: 'power', sides: 'any', each: 'module', zMm: [6, 12], along: [0.2, 0.35] },
+  ],
+  runoff: [{ type: 'water-in', sides: 'any', each: 'module', zMm: [2, 6], along: [0.4, 0.6] }],
+  disposal: [{ type: 'water-in', sides: 'any', each: 'module', zMm: [2, 6], along: [0.4, 0.6] }],
 };
+// A pumped tank gets a power bracket after its water ports
+MOUNT_PORTS.pumptank = [...TANK, ...MACHINE(4, 9)];
+// A junction box sits on an outward wall of wall-bearing families that carry one
+for (const family of JUNCTION_FAMILIES) MOUNT_PORTS[family] = [...(MOUNT_PORTS[family] || []), JUNCTION];
 
 const inBox = (shape, point) => point.every((value, axis) => value > shape.min[axis] && value < shape.max[axis]);
 
@@ -223,11 +244,11 @@ export function variantMounts(variant, rules = MOUNT_PORTS[variant.family] || []
     const rng = makeRng(mixSeed(variant.seed >>> 0, MOUNT_SEED));
     for (const rule of rules) {
       const kind = PORT_TYPES[rule.type];
-      if (!kind || (rule.when === 'pump' && !hasPump(variant))) continue;
+      if (!kind || (rule.when === 'pump' && !hasPump(variant)) || (rule.when === 'jbox' && !variant.jb)) continue;
       for (const group of edgeGroups(rule, variant, cells)) {
         const port = placePort(ops, rule, variant, group, rng);
         if (!port) continue;
-        ports.push({ index: ports.length, type: rule.type, capacity: rule.capacity === undefined ? kind.capacity : rule.capacity, roof: !!rule.roof, ...port });
+        ports.push({ index: ports.length, type: rule.type, capacity: rule.capacity === undefined ? kind.capacity : rule.capacity, roof: !!rule.roof, ...(rule.relay ? { relay: true } : {}), ...port });
       }
     }
   }

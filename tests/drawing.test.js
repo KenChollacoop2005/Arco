@@ -76,7 +76,13 @@ test('services overlay draws strings, dashed blocked attempts and dry or partial
   const dry = consumers.filter((report) => report.status === 'dry').length;
   const partial = consumers.filter((report) => report.status === 'partial').length;
   assert.ok(dry > 0 && partial > 0);
-  const marks = dry * 6 + partial * 4;
+  // Power marks follow: short consumers like water ones, relays as a square
+  const powerReports = Object.values(services.power.consumers);
+  const powerDry = powerReports.filter((report) => !report.relay && report.status === 'dry').length;
+  const powerPartial = powerReports.filter((report) => !report.relay && report.status === 'partial').length;
+  const relaysFed = powerReports.filter((report) => report.relay && report.fed).length;
+  const relaysIdle = powerReports.filter((report) => report.relay && !report.fed).length;
+  const marks = dry * 6 + partial * 4 + powerDry * 6 + powerPartial * 4 + (relaysFed + relaysIdle) * 4;
   const dashStart = pipeSteps + sheetSteps + wireSteps;
   const dashes = lines.statuses.length - dashStart - marks;
   assert.ok(dashes > steps(services.blocked), 'blocked strings are cut into dashes');
@@ -88,8 +94,9 @@ test('services overlay draws strings, dashed blocked attempts and dry or partial
   assert.deepEqual(new Set(lines.statuses.slice(dashStart, dashStart + dashes)), blockedTypes);
   // Marks: dry red with a cross, partial orange
   const markStatuses = lines.statuses.slice(dashStart + dashes);
-  assert.equal(markStatuses.filter((status) => status === 'fail').length, dry * 6);
-  assert.equal(markStatuses.filter((status) => status === 'warn').length, partial * 4);
+  assert.equal(markStatuses.filter((status) => status === 'fail').length, (dry + powerDry) * 6);
+  assert.equal(markStatuses.filter((status) => status === 'warn').length, (partial + powerPartial + relaysIdle) * 4);
+  assert.equal(markStatuses.filter((status) => status === 'power').length, relaysFed * 4);
   const partialId = Number(Object.keys(services.water.consumers).find((id) => services.water.consumers[id].status === 'partial'));
   const instance = structure.modules.find((module) => module.id === partialId);
   const warnAt = lines.statuses.indexOf('warn', dashStart + dashes);
@@ -98,14 +105,27 @@ test('services overlay draws strings, dashed blocked attempts and dry or partial
 
 test('inspector water and power lines read the solver and the wires', () => {
   const consumers = { 1: { received: 0.5, demand: 1, headLeft: null, status: 'partial', reason: 'out of head', short: 2 }, 2: { received: 0.25, demand: 0.25, headLeft: 1, status: 'full', reason: null, short: 0 }, 3: { received: 0, demand: 0.5, headLeft: null, status: 'dry', reason: 'no free port', short: 0 } };
-  const flows = { ports: [{ module: 4, type: 'power' }, { module: 5, type: 'water-in' }], services: { water: { consumers }, power: { powered: [1] } } };
+  const power = {
+    nodes: [{ id: '6', module: 6, kind: 'source', supply: 2 }, { id: '7', module: 7, kind: 'relay', throughput: 8 }, { id: '4:box', module: 4, kind: 'relay', throughput: 3 }],
+    consumers: {
+      1: { received: 0.5, demand: 0.5, reachLeft: 2, status: 'full', reason: null, short: 0 },
+      4: { received: 0, demand: 0.5, reachLeft: null, status: 'dry', reason: 'out of reach', short: 2 },
+      8: { received: 0.25, demand: 1, reachLeft: 1, status: 'partial', reason: 'relay at throughput', short: 0 },
+      7: { relay: true, fed: true, received: 1.5, capped: false, reason: null },
+      '4:box': { relay: true, fed: false, received: 0, capped: false, reason: 'no route' },
+    },
+  };
+  const flows = { ports: [{ module: 4, type: 'power' }, { module: 5, type: 'water-in' }], services: { water: { consumers, pumps: { 8: { runs: false } } }, power } };
   assert.equal(waterText(flows, 1), `${COPY.water}: 0.5 ${COPY.waterOf} 1, ${COPY.waterPartial}, ${COPY.waterShortBy} 2`);
   assert.equal(waterText(flows, 2), `${COPY.water}: 0.25 ${COPY.waterOf} 0.25, ${COPY.waterFull}`);
   assert.equal(waterText(flows, 3), `${COPY.water}: 0 ${COPY.waterOf} 0.5, ${COPY.waterDry}, ${COPY.waterNoPort}`);
   assert.equal(waterText(flows, 4), null);
   assert.equal(waterText(null, 1), null);
-  assert.equal(powerText(flows, 1), COPY.powered);
-  assert.equal(powerText(flows, 4), COPY.notPowered);
+  assert.equal(powerText(flows, 1), `${COPY.power}: 0.5 ${COPY.powerOf} 0.5`);
+  assert.equal(powerText(flows, 4), `${COPY.notPowered}: ${COPY.powerShortBy} 2. ${COPY.relayIdle}, ${COPY.powerNoRoute}`);
+  assert.equal(powerText(flows, 8), `${COPY.power}: 0.25 ${COPY.powerOf} 1, ${COPY.powerPartial}, ${COPY.powerRelayFull}. ${COPY.pumpOff}`);
+  assert.equal(powerText(flows, 6), `${COPY.powerMakes} 2 ${COPY.powerUnits}`);
+  assert.equal(powerText(flows, 7), `${COPY.relayPasses} 1.5 ${COPY.powerOf} 8`);
   assert.equal(powerText(flows, 5), null);
   // Every solver reason has a line
   const structure = generate({ seed: 'barbican', scale: 'mega', density: 'high' });

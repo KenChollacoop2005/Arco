@@ -15,8 +15,9 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, PLUG_ENDS, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
+import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
 import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, JETTY, cleanProfiles, packProfiles, profileAt, profileKinds } from './profiles.js';
@@ -94,6 +95,16 @@ const MAINS = [[0, 1], [1, 2], [1, 2]]; // water main columns per structure by d
 const MAIN_RISE = [2, 9]; // water main column height range in stories
 const POWER_ROOMS = [[0, 1], [1, 2], [1, 3]]; // power rooms per structure by density: block, mega
 const HOMES = ['housing', 'studio', 'shacks', 'flared', 'penthouse', 'hall']; // families a power room goes near
+const INDUSTRY = ['smokestack', 'chimney', 'cooling', 'tankfarm', 'pipes', 'pumproom']; // families industry goes near
+const GENERATORS = [[0, 1], [0, 1], [1, 2]]; // generator rooms by density: block, mega
+const SPRINGS = [[0, 1], [0, 1], [0, 2]]; // springs by density: block, mega
+const WELLS = [[0, 1], [0, 1], [0, 1]]; // wells by density: block, mega
+const RAIN_CATCHERS = [[0, 1], [1, 2], [1, 3]]; // rain catchers by density: block, mega
+const RAISED_WHEELS = [[0, 1], [0, 1], [0, 1]]; // raised water wheels by density: block, mega
+const RUNOFFS = [[0, 1], [0, 1], [0, 1]]; // runoff outlets by density: block, mega
+const DISPOSALS = [[0, 1], [0, 1], [0, 1]]; // disposal outlets by density: block, mega
+const STREAM_WHEELS = [1, 2, 2]; // most stream wheels by density
+const JUNCTION_CHANCE = 0.12; // share of wall-bearing modules with a junction box
 const PUMPED_TANK_CHANCE = 0.4; // chance a tank gets a pump
 const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // families a pump goes near
 const NEAR_CELLS = 2; // reach of near, in cells
@@ -114,7 +125,8 @@ const ROOF_ECO = [['solar', 3], ['turbine', 2], ['farm', 2], ['greenhouse', 2], 
 const GROUND_CAPS = [['steps', 2], ['planter', 2], ['patio', 2], ['ramp', 1], ['buttress', 1.5]];
 const GROUND_INDUSTRIAL = [['pipes', 2], ['tankfarm', 2], ['cooling', 1.5], ['smokestack', 1], ['chimney', 1]];
 const GROUND_ECO = [['planter', 2], ['market', 2], ['farm', 2], ['greenhouse', 1.5], ['patio', 1], ['garden', 1.5]];
-const UNIT_SKIP = ['bridge', 'gantry', 'walkway']; // need two supports
+const UNIT_SKIP = ['bridge', 'gantry', 'walkway', 'wheel']; // need two supports, or the stream
+const ARCH_SKIP = 0.25; // chance a stream cell inside the mass stays open water
 
 const cellKey = (cellX, cellY) => (cellX + 64) * 256 + (cellY + 64);
 const area = (footprintId) => FOOTPRINTS[footprintId].length;
@@ -156,7 +168,7 @@ function place(ctx, spec) {
       if (lockedFacade(ctx, instance, side)) instance.mask |= 1 << ((side - instance.rot + 4) & 3);
     }
   }
-  if (!checkPlacement(ctx.world, instance, { cap: Math.max(MAX_MODULES, ctx.limit) }).ok) return null;
+  if (!checkPlacement(ctx.world, instance, { cap: Math.max(MAX_MODULES, ctx.limit), stream: ctx.stream }).ok) return null;
   return addModule(ctx.world, instance);
 }
 
@@ -427,7 +439,13 @@ function massing(ctx) {
     };
     for (const cell of ctx.rng.shuffle(ctx.site)) {
       if (ctx.world.modules.size >= massLimit) return;
-      if (open(cell[0], cell[1])) massCell(ctx, cell, level, open);
+      if (!open(cell[0], cell[1])) continue;
+      // Where the mass meets the stream it stands on an arch, or leaves the water open
+      if (level === 0 && onStream(ctx.stream, cell[0], cell[1])) {
+        if (!ctx.rng.chance(ARCH_SKIP)) place(ctx, { family: 'arch', fp: '1x1', h: 1, seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: ctx.stream.alongX ? 0 : 1 });
+        continue;
+      }
+      massCell(ctx, cell, level, (cellX, cellY) => open(cellX, cellY) && !(level === 0 && onStream(ctx.stream, cellX, cellY)));
     }
   }
 }
@@ -923,6 +941,35 @@ function services(ctx) {
   for (let pump = 0; pump < pumps; pump++) keep(roofSpot(ctx, rng, 'smallpump', THIRSTY));
   const rooms = rng.int(0, POWER_ROOMS[opts.density][mega]);
   for (let room = 0; room < rooms; room++) keep(roofSpot(ctx, rng, 'powerroom', HOMES));
+  // Power and water pieces, each a few per structure
+  const roll = (table) => rng.int(0, table[opts.density][mega]);
+  for (let count = roll(GENERATORS); count > 0; count--) {
+    const family = FAMILIES.generator;
+    keep(rng.chance(0.5) ? groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)) : roofSpot(ctx, rng, family.id, INDUSTRY));
+  }
+  for (let count = roll(SPRINGS); count > 0; count--) keep(groundSpot(ctx, rng, 'spring', rng.pick(FAMILIES.spring.footprints), 1));
+  for (let count = roll(WELLS); count > 0; count--) keep(groundSpot(ctx, rng, 'well', '1x1', 1));
+  for (let count = roll(RAIN_CATCHERS); count > 0; count--) keep(roofSpot(ctx, rng, 'raincatcher', THIRSTY));
+  for (let count = roll(RAISED_WHEELS); count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
+  for (let count = roll(RUNOFFS); count > 0; count--) keep(roofSpot(ctx, rng, 'runoff', THIRSTY));
+  for (let count = roll(DISPOSALS); count > 0; count--) keep(roofSpot(ctx, rng, 'disposal', INDUSTRY));
+  // Water wheels stand on open stream cells, turned with the flow
+  if (ctx.stream) {
+    let wheels = rng.int(0, STREAM_WHEELS[opts.density]);
+    for (const [cellX, cellY] of rng.shuffle(ctx.stream.cells)) {
+      if (wheels <= 0) break;
+      if (!emptyAt(world, cellX, cellY, 0, FAMILIES.wheel.maxStories)) continue;
+      const placed = place(ctx, { family: 'wheel', fp: '1x1', h: rng.int(1, FAMILIES.wheel.maxStories), seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: 0, rot: (ctx.stream.alongX ? 0 : 1) + rng.int(0, 1) * 2 });
+      if (placed) {
+        keep(placed);
+        wheels--;
+      }
+    }
+  }
+  // Some wall-bearing modules carry a junction box
+  for (const instance of world.modules.values()) {
+    if (!ctx.locked.has(instance.id) && JUNCTION_FAMILIES.includes(instance.family) && !instance.jb && rng.chance(JUNCTION_CHANCE)) instance.jb = 1;
+  }
   if (opts.unstable) return;
   // New parts go again until the structure passes
   for (let round = 0; round < SERVICE_ROUNDS && added.length > 0; round++) {
@@ -1009,6 +1056,8 @@ export function generate(options) {
     capped: false,
     towers: [],
     pool: Array.from({ length: STYLE_POOL }, () => rng.int(1, 0x7fffffff)),
+    // A unit stands alone; larger scales share the seed's stream
+    stream: opts.scale === 'unit' ? null : streamOf(opts.seed),
   };
   const angle = rng.range(0, Math.PI * 2);
   ctx.themeAxis = [Math.cos(angle), Math.sin(angle)];
@@ -1044,5 +1093,5 @@ export function generate(options) {
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );
-  return { modules, seed: opts.seed, options: opts, capped: ctx.capped, hash: structureHash(modules) };
+  return { modules, seed: opts.seed, options: opts, capped: ctx.capped, hash: structureHash(modules), stream: streamRecord(ctx.stream) };
 }

@@ -151,7 +151,8 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       build.setCap(cap);
     },
     // A structure made elsewhere becomes the build
-    adopt(modules) {
+    adopt(modules, stream = null) {
+      build.setStream(stream);
       build.replace(modules);
       refreshButtons();
     },

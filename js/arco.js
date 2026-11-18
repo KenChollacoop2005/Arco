@@ -10,7 +10,7 @@ import { createSection } from './render/section.js';
 import { createDecor } from './render/decor.js';
 import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
-import { STATE_NORMAL, STATE_SELECTED } from './render/materials.js';
+import { STATE_NORMAL, STATE_SELECTED, sharedUniforms } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
@@ -25,6 +25,8 @@ import { freezeDeep } from './core/analysis.js';
 import { decorItems } from './core/decor.js';
 import { createWorkerClient } from './workers/client.js';
 import { drawnPorts } from './core/services.js';
+import { streamFrom } from './core/stream.js';
+import { createWaterworks } from './render/waterworks.js';
 import { growLimits, placeCap } from './core/budget.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -64,6 +66,8 @@ const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#tit
 const section = createSection(view, modules);
 const decor = createDecor(view);
 const strings = createStrings(view);
+const waterworks = createWaterworks(view);
+const SPINNING = ['turbine', 'wheel', 'wheelup']; // families that turn with Effects on
 
 export const app = {
   view,
@@ -204,14 +208,15 @@ async function generateStructure(options) {
   const token = ++generateToken;
   const result = await generator.call({ options });
   if (token !== generateToken) return null;
-  builder.adopt(result.modules);
+  app.stream = result.stream;
+  builder.adopt(result.modules, streamFrom(result.stream));
   return (await showStructure(result, { follow: true })) ? result : null;
 }
 
 // Shows the hand edited build as the structure
 function showBuild(list, options = {}) {
   generateToken++;
-  const result = { modules: list, seed: COPY.buildSeed, options: null, capped: false, hash: structureHash(list) };
+  const result = { modules: list, seed: COPY.buildSeed, options: null, capped: false, hash: structureHash(list), stream: app.stream || null };
   showStructure(result, { only: options.only || new Set() });
 }
 
@@ -223,7 +228,8 @@ async function growStructure(base) {
   if (token !== generateToken) return null;
   const known = new Set(base.map((instance) => instance.id));
   const only = new Set(result.modules.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
-  builder.adopt(result.modules);
+  app.stream = result.stream;
+  builder.adopt(result.modules, streamFrom(result.stream));
   showStructure(result, { only });
   return { added: only.size, seed: result.seed };
 }
@@ -271,6 +277,24 @@ setupPhysics(app, modules, query('#physicsToggle'));
 const toggles = setupToggles();
 app.toggles = toggles;
 bindToggle(toggles, query('#effectsToggle'), { id: 'effects', on: true, lightOn: false });
+
+// Effects drive the turning and flowing parts; reduced motion keeps them still
+function applyEffects() {
+  sharedUniforms.uEffects.value = toggles.get('effects') && !reducedMotion ? 1 : 0;
+  view.requestRender();
+}
+toggles.watch('effects', applyEffects);
+applyEffects();
+view.onFrame(() => sharedUniforms.uEffects.value > 0 && (waterworks.flowing() || (!!app.structure && app.structure.modules.some((instance) => SPINNING.includes(instance.family)))));
+
+// Stream, pours and junction boxes follow the structure and its analysis
+app.structureListeners.push((result, phase) => {
+  if (phase !== 'start') return;
+  waterworks.setStream(result.stream || null);
+  waterworks.setPours(result.modules);
+});
+app.analysisListeners.push(() => waterworks.setBoxes(app.analysis && app.analysis.flows ? app.analysis.flows.ports : []));
+app.modeListeners.push(() => waterworks.setShown(app.mode !== 'drawing'));
 
 // Decor shows on a finished, still structure only
 let builtResult = null;

@@ -75,7 +75,23 @@ const TABLE = [
   ['pumptank', 'Roof and services', 'Pumped tank', 'neutral', ['1x1', '2x2'], [1, 2], 0, 0, 0, 0, 0],
   ['watermain', 'Roof and services', 'Water main', 'neutral', ['1x1'], [1, 4], 1, 0, 0, 0, 0],
   ['powerroom', 'Roof and services', 'Power room', 'neutral', ['1x1', '1x2'], [1, 1], 0, 0, 0, 0, 0],
+  ['generator', 'Industrial', 'Generator room', 'industrial', ['1x1', '1x2'], [1, 2], 0, 0, 0, 0, 0],
+  ['spring', 'Ground', 'Spring', 'eco', ['1x1', '1x2'], [1, 1], 0, 1, 0, 0, 0],
+  ['raincatcher', 'Roof and services', 'Rain catcher', 'neutral', ['1x1', '1x2'], [1, 1], 0, 0, 0, 0, 0],
+  ['well', 'Ground', 'Well', 'neutral', ['1x1'], [1, 1], 0, 1, 0, 0, 0],
+  ['wheel', 'Eco', 'Water wheel', 'eco', ['1x1'], [1, 2], 0, 1, 0, 0, 0],
+  ['wheelup', 'Roof and services', 'Raised water wheel', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['runoff', 'Expression', 'Runoff', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['disposal', 'Industrial', 'Disposal', 'industrial', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['arch', 'Structure', 'Arched foundation', 'neutral', ['1x1'], [1, 1], 1, 1, 0, 1, 0],
 ];
+
+// Sides a family always keeps open, as a local side mask
+const OPEN_SIDES = { arch: 0b0101 };
+// Families that may carry a junction box on an outward wall
+export const JUNCTION_FAMILIES = ['housing', 'studio', 'hall', 'penthouse', 'shacks', 'flared', 'shop', 'stair', 'deck', 'core', 'podium', 'pumproom'];
+// Families that may stand on the stream
+export const STREAM_FAMILIES = ['wheel', 'arch'];
 
 // Families whose facade sides take side profiles
 export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall', 'penthouse', 'shop', 'stair', 'deck', 'brise', 'fins', 'spout', 'panel', 'podium'];
@@ -154,7 +170,7 @@ export function normalizeVariant(variant) {
     fp: variant.fp,
     h: variant.h,
     seed: variant.seed >>> 0,
-    mask: family.rails ? variant.mask & 15 : 15,
+    mask: family.rails ? (variant.mask | (OPEN_SIDES[variant.family] || 0)) & 15 : 15,
     roof: family.roofable ? !!variant.roof : !family.stack,
   };
   // Flush variants carry no prof field
@@ -163,12 +179,14 @@ export function normalizeVariant(variant) {
   // Variants without docks carry no dock field
   const dock = cleanDock(variant.dock, record.mask, record.fp, family);
   if (dock) record.dock = dock;
+  // A junction box is a render only option, kept only where it may go
+  if (variant.jb && JUNCTION_FAMILIES.includes(variant.family)) record.jb = 1;
   return record;
 }
 
 const PLANT_PUMP_SEED = 0x9a17; // keeps the pump roll apart from shape rolls
 export const PLANT_PUMP_CHANCE = 0.35; // share of plant rooms with a pump
-export const PUMP_FAMILIES = ['pumproom', 'smallpump', 'pumptank']; // families that always pump
+export const PUMP_FAMILIES = ['pumproom', 'smallpump', 'pumptank', 'well']; // families that always pump
 
 // True when a variant carries a pump, seeded for plant rooms
 export function hasPump(variant) {

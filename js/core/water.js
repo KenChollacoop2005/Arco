@@ -19,6 +19,7 @@ const SEARCH_SLACK = 1e-6; // head slack when a search stops early
 const SHORT_REACH = 4; // shortfalls past this much head are reported without a number
 export const WATER_REASONS = ['out of head', 'no route', 'no wall route', 'source empty', 'no free port'];
 const UNPOWERED_TANKS = ['pumptank']; // pumped tanks that drain by gravity when off
+const WHEEL_JUNCTIONS = ['wheelup']; // families water passes through to turn a wheel
 
 const toQuarters = (units) => Math.round(units * WATER_QUARTERS);
 const toUnits = (quarters) => quarters / WATER_QUARTERS;
@@ -216,6 +217,8 @@ function rolesOf(instance, roofOpen, powered) {
     roles.push({ kind: 'source', supply: WATER_SOURCES[SOURCE_FAMILIES[instance.family]][0], head: null, row: SOURCE_FAMILIES[instance.family] });
   }
   if (instance.family === 'watermain') roles.push({ kind: 'main', supply: 0, head: null });
+  // A raised wheel passes water on; what passes by gravity turns it
+  if (WHEEL_JUNCTIONS.includes(instance.family)) roles.push({ kind: 'main', supply: 0, head: null, wheel: true });
   const cells = instanceCells(instance).length;
   const demand = (DEMAND_PER_CELL[instance.family] || 0) * cells + (DEMAND_PER_MODULE[instance.family] || 0);
   if (demand > 0) roles.push({ kind: 'consumer', supply: 0, head: null, demand });

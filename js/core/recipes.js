@@ -4,6 +4,7 @@ import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from '.
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
 import { addJetties } from './jetty.js';
+import { PIECE_RECIPES, turbineForm, solarForm } from './pieces.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const CUT_OVER_MM = 1; // cut overshoot past a face
@@ -308,6 +309,45 @@ function shackSide(kit, run) {
     // Glass only where the pane sits in concrete
     if (group === 'concrete') kit.add('glass', run.box(left + paneEdge, left + opening - paneEdge, sill, head - windowDepth, back - paneFront, back + paneBack));
   }
+}
+
+// Tilted panel rack, the first solar form
+function solarRack(kit) {
+  const { alongX, length, width } = axes(kit);
+  const clear = kit.clear;
+  const [run, rise, skin, pitch] = SOLAR_MM;
+  kit.slab('concrete', clear, 0, PAVE_MM);
+  for (let at = clear + 1; at + run < length - clear; at += pitch) {
+    kit.add('concrete', cross(alongX, [[at, PAVE_MM - SINK_MM], [at + run, PAVE_MM - SINK_MM], [at + run, PAVE_MM + rise], [at, PAVE_MM]], clear + 1, width - clear - 1));
+    kit.add('solar', cross(alongX, [[at, PAVE_MM], [at + run, PAVE_MM + rise], [at + run, PAVE_MM + rise + skin], [at, PAVE_MM + skin]], clear + 1, width - clear - 1));
+  }
+}
+
+// Vertical axis rotor, the first turbine form
+function verticalRotor(kit) {
+  const centerX = kit.W / 2;
+  const centerY = kit.D / 2;
+  const [mastLow, mastHigh, bladeRadius, bladeHalf, armHalf] = TURBINE_MM;
+  const [bladeStart, bladeEnd, lowArm, highArm, armHeight] = ROTOR_MM;
+  kit.slab('concrete', kit.clear, 0, CURB_MM);
+  kit.add('steel', cyl(centerX, centerY, CURB_MM, kit.H - 1, mastLow, mastHigh, 10));
+  kit.add('hazard', cyl(centerX, centerY, kit.H - 1, kit.H, mastHigh, mastHigh, 10));
+  const turn = kit.rng.range(0, Math.PI * 2);
+  for (let blade = 0; blade < 3; blade++) {
+    const angle = turn + (blade * Math.PI * 2) / 3;
+    const radial = [Math.cos(angle), Math.sin(angle)];
+    const side = [-radial[1], radial[0]];
+    const quad = (from, to, half) => [
+      [centerX + radial[0] * from - side[0] * half, centerY + radial[1] * from - side[1] * half],
+      [centerX + radial[0] * to - side[0] * half, centerY + radial[1] * to - side[1] * half],
+      [centerX + radial[0] * to + side[0] * half, centerY + radial[1] * to + side[1] * half],
+      [centerX + radial[0] * from + side[0] * half, centerY + radial[1] * from + side[1] * half],
+    ];
+    kit.add('rotor', prismZ(quad(bladeRadius - bladeHalf, bladeRadius + bladeHalf, armHalf), kit.H - bladeStart, kit.H - bladeEnd));
+    kit.add('rotor', prismZ(quad(0, bladeRadius, bladeHalf), kit.H - lowArm, kit.H - lowArm + armHeight));
+    kit.add('rotor', prismZ(quad(0, bladeRadius, bladeHalf), kit.H - highArm, kit.H - highArm + armHeight));
+  }
+  kit.anchors.spin = [centerX, centerY];
 }
 
 const RECIPES = {
@@ -873,40 +913,11 @@ const RECIPES = {
   },
 
   solar(kit) {
-    const { alongX, length, width } = axes(kit);
-    const clear = kit.clear;
-    const [run, rise, skin, pitch] = SOLAR_MM;
-    kit.slab('concrete', clear, 0, PAVE_MM);
-    for (let at = clear + 1; at + run < length - clear; at += pitch) {
-      kit.add('concrete', cross(alongX, [[at, PAVE_MM - SINK_MM], [at + run, PAVE_MM - SINK_MM], [at + run, PAVE_MM + rise], [at, PAVE_MM]], clear + 1, width - clear - 1));
-      kit.add('solar', cross(alongX, [[at, PAVE_MM], [at + run, PAVE_MM + rise], [at + run, PAVE_MM + rise + skin], [at, PAVE_MM + skin]], clear + 1, width - clear - 1));
-    }
+    solarForm(kit, solarRack);
   },
 
   turbine(kit) {
-    const centerX = kit.W / 2;
-    const centerY = kit.D / 2;
-    const [mastLow, mastHigh, bladeRadius, bladeHalf, armHalf] = TURBINE_MM;
-    const [bladeStart, bladeEnd, lowArm, highArm, armHeight] = ROTOR_MM;
-    kit.slab('concrete', kit.clear, 0, CURB_MM);
-    kit.add('steel', cyl(centerX, centerY, CURB_MM, kit.H - 1, mastLow, mastHigh, 10));
-    kit.add('hazard', cyl(centerX, centerY, kit.H - 1, kit.H, mastHigh, mastHigh, 10));
-    const turn = kit.rng.range(0, Math.PI * 2);
-    for (let blade = 0; blade < 3; blade++) {
-      const angle = turn + (blade * Math.PI * 2) / 3;
-      const radial = [Math.cos(angle), Math.sin(angle)];
-      const side = [-radial[1], radial[0]];
-      const quad = (from, to, half) => [
-        [centerX + radial[0] * from - side[0] * half, centerY + radial[1] * from - side[1] * half],
-        [centerX + radial[0] * to - side[0] * half, centerY + radial[1] * to - side[1] * half],
-        [centerX + radial[0] * to + side[0] * half, centerY + radial[1] * to + side[1] * half],
-        [centerX + radial[0] * from + side[0] * half, centerY + radial[1] * from + side[1] * half],
-      ];
-      kit.add('rotor', prismZ(quad(bladeRadius - bladeHalf, bladeRadius + bladeHalf, armHalf), kit.H - bladeStart, kit.H - bladeEnd));
-      kit.add('rotor', prismZ(quad(0, bladeRadius, bladeHalf), kit.H - lowArm, kit.H - lowArm + armHeight));
-      kit.add('rotor', prismZ(quad(0, bladeRadius, bladeHalf), kit.H - highArm, kit.H - highArm + armHeight));
-    }
-    kit.anchors.spin = [centerX, centerY];
+    turbineForm(kit, verticalRotor);
   },
 
   farm(kit) {
@@ -1067,6 +1078,8 @@ const RECIPES = {
     });
   },
 };
+
+Object.assign(RECIPES, PIECE_RECIPES);
 
 export const RECIPE_IDS = Object.keys(RECIPES);
 

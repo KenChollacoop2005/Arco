@@ -4,6 +4,8 @@ export const KIND_DETAIL = 1;
 export const KIND_GLASS = 2;
 export const KIND_SWAY = 3;
 export const KIND_SPIN = 4;
+export const KIND_SPIN_X = 5; // turns about a local x axle
+export const KIND_SPIN_Y = 6; // turns about a local y axle
 
 // Group fields: color, kind, printed
 export const GROUPS = {
@@ -26,6 +28,8 @@ export const GROUPS = {
   tarpMustard: [0xc8982c, KIND_SWAY, true],
   tarpTeal: [0x4b8985, KIND_SWAY, true],
   rotor: [0xd9d6cf, KIND_SPIN, true],
+  blade: [0xe4e1da, KIND_SPIN_X, false],
+  wheel: [0x7a5a3c, KIND_SPIN_Y, true],
 };
 
 export const GROUP_IDS = Object.keys(GROUPS);

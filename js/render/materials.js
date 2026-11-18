@@ -29,6 +29,7 @@ const RED = 'vec3(0.8, 0.16, 0.16)'; // fail red
 const ORANGE = 'vec3(0.91, 0.35, 0.05)'; // signal orange
 const PAPER = 'vec3(0.965, 0.957, 0.937)'; // drawing paper
 const SWAY_SPEED = 1.9; // tarp sway rate
+const BLADE_SPIN_SHARE = 2.5; // blade rotors turn this much faster than drums and wheels
 const SWAY_WAVE_X = 0.45; // tarp ripple along x
 const SWAY_WAVE_Y = 0.3; // tarp ripple along y
 const MODULE_ROUGHNESS = 0.92; // concrete roughness
@@ -87,7 +88,15 @@ vState = 0.0;
 vTall = 1.0;
 vTone = 0.0;
 #endif
-if (uEffects > 0.5 && aMeta.x > 3.5) {
+if (uEffects > 0.5 && aMeta.x > 5.5) {
+  float angle = uTime * uSpin;
+  vec2 arm = transformed.xz - aMeta.yz;
+  transformed.xz = aMeta.yz + vec2(arm.x * cos(angle) - arm.y * sin(angle), arm.x * sin(angle) + arm.y * cos(angle));
+} else if (uEffects > 0.5 && aMeta.x > 4.5) {
+  float angle = uTime * uSpin * ${glsl(BLADE_SPIN_SHARE)};
+  vec2 arm = transformed.yz - aMeta.yz;
+  transformed.yz = aMeta.yz + vec2(arm.x * cos(angle) - arm.y * sin(angle), arm.x * sin(angle) + arm.y * cos(angle));
+} else if (uEffects > 0.5 && aMeta.x > 3.5) {
   float angle = uTime * uSpin;
   vec2 arm = transformed.xy - aMeta.yz;
   transformed.xy = aMeta.yz + vec2(arm.x * cos(angle) - arm.y * sin(angle), arm.x * sin(angle) + arm.y * cos(angle));

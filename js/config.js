@@ -81,6 +81,10 @@ export const TARP_SWAY_MM = 0.5; // tarp sway size
 export const LIGHT_CORES_MAX = 4; // cores at or under this: light preset
 export const LIGHT_MEMORY_GB_MAX = 4; // memory at or under this: light preset
 
+// Stream on the plinth
+export const STREAM_CHANCE = 0.35; // share of seeds with a stream
+export const STREAM_LENGTH = [6, 12]; // stream length range in cells, from the rim upstream
+
 // Analysis
 export const EXPOSURE_REACH_CELLS = 4; // free cells counted in front of a face
 
@@ -107,9 +111,10 @@ export const WATER_SOURCES = {
   smallpump: [0, 9, 6],
   plantpump: [0, 9, 6],
   pumproom: [6, 20, 12],
+  well: [3, 6, 3],
 };
-export const SOURCE_FAMILIES = { spout: 'rain', tank: 'tank' }; // families that are sources (no family is a spring yet)
-export const PUMP_KINDS = { pumptank: 'pumptank', smallpump: 'smallpump', plant: 'plantpump', pumproom: 'pumproom' }; // family to pump row
+export const SOURCE_FAMILIES = { raincatcher: 'rain', spring: 'spring', tank: 'tank' }; // families that are gravity sources
+export const PUMP_KINDS = { pumptank: 'pumptank', smallpump: 'smallpump', plant: 'plantpump', pumproom: 'pumproom', well: 'well' }; // family to pump row
 export const DEMAND_PER_CELL = { farm: 0.5, planter: 0.5, greenhouse: 0.5, planted: 0.5 }; // crop beds, units per footprint cell
 export const DEMAND_PER_MODULE = { housing: 0.25, studio: 0.25, penthouse: 0.25, shacks: 0.25, flared: 0.25, garden: 0.5 }; // homes and pools, units per module
 export const HUB_INPUTS = 2; // most pipes into one pump or main

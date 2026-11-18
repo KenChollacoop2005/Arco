@@ -33,9 +33,10 @@ export function growOptions(choices, modules) {
   return { ...choices, scale: choices.scale === 'unit' ? 'block' : choices.scale, budget: 0, budgetMin: 0, locked: modules.map((instance) => ({ ...instance })) };
 }
 
-export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
+export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } = {}) {
   let modules = initial.slice();
   let placeCap = cap;
+  let placeStream = stream;
   let undoStack = [];
   let redoStack = [];
 
@@ -58,7 +59,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
   }
 
   function check(instance) {
-    return checkPlacement(worldFromModules(modules), instance, { cap: placeCap });
+    return checkPlacement(worldFromModules(modules), instance, { cap: placeCap, stream: placeStream });
   }
 
   return {
@@ -69,6 +70,10 @@ export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
     setCap(next) {
       placeCap = next;
     },
+    // The plinth's stream, which only wheels and arches may stand on
+    setStream(next) {
+      placeStream = next || null;
+    },
     canUndo: () => undoStack.length > 0,
     canRedo: () => redoStack.length > 0,
     // Snapped, stacked candidate under a point in mm
@@ -78,7 +83,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
       const world = worldFromModules(modules);
       const instance = { ...normalizeVariant(variant), x: originX, y: originY, z: restLevel(world, variant.fp, turn, originX, originY), rot: turn };
       if (isDocked(instance)) instance.z = dockLevel(world, instance, placeCap);
-      const result = checkPlacement(world, instance, { cap: placeCap });
+      const result = checkPlacement(world, instance, { cap: placeCap, stream: placeStream });
       return { instance, ok: result.ok, reason: result.reason };
     },
     place(spec) {
@@ -103,7 +108,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES } = {}) {
       const turned = { ...current, rot: nextRot(current.rot) };
       const rest = modules.filter((instance) => instance.id !== id);
       // Turning keeps the count, so the cap never refuses it
-      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 }, { ignoreCap: true });
+      const result = checkPlacement(worldFromModules(rest), { ...turned, id: 0 }, { ignoreCap: true, stream: placeStream });
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };

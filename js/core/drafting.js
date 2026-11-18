@@ -11,6 +11,7 @@ const CONSUMER_MARK_MM = 4; // half width of a dry or partial diamond
 const CONSUMER_MARKS = { dry: 'fail', partial: 'warn' }; // consumer status to line status
 const STRING_STATUS = { pipe: 'water', wire: 'power' }; // string type to line status
 const PORT_MARK_MM = 1.2; // half width of an unused port's hollow square
+const POWER_LIFT_MM = 3; // power marks sit this far over the water marks
 
 // All results: { positions: number[], statuses: string[] }, one status per segment
 const sheet = () => ({ positions: [], statuses: [] });
@@ -120,11 +121,16 @@ function polyline(target, points, status, dashed) {
 }
 
 // Diamond on a consumer's roof, crossed when dry
-function consumerMark(target, instance, status) {
+// Plan centre of a module and the height of its roof mark
+function roofPoint(instance, lift) {
   const cells = instanceCells(instance);
   const centerX = (cells.reduce((sum, cell) => sum + cell[0], 0) / cells.length + 0.5) * CELL_MM;
   const centerY = (cells.reduce((sum, cell) => sum + cell[1], 0) / cells.length + 0.5) * CELL_MM;
-  const top = (instance.z + instance.h) * STORY_MM + LIFT_MM;
+  return [centerX, centerY, (instance.z + instance.h) * STORY_MM + LIFT_MM + lift];
+}
+
+function consumerMark(target, instance, status, lift = 0) {
+  const [centerX, centerY, top] = roofPoint(instance, lift);
   const size = CONSUMER_MARK_MM;
   const corners = [[size, 0], [0, size], [-size, 0], [0, -size]].map(([offsetX, offsetY]) => [centerX + offsetX, centerY + offsetY, top]);
   corners.forEach((corner, index) => segment(target, corner, corners[(index + 1) % 4], CONSUMER_MARKS[status]));
@@ -157,6 +163,21 @@ export function serviceLines(services, modules = [], unused = []) {
     const instance = byId.get(Number(id));
     if (instance && CONSUMER_MARKS[report.status]) consumerMark(target, instance, report.status);
   }
+  // Power: short consumers marked like dry water, relays as a square, yellow when fed
+  for (const [id, report] of Object.entries((services.power && services.power.consumers) || {})) {
+    const instance = byId.get(parseInt(id, 10));
+    if (!instance) continue;
+    if (report.relay) relayMark(target, instance, report.fed);
+    else if (CONSUMER_MARKS[report.status]) consumerMark(target, instance, report.status, POWER_LIFT_MM);
+  }
   for (const port of unused) portMark(target, port);
   return target;
+}
+
+// Square on a relay's roof: power colour when fed, warn when not
+function relayMark(target, instance, fed) {
+  const [centerX, centerY, top] = roofPoint(instance, POWER_LIFT_MM);
+  const size = CONSUMER_MARK_MM;
+  const corners = [[size, size], [-size, size], [-size, -size], [size, -size]].map(([offsetX, offsetY]) => [centerX + offsetX, centerY + offsetY, top]);
+  corners.forEach((corner, index) => segment(target, corner, corners[(index + 1) % 4], fed ? 'power' : 'warn'));
 }
