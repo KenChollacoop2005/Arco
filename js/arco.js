@@ -339,6 +339,8 @@ const exporter = setupExport(app, exportWorker, (fit) => {
 });
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
+// Grow from the Generate panel keeps the current build
+query('#generateGrow').addEventListener('click', () => builder.grow(query('#generateStatus')));
 // Budget: Build's cap and the module count follow the control
 const syncBudget = (budget) => {
   builder.setCap(placeCap(budget));

@@ -7,6 +7,7 @@ import { BUDGET_HARD_CAP, BUDGET_CUSTOM_MIN, BUDGET_CUSTOM_DEFAULT, FANTASY_GROW
 import { makeBudget, budgetCap, generateLimits, budgetParams, budgetFromParams } from '../core/budget.js';
 
 const SKIP_KEY = 'arco.skipAnimation'; // remembered animation setting
+const ADVANCED_KEY = 'arco.advanced'; // remembered Advanced section state
 const URL_KEYS = { scale: 'scale', density: 'density', height: 'height', daring: 'cantilevers', theme: 'theme', services: 'services' };
 
 function readUrl() {
@@ -130,6 +131,10 @@ export function setupGenerate(form, skipInput, generate) {
   });
 
   skipInput.checked = readSetting(SKIP_KEY, 'off') === 'on';
+  // Advanced starts closed; its state is remembered
+  const advanced = form.querySelector('#advancedSection');
+  advanced.open = readSetting(ADVANCED_KEY, 'closed') === 'open';
+  advanced.addEventListener('toggle', () => writeSetting(ADVANCED_KEY, advanced.open ? 'open' : 'closed'));
   skipInput.addEventListener('change', () => writeSetting(SKIP_KEY, skipInput.checked ? 'on' : 'off'));
 
   const shared = readUrl();

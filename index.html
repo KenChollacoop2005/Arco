@@ -35,9 +35,6 @@
         <label class="check"><input type="radio" name="projection" value="ortho" checked><span data-copy="viewOrtho"></span></label>
         <label class="check"><input type="radio" name="projection" value="persp"><span data-copy="viewPersp"></span></label>
         <hr>
-        <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
-        <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
-        <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
         <button class="plain" id="resetView" data-copy="viewReset"></button>
       </div>
     </details>
@@ -53,50 +50,6 @@
         <label><input type="radio" name="scale" value="block" checked><span data-copy="scaleBlock"></span></label>
         <label><input type="radio" name="scale" value="mega"><span data-copy="scaleMega"></span></label>
       </fieldset>
-      <fieldset class="seg">
-        <legend data-copy="density"></legend>
-        <label><input type="radio" name="density" value="0"><span data-copy="low"></span></label>
-        <label><input type="radio" name="density" value="1" checked><span data-copy="mid"></span></label>
-        <label><input type="radio" name="density" value="2"><span data-copy="high"></span></label>
-      </fieldset>
-      <fieldset class="seg">
-        <legend data-copy="height"></legend>
-        <label><input type="radio" name="height" value="0"><span data-copy="low"></span></label>
-        <label><input type="radio" name="height" value="1" checked><span data-copy="mid"></span></label>
-        <label><input type="radio" name="height" value="2"><span data-copy="high"></span></label>
-      </fieldset>
-      <fieldset class="seg">
-        <legend data-copy="daring"></legend>
-        <label><input type="radio" name="daring" value="0"><span data-copy="low"></span></label>
-        <label><input type="radio" name="daring" value="1" checked><span data-copy="mid"></span></label>
-        <label><input type="radio" name="daring" value="2"><span data-copy="high"></span></label>
-      </fieldset>
-      <fieldset class="seg">
-        <legend data-copy="categories"></legend>
-        <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
-        <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
-        <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
-        <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
-        <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
-      </fieldset>
-      <input type="hidden" name="theme" value="1">
-      <fieldset class="seg">
-        <legend data-copy="services"></legend>
-        <label><input type="radio" name="services" value="off"><span data-copy="off"></span></label>
-        <label><input type="radio" name="services" value="low" checked><span data-copy="low"></span></label>
-        <label><input type="radio" name="services" value="high"><span data-copy="high"></span></label>
-      </fieldset>
-      <fieldset class="seg">
-        <legend data-copy="budget"></legend>
-        <label><input type="radio" name="budgetMode" value="fixed" checked><span data-copy="budgetFixed"></span></label>
-        <label><input type="radio" name="budgetMode" value="custom"><span data-copy="budgetCustom"></span></label>
-        <label><input type="radio" name="budgetMode" value="fantasy"><span data-copy="budgetFantasy"></span></label>
-      </fieldset>
-      <div class="field budget-cap">
-        <label for="budgetCap" data-copy="budgetCap"></label>
-        <input id="budgetCap" name="budgetCap" type="number" step="1" inputmode="numeric">
-      </div>
-      <p class="status" id="budgetCount" role="status"></p>
       <div class="field">
         <label for="seedInput" data-copy="seed"></label>
         <div class="field-row">
@@ -104,9 +57,68 @@
           <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
         </div>
       </div>
-      <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
-      <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
+      <div class="button-grid">
+        <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
+        <button type="button" class="plain" id="generateGrow" data-copy="grow"></button>
+      </div>
       <p class="status" id="generateStatus" role="status"></p>
+      <details class="sub" id="advancedSection">
+        <summary data-copy="advanced"></summary>
+        <div class="sub-body">
+          <fieldset class="seg">
+            <legend data-copy="density"></legend>
+            <label><input type="radio" name="density" value="0"><span data-copy="low"></span></label>
+            <label><input type="radio" name="density" value="1" checked><span data-copy="mid"></span></label>
+            <label><input type="radio" name="density" value="2"><span data-copy="high"></span></label>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-copy="height"></legend>
+            <label><input type="radio" name="height" value="0"><span data-copy="low"></span></label>
+            <label><input type="radio" name="height" value="1" checked><span data-copy="mid"></span></label>
+            <label><input type="radio" name="height" value="2"><span data-copy="high"></span></label>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-copy="daring"></legend>
+            <label><input type="radio" name="daring" value="0"><span data-copy="low"></span></label>
+            <label><input type="radio" name="daring" value="1" checked><span data-copy="mid"></span></label>
+            <label><input type="radio" name="daring" value="2"><span data-copy="high"></span></label>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-copy="services"></legend>
+            <label><input type="radio" name="services" value="off"><span data-copy="off"></span></label>
+            <label><input type="radio" name="services" value="low" checked><span data-copy="low"></span></label>
+            <label><input type="radio" name="services" value="high"><span data-copy="high"></span></label>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-copy="budget"></legend>
+            <label><input type="radio" name="budgetMode" value="fixed" checked><span data-copy="budgetFixed"></span></label>
+            <label><input type="radio" name="budgetMode" value="custom"><span data-copy="budgetCustom"></span></label>
+            <label><input type="radio" name="budgetMode" value="fantasy"><span data-copy="budgetFantasy"></span></label>
+          </fieldset>
+          <div class="field budget-cap">
+            <label for="budgetCap" data-copy="budgetCap"></label>
+            <input id="budgetCap" name="budgetCap" type="number" step="1" inputmode="numeric">
+          </div>
+          <p class="status" id="budgetCount" role="status"></p>
+          <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
+        </div>
+      </details>
+      <fieldset class="seg">
+        <legend data-copy="buildWith"></legend>
+        <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
+        <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
+        <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
+        <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
+        <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
+      </fieldset>
+      <input type="hidden" name="theme" value="1">
+      <fieldset class="show-list">
+        <legend data-copy="show"></legend>
+        <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
+        <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
+        <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
+        <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
+      </fieldset>
     </form>
 
     <div class="mode-pane" data-pane="collection">
@@ -179,7 +191,6 @@
       </fieldset>
       <input type="range" id="sectionPosition" min="0" max="1000" value="500" aria-label="Section position">
     </div>
-    <label class="toggle"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
     <button class="primary" id="exportButton" data-copy="exportButton"></button>
   </footer>
 

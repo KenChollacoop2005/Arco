@@ -24,6 +24,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     query('#buildRedo').disabled = !build.canRedo();
     query('#buildClear').disabled = build.modules.length === 0;
     query('#buildGrow').disabled = growing;
+    query('#generateGrow').disabled = growing;
   }
 
   function refreshPalette() {
@@ -91,16 +92,17 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     apply();
   }
 
-  async function grow() {
+  // Grow from Build or the Generate panel; the message goes to that panel's line
+  async function grow(line = status) {
     if (growing) return;
     growing = true;
     refreshButtons();
-    status.textContent = COPY.growWorking;
+    line.textContent = COPY.growWorking;
     try {
       const result = await hooks.grow(build.modules);
-      if (result) status.textContent = result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${COPY.growNone} ${result.seed}`;
+      if (result) line.textContent = result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${COPY.growNone} ${result.seed}`;
     } catch {
-      status.textContent = COPY.loadFailed;
+      line.textContent = COPY.loadFailed;
     } finally {
       growing = false;
       refreshButtons();
@@ -112,7 +114,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   query('#buildUndo').addEventListener('click', () => step(build.undo()));
   query('#buildRedo').addEventListener('click', () => step(build.redo()));
   query('#buildClear').addEventListener('click', () => step(build.clear()));
-  query('#buildGrow').addEventListener('click', grow);
+  query('#buildGrow').addEventListener('click', () => grow());
 
   canvas.addEventListener('pointermove', (event) => {
     pointerEvent = event;
@@ -149,6 +151,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   refreshButtons();
 
   return {
+    grow,
     // Most modules Build may place, from the budget
     setCap(cap) {
       build.setCap(cap);
