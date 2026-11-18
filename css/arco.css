@@ -198,6 +198,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .budget-cap { display: none; }
 #generateForm:has(input[name='budgetMode'][value='custom']:checked) .budget-cap { display: grid; }
 .sub { border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+.sub + .sub { border-top: 0; margin-top: -12px; }
 .sub summary, .show-list legend {
   padding: 8px 0;
   font: 400 10px/1.2 var(--font-mono);

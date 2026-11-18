@@ -50,18 +50,6 @@
         <label><input type="radio" name="scale" value="block" checked><span data-copy="scaleBlock"></span></label>
         <label><input type="radio" name="scale" value="mega"><span data-copy="scaleMega"></span></label>
       </fieldset>
-      <div class="field">
-        <label for="seedInput" data-copy="seed"></label>
-        <div class="field-row">
-          <input id="seedInput" name="seed" type="text" maxlength="24" autocomplete="off" spellcheck="false">
-          <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
-        </div>
-      </div>
-      <div class="button-grid">
-        <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
-        <button type="button" class="plain" id="generateGrow" data-copy="grow"></button>
-      </div>
-      <p class="status" id="generateStatus" role="status"></p>
       <details class="sub" id="advancedSection">
         <summary data-copy="advanced"></summary>
         <div class="sub-body">
@@ -103,22 +91,43 @@
           <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
         </div>
       </details>
-      <fieldset class="seg">
-        <legend data-copy="buildWith"></legend>
-        <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
-        <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
-        <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
-        <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
-        <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
-      </fieldset>
+      <details class="sub" id="buildWithSection">
+        <summary data-copy="buildWith"></summary>
+        <div class="sub-body">
+          <fieldset class="seg">
+            <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
+            <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
+            <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
+            <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
+            <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
+          </fieldset>
+        </div>
+      </details>
+      <details class="sub" id="showSection">
+        <summary data-copy="show"></summary>
+        <div class="sub-body">
+          <fieldset class="show-list">
+            <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
+            <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
+            <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
+            <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
+          </fieldset>
+        </div>
+      </details>
       <input type="hidden" name="theme" value="1">
-      <fieldset class="show-list">
-        <legend data-copy="show"></legend>
-        <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
-        <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
-        <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
-        <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
-      </fieldset>
+      <!-- Seed, Generate and Grow always stay last in this pane -->
+      <div class="field">
+        <label for="seedInput" data-copy="seed"></label>
+        <div class="field-row">
+          <input id="seedInput" name="seed" type="text" maxlength="24" autocomplete="off" spellcheck="false">
+          <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
+        </div>
+      </div>
+      <div class="button-grid">
+        <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
+        <button type="button" class="plain" id="generateGrow" data-copy="grow"></button>
+      </div>
+      <p class="status" id="generateStatus" role="status"></p>
     </form>
 
     <div class="mode-pane" data-pane="collection">
