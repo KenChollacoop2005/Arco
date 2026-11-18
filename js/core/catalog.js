@@ -136,6 +136,8 @@ export const endCode = (variant, end) => ((variant.ends || 0) >> (end * 2)) & 3;
 export const OPEN_SIDE_FAMILIES = ['lookout', 'terrace', 'patio', 'balcony'];
 // Local sides a platform leaves open, from its mask
 export const openSides = (variant) => (OPEN_SIDE_FAMILIES.includes(variant.family) ? ~variant.mask & 15 : 0);
+// Families that stand on support below, never hang in a group
+export const STANDING_FAMILIES = ['lookout'];
 
 // Families kept in code but never generated or placed
 export const DISABLED_FAMILIES = ['wheelup'];

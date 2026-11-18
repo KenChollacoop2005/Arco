@@ -120,7 +120,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     },
     // Swap in a whole structure as one step
     replace(list) {
-      commit(list.map((instance) => ({ ...instance })));
+      commit(reopenSides(list.map((instance) => ({ ...instance }))));
     },
     clear() {
       if (modules.length === 0) return false;

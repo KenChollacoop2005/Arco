@@ -2,14 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBuild, growOptions } from '../js/core/build.js';
 import { generate } from '../js/core/generator.js';
-import { worldFromModules } from '../js/core/grid.js';
-import { validateStructure, reopenSides, outwardMask } from '../js/core/placement.js';
-import { OPEN_SIDE_FAMILIES } from '../js/core/catalog.js';
+import { worldFromModules, SIDES } from '../js/core/grid.js';
+import { validateStructure, reopenSides, outwardMask, supportsUnder } from '../js/core/placement.js';
+import { OPEN_SIDE_FAMILIES, openSides, normalizeVariant } from '../js/core/catalog.js';
+import { buildRecipe } from '../js/core/recipes.js';
+import { groupAt } from '../js/core/kit.js';
 import { runChecks } from '../js/core/checks.js';
 
 const CHOICES = { density: 1, height: 1, daring: 1, theme: 1 };
 // barbican's block is full of caps once the services planner runs, so arco stands in
 const BASE_SEEDS = ['habitat', 'nakagin', 'trellick', 'arco'];
+// Lookout deck: rail height above it, its thickness, contact reach
+const LOOKOUT_DECK_TOP_MM = 4;
+const LOOKOUT_DECK_MM = 6.5;
+const LOOKOUT_TOUCH_MM = 0.1;
 const byId = (modules) => new Map(modules.map((instance) => [instance.id, instance]));
 
 // Kept as given; platforms may only refresh their open sides
@@ -108,6 +114,89 @@ test('grow opens the sides of kept platforms beside new modules, as Build edits 
     assertKept(grown, base.modules);
   }
   assert.ok(opened >= 4, `opened ${opened}`);
+});
+
+// Lookout shape for its mask: deck to the walls, a wall pier, rails toward air
+function assertLookoutShape(variant, label) {
+  const { ops, kit } = buildRecipe(variant);
+  const open = openSides(variant);
+  const middle = [kit.W / 2, kit.D / 2];
+  const deckBottom = kit.H - LOOKOUT_DECK_TOP_MM - LOOKOUT_DECK_MM;
+  // Local point just inside a side's cell edge, at a share along it
+  const near = (side, inside, along, height) => {
+    const [stepX, stepY] = SIDES[side];
+    const across = [stepY !== 0 ? kit.W * along : stepX > 0 ? kit.W - inside : inside, stepX !== 0 ? kit.D * along : stepY > 0 ? kit.D - inside : inside];
+    return [across[0], across[1], height];
+  };
+  const touch = LOOKOUT_TOUCH_MM;
+  for (let side = 0; side < 4; side++) {
+    if ((open >> side) & 1) {
+      // Against a wall: deck and pier reach the cell edge from the floor up
+      for (const height of [touch, deckBottom / 2, deckBottom + LOOKOUT_DECK_MM / 2]) {
+        assert.equal(groupAt(ops, near(side, kit.inset + touch, 0.5, height)), 'concrete', `${label} side ${side} wall contact at ${height}`);
+      }
+      assert.equal(groupAt(ops, near(side, kit.clear / 2, 0.5, kit.H - 1)), null, `${label} side ${side} rail toward a wall`);
+    } else {
+      assert.equal(groupAt(ops, near(side, kit.clear + touch, 0.5, kit.H - 1)), 'steel', `${label} side ${side} no rail toward air`);
+    }
+  }
+  // Free standing: the column stands on the floor
+  if (!open) assert.equal(groupAt(ops, [middle[0], middle[1], touch]), 'concrete', `${label} column`);
+}
+
+test('lookouts stand on support, attach to walls beside the deck and rail only toward air', () => {
+  // Every mask, one and two stories
+  for (let h = 1; h <= 2; h++) for (let mask = 0; mask < 16; mask++) assertLookoutShape(normalizeVariant({ family: 'lookout', fp: '1x1', h, seed: 1, mask, roof: false }), `h${h} mask ${mask}`);
+  // Generate and Grow: on support, mask from the walls at the deck
+  let seen = 0;
+  for (const seed of ['arco', 'habitat', 'barbican', 'nakagin', 'golden', 'brunswick', 'quarry', 'beton', 'lumen', 'hulme', 'trellick', 'rotunda']) {
+    for (const [scale, level] of [['block', 1], ['mega', 1], ['mega', 2]]) {
+      const choices = { density: level, height: level, daring: level, theme: level };
+      const base = generate({ seed, scale, ...choices });
+      const grown = generate(growOptions({ seed: 'grow-' + seed, scale: 'mega', ...choices }, base.modules));
+      for (const modules of [base.modules, grown.modules]) {
+        const world = worldFromModules(modules);
+        for (const instance of modules.filter((entry) => entry.family === 'lookout')) {
+          seen++;
+          assert.ok(supportsUnder(world, instance).every(Boolean), `${seed} ${scale} lookout ${instance.id} has nothing under it`);
+          assert.equal(instance.mask, outwardMask(world, instance), `${seed} ${scale} lookout ${instance.id} mask`);
+        }
+      }
+    }
+  }
+  assert.ok(seen >= 20, `lookouts seen: ${seen}`);
+  // Build: sides follow neighbours at the deck, never hangs in a group
+  const build = createBuild();
+  const tower = { family: 'housing', fp: '1x1', h: 3, seed: 9, mask: 0, roof: false };
+  const base = { family: 'housing', fp: '1x1', h: 1, seed: 9, mask: 0, roof: false };
+  const lookout = (h) => ({ family: 'lookout', fp: '1x1', h, seed: 1, mask: 15, roof: false });
+  assert.equal(build.place({ ...base, x: 1, y: 0, z: 0, rot: 0 }).ok, true);
+  const placed = build.place({ ...lookout(1), x: 1, y: 0, z: 1, rot: 0 });
+  assert.equal(build.modules.find((entry) => entry.id === placed.id).mask, 15, 'free standing lookout rails all round');
+  const towerId = build.place({ ...tower, x: 0, y: 0, z: 0, rot: 0 }).id;
+  assert.equal(build.modules.find((entry) => entry.id === placed.id).mask, 15 & ~4, 'opens toward the new tower');
+  assert.equal(build.rotate(placed.id).ok, true);
+  const turned = build.modules.find((entry) => entry.id === placed.id);
+  assert.equal(turned.mask, outwardMask(worldFromModules(build.modules), turned), 'turned lookout keeps its wall side open');
+  assert.equal(openSides(turned), 1 << 1, 'turned lookout opens its local +y side');
+  assert.equal(build.remove([towerId]).ok, true);
+  assert.equal(build.modules.find((entry) => entry.id === placed.id).mask, 15, 'rails come back when the tower goes');
+  // A two story lookout beside a one story module faces air at its deck
+  const low = createBuild();
+  assert.equal(low.place({ ...base, x: 0, y: 0, z: 0, rot: 0 }).ok, true);
+  const tall = low.place({ ...lookout(2), x: 1, y: 0, z: 0, rot: 0 });
+  assert.equal(low.modules.find((entry) => entry.id === tall.id).mask, 15, 'deck above a low neighbour is railed');
+  // Beside a module over a support, a lookout may not hang
+  const group = createBuild();
+  assert.equal(group.place({ family: 'support', fp: '1x1', h: 1, seed: 1, mask: 15, roof: false, x: 0, y: 0, z: 0, rot: 0 }).ok, true);
+  assert.equal(group.place({ ...base, x: 0, y: 0, z: 1, rot: 0 }).ok, true);
+  const hung = group.place({ ...lookout(1), x: 1, y: 0, z: 1, rot: 0 });
+  assert.deepEqual(hung, { ok: false, reason: 'No support below' }, 'a lookout never hangs');
+  assert.equal(group.place({ ...base, x: 1, y: 0, z: 1, rot: 0 }).ok, true, 'a housing may hang in the group');
+  // Adopted structures get fresh sides too
+  const adopted = createBuild();
+  adopted.replace([{ ...base, x: 0, y: 0, z: 0, rot: 0, id: 1 }, { ...tower, x: 1, y: 0, z: 0, rot: 0, id: 2 }, { ...lookout(1), x: 0, y: 0, z: 1, rot: 0, id: 3 }]);
+  assert.equal(adopted.modules.find((entry) => entry.id === 3).mask, 15 & ~1, 'adopted lookout opens toward the tower');
 });
 
 test('grow from an empty plinth is a plain generator run', () => {

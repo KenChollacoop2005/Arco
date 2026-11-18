@@ -11,7 +11,7 @@ import {
   worldHeight,
   worldFromModules,
 } from './grid.js';
-import { FAMILIES, OPEN_SIDE_FAMILIES, canSupport, defaultPlacement, isDocked, sideType } from './catalog.js';
+import { FAMILIES, OPEN_SIDE_FAMILIES, STANDING_FAMILIES, canSupport, defaultPlacement, isDocked, sideType } from './catalog.js';
 
 export const placementOf = (instance) => instance.placement || defaultPlacement(instance);
 
@@ -25,10 +25,9 @@ export function outwardMask(world, instance) {
       const nextX = cellX + SIDES[side][0];
       const nextY = cellY + SIDES[side][1];
       if (own.has(nextX + ',' + nextY)) continue;
-      for (let level = instance.z; level < instance.z + instance.h && !walled; level++) {
-        const other = moduleAt(world, nextX, nextY, level);
-        if (other && other.id !== instance.id) walled = true;
-      }
+      // Walls count at the deck, the top story
+      const other = moduleAt(world, nextX, nextY, instance.z + instance.h - 1);
+      if (other && other.id !== instance.id) walled = true;
     }
     if (!walled) mask |= 1 << ((side - instance.rot + 4) & 3);
   }
@@ -235,7 +234,8 @@ export function checkPlacement(world, instance, options = {}) {
   const supports = supportsUnder(world, instance);
   if (docked && !overGap(world, instance)) return { ok: false, reason: GAP_REASON };
   // A module with nothing under it may hang in a support's rigid group
-  if (!docked && !supports.some(Boolean) && !groupCarried([...world.modules.values()], instance, instanceCells)) return { ok: false, reason: 'No support below' };
+  const hangs = !STANDING_FAMILIES.includes(instance.family) && groupCarried([...world.modules.values()], instance, instanceCells);
+  if (!docked && !supports.some(Boolean) && !hangs) return { ok: false, reason: 'No support below' };
   for (const support of supports) {
     if (!docked && support && support !== 'plinth' && !canSupport(support)) {
       return { ok: false, reason: 'Nothing can sit on that part' };

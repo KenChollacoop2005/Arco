@@ -10,13 +10,13 @@ import { runChecks } from '../js/core/checks.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { makeBudget, budgetCap, withinBudget, growRoll, generateLimits, growLimits, placeCap, budgetParams, budgetFromParams } from '../js/core/budget.js';
 
-// Generate and Grow results, re-recorded after the raised wheel and platform sides changes
+// Generate and Grow results, re-recorded after the raised wheel, platform sides and lookout deck walls
 const BEFORE = {
   'barbican mega 2': [203, 'a86ff90a88736667', 197, '398fd3bc83dc4b15'],
   'habitat block 1': [31, 'b79dff1c375043fc', 32, 'ddbb4f42292825df'],
   'arco unit 1': [1, '6b6828ffe3949732', 50, '65413d18e0ff9ce3'],
   'beton block 0': [30, 'ff52a9a5cf7e987e', 41, '925712f2bd6819a9'],
-  'golden mega 1': [210, '8441bb5815b4bdab', 161, '2d5076a2d1bf04f6'],
+  'golden mega 1': [210, '8441bb5815b4bdab', 161, 'b2b3a22955ddb3e9'],
 };
 const OPENING_BEFORE = [17, '17ed3cdabbe96458'];
 

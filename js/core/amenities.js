@@ -32,6 +32,7 @@ const TEA_MM = [1.2, 9, 3]; // teahouse post half, eave height, roof flare
 const TEA_EDGE_MM = 1.4; // teahouse roof edge thickness
 const TEA_SPAN_MM = 13; // most room between teahouse posts
 const LOOKOUT_MM = [4, 6.5, 1.6, 4]; // lookout post half, deck thickness, rail thickness, rail height
+const LOOKOUT_PIER_MM = 4; // lookout pier thickness against a wall
 
 // Facade style per amenity, or the shopfront
 const FRONTS = {
@@ -206,6 +207,38 @@ function building(kind) {
   };
 }
 
+// Lookout pier on a wall side, a 45 degree corbel out to the far deck edge
+function wallCorbel(kit, side, under, [lowX, lowY, highX, highY]) {
+  const pier = LOOKOUT_PIER_MM;
+  const reach = side === 0 || side === 2 ? highX - lowX : highY - lowY;
+  const spring = Math.max(0, under - (reach - pier));
+  const lift = Math.max(0, (reach - pier) - under);
+  // Outline in (distance from the wall, height)
+  const outline = [[0, 0], [pier + lift, 0], [pier, spring], [reach, under + SINK_MM], [0, under + SINK_MM]];
+  if (lift > 0) outline.splice(2, 1);
+  if (side === 0) kit.add('concrete', prismY(outline.map(([out, up]) => [highX - out, up]), lowY, highY));
+  if (side === 2) kit.add('concrete', prismY(outline.map(([out, up]) => [lowX + out, up]), lowY, highY));
+  if (side === 1) kit.add('concrete', prismX(outline.map(([out, up]) => [highY - out, up]), lowX, highX));
+  if (side === 3) kit.add('concrete', prismX(outline.map(([out, up]) => [lowY + out, up]), lowX, highX));
+}
+
+// Lookout sign on the column, or flush on the deck edge facing air
+function lookoutSign(kit, open, deckBox, under) {
+  const [wide, tall, thick] = CAP_SIGN_MM;
+  const [lowX, lowY, highX, highY] = deckBox;
+  const bottom = under + (LOOKOUT_MM[1] - tall) / 2;
+  const middleX = (lowX + highX) / 2;
+  const middleY = (lowY + highY) / 2;
+  const signs = [
+    box(highX - SINK_MM, middleY - wide / 2, bottom, highX + thick, middleY + wide / 2, bottom + tall),
+    box(middleX - wide / 2, highY - SINK_MM, bottom, middleX + wide / 2, highY + thick, bottom + tall),
+    box(lowX - thick, middleY - wide / 2, bottom, lowX + SINK_MM, middleY + wide / 2, bottom + tall),
+    box(middleX - wide / 2, lowY - thick, bottom, middleX + wide / 2, lowY + SINK_MM, bottom + tall),
+  ];
+  const side = [3, 0, 1, 2].find((each) => !((open >> each) & 1));
+  if (side !== undefined) kit.add('signSocial', signs[side]);
+}
+
 // Caps: shrine, rooftop playground, teahouse and lookout
 const CAPS = {
   shrine(kit) {
@@ -255,20 +288,28 @@ const CAPS = {
     const [x, y] = kit.cellCenters()[0];
     const [post, deck, rail, railTall] = LOOKOUT_MM;
     const top = kit.H - railTall;
-    const half = Math.min(kit.W, kit.D) / 2 - kit.clear;
-    kit.add('concrete', box(x - post, y - post, 0, x + post, y + post, top - deck));
-    // A 45 degree corbel carries a deck that reaches the cell edges
-    kit.add('concrete', pyramid(x, y, top - deck - (half - post), top - deck + SINK_MM, post, half));
-    kit.add('concrete', box(kit.clear, kit.clear, top - deck, kit.W - kit.clear, kit.D - kit.clear, top));
-    // Rails on outward sides; a free standing lookout keeps its +x way in
+    const under = top - deck;
     const open = openSides(kit.variant);
-    const railed = (side) => !((open >> side) & 1) && (side !== 0 || open !== 0);
-    if (railed(0)) kit.add('steel', box(kit.W - kit.clear - rail, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
-    if (railed(3)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.clear + rail, kit.H));
-    if (railed(1)) kit.add('steel', box(kit.clear, kit.D - kit.clear - rail, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
-    if (railed(2)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.clear + rail, kit.D - kit.clear, kit.H));
-    // Sign on the column, under the corbel
-    faceSign(kit, x, y - post, CAP_SIGN_MM[3]);
+    const isOpen = (side) => ((open >> side) & 1) === 1;
+    // Deck reaches a wall beside it, stops short of the air
+    const edge = (side) => (isOpen(side) ? kit.inset : kit.clear);
+    const [lowX, lowY, highX, highY] = [edge(2), edge(3), kit.W - edge(0), kit.D - edge(1)];
+    kit.add('concrete', box(lowX, lowY, under, highX, highY, top));
+    if (!open) {
+      // Free standing: a column and a 45 degree corbel under the deck
+      const half = Math.min(kit.W, kit.D) / 2 - kit.clear;
+      kit.add('concrete', box(x - post, y - post, 0, x + post, y + post, under));
+      kit.add('concrete', pyramid(x, y, under - (half - post), under + SINK_MM, post, half));
+    } else {
+      // Beside a wall: a pier against it and a 45 degree corbel out to the deck edge
+      for (let side = 0; side < 4; side++) if (isOpen(side)) wallCorbel(kit, side, under, [lowX, lowY, highX, highY]);
+    }
+    // Rails on every side that faces air
+    if (!isOpen(0)) kit.add('steel', box(highX - rail, lowY, top - SINK_MM, highX, highY, kit.H));
+    if (!isOpen(3)) kit.add('steel', box(lowX, lowY, top - SINK_MM, highX, lowY + rail, kit.H));
+    if (!isOpen(1)) kit.add('steel', box(lowX, highY - rail, top - SINK_MM, highX, highY, kit.H));
+    if (!isOpen(2)) kit.add('steel', box(lowX, lowY, top - SINK_MM, lowX + rail, highY, kit.H));
+    lookoutSign(kit, open, [lowX, lowY, highX, highY], under);
   },
 };
 
