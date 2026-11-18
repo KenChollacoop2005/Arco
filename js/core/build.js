@@ -1,7 +1,7 @@
 import { CELL_MM, MAX_MODULES } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
 import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
-import { checkPlacement, validateStructure } from './placement.js';
+import { checkPlacement, validateStructure, reopenSides } from './placement.js';
 
 const UNDO_LIMIT = 100; // most steps kept for undo
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
@@ -94,14 +94,14 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       const result = check(instance);
       if (!result.ok) return { ok: false, reason: result.reason };
       instance.id = Math.max(0, ...modules.map((placed) => placed.id)) + 1;
-      commit([...modules, instance]);
+      commit(reopenSides([...modules, instance]));
       return { ok: true, reason: '', id: instance.id };
     },
     remove(ids) {
       const next = modules.filter((instance) => !ids.includes(instance.id));
       if (next.length === modules.length) return { ok: false, reason: '' };
       if (breaksOthers(next, 0)) return { ok: false, reason: RESTS_REASON };
-      commit(next);
+      commit(reopenSides(next));
       return { ok: true, reason: '' };
     },
     // Quarter turn of a placed module, in place
@@ -115,7 +115,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
-      commit(next);
+      commit(reopenSides(next));
       return { ok: true, reason: '' };
     },
     // Swap in a whole structure as one step

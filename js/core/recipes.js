@@ -1,5 +1,5 @@
 import { CELL_MM, STORY_MM, DOCK_LIP_MM, DOCK_HEAD_MM } from '../config.js';
-import { isDocked, hasPump, endCode, END_CAP, END_STEP } from './catalog.js';
+import { isDocked, hasPump, endCode, END_CAP, END_STEP, openSides } from './catalog.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
@@ -231,6 +231,28 @@ function tray(kit, top, floor = DECK_MM, wall = THIN_MM) {
   kit.slab('concrete', kit.clear, 0, top);
   kit.carve(kit.clear + wall, floor, top + 1);
   return kit.clear + wall;
+}
+
+// Tray wall cut away on open sides; a corner goes only when both sides open
+function openTray(kit, floor, top, wall = THIN_MM) {
+  const open = openSides(kit.variant);
+  const rects = kit.rects(kit.clear);
+  if (!open || rects.length !== 1) return;
+  const [minX, minY, maxX, maxY] = rects[0];
+  const isOpen = (side) => ((open >> side) & 1) === 1;
+  const lowY = isOpen(3) ? minY - CUT_OVER_MM : minY + wall;
+  const highY = isOpen(1) ? maxY + CUT_OVER_MM : maxY - wall;
+  const lowX = isOpen(2) ? minX - CUT_OVER_MM : minX + wall;
+  const highX = isOpen(0) ? maxX + CUT_OVER_MM : maxX - wall;
+  const cuts = [
+    box(maxX - wall - SINK_MM, lowY, floor, maxX + CUT_OVER_MM, highY, top + 1),
+    box(lowX, maxY - wall - SINK_MM, floor, highX, maxY + CUT_OVER_MM, top + 1),
+    box(minX - CUT_OVER_MM, lowY, floor, minX + wall + SINK_MM, highY, top + 1),
+    box(lowX, minY - CUT_OVER_MM, floor, highX, minY + wall + SINK_MM, top + 1),
+  ];
+  cuts.forEach((shape, side) => {
+    if (isOpen(side)) kit.cut(shape, 'concrete');
+  });
 }
 
 function bush(kit, centerX, centerY, base, radius, group) {
@@ -678,6 +700,7 @@ const RECIPES = {
 
   balcony(kit) {
     const inner = tray(kit, BALCONY_TOP_MM);
+    openTray(kit, DECK_MM, BALCONY_TOP_MM);
     if (kit.rng.chance(0.5)) {
       kit.add('soil', box(inner, inner, DECK_MM, inner + CURB_MM, kit.D - inner, SOIL_TOP_MM));
       bush(kit, inner + CURB_MM / 2, kit.D / 2, SOIL_TOP_MM, BUSH_MM[0], kit.rng.pick(PLANT_GROUPS));
@@ -686,6 +709,7 @@ const RECIPES = {
 
   terrace(kit) {
     const inner = tray(kit, TERRACE_TOP_MM);
+    openTray(kit, DECK_MM, TERRACE_TOP_MM);
     const [benchLength, benchDepth, benchHeight] = BENCH_MM;
     kit.add('wood', box(inner + 1, inner, DECK_MM, inner + 1 + benchLength, inner + benchDepth, DECK_MM + benchHeight));
     if (kit.cells.length > 1 && kit.rng.chance(0.6)) {
@@ -700,7 +724,8 @@ const RECIPES = {
     kit.slab('concrete', clear, 0, PAVE_MM);
     const [minX, minY, maxX] = kit.rects(clear)[0];
     const [benchLength, benchDepth, benchHeight] = BENCH_MM;
-    kit.add('concrete', box(minX, minY, 0, maxX, minY + THIN_MM, PLANTER_TOP_MM));
+    // Low wall only when that side faces out
+    if (!((openSides(kit.variant) >> 3) & 1)) kit.add('concrete', box(minX, minY, 0, maxX, minY + THIN_MM, PLANTER_TOP_MM));
     kit.add('wood', box(minX + 2, minY + THIN_MM, PAVE_MM, minX + 2 + benchLength, minY + THIN_MM + benchDepth, PAVE_MM + benchHeight));
     const [centerX, centerY] = kit.cellCenters()[kit.cells.length - 1];
     kit.add('soil', cyl(centerX, centerY + 2, PAVE_MM, PAVE_MM + 1, CURB_MM, CURB_MM, BUSH_SIDES));

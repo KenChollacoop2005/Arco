@@ -130,6 +130,11 @@ export const END_STEP = 2; // meets a roof at deck level
 // Code of one end, 0 the local low x end, 1 the high
 export const endCode = (variant, end) => ((variant.ends || 0) >> (end * 2)) & 3;
 
+// Platforms whose mask marks outward sides: railed there, open toward walls
+export const OPEN_SIDE_FAMILIES = ['lookout', 'terrace', 'patio', 'balcony'];
+// Local sides a platform leaves open, from its mask
+export const openSides = (variant) => (OPEN_SIDE_FAMILIES.includes(variant.family) ? ~variant.mask & 15 : 0);
+
 // Families kept in code but never generated or placed
 export const DISABLED_FAMILIES = ['wheelup'];
 
@@ -219,7 +224,7 @@ export function normalizeVariant(variant) {
     fp: variant.fp,
     h: variant.h,
     seed: variant.seed >>> 0,
-    mask: family.rails ? (variant.mask | (OPEN_SIDES[variant.family] || 0)) & 15 : 15,
+    mask: family.rails ? (variant.mask | (OPEN_SIDES[variant.family] || 0)) & 15 : OPEN_SIDE_FAMILIES.includes(variant.family) && Number.isInteger(variant.mask) ? variant.mask & 15 : 15,
     roof: family.roofable ? !!variant.roof : !family.stack,
   };
   // Flush variants carry no prof field

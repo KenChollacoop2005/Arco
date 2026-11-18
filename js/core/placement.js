@@ -9,10 +9,41 @@ import {
   instanceCells,
   moduleAt,
   worldHeight,
+  worldFromModules,
 } from './grid.js';
-import { FAMILIES, canSupport, defaultPlacement, isDocked, sideType } from './catalog.js';
+import { FAMILIES, OPEN_SIDE_FAMILIES, canSupport, defaultPlacement, isDocked, sideType } from './catalog.js';
 
 export const placementOf = (instance) => instance.placement || defaultPlacement(instance);
+
+// Platform mask from where it sits: a side beside a module is open, the rest face out
+export function outwardMask(world, instance) {
+  let mask = 0;
+  const own = new Set(instanceCells(instance).map(([cellX, cellY]) => cellX + ',' + cellY));
+  for (let side = 0; side < 4; side++) {
+    let walled = false;
+    for (const [cellX, cellY] of instanceCells(instance)) {
+      const nextX = cellX + SIDES[side][0];
+      const nextY = cellY + SIDES[side][1];
+      if (own.has(nextX + ',' + nextY)) continue;
+      for (let level = instance.z; level < instance.z + instance.h && !walled; level++) {
+        const other = moduleAt(world, nextX, nextY, level);
+        if (other && other.id !== instance.id) walled = true;
+      }
+    }
+    if (!walled) mask |= 1 << ((side - instance.rot + 4) & 3);
+  }
+  return mask;
+}
+
+// Fresh platform masks for a module list; others kept as they are
+export function reopenSides(modules) {
+  const world = worldFromModules(modules);
+  return modules.map((instance) => {
+    if (!OPEN_SIDE_FAMILIES.includes(instance.family)) return instance;
+    const mask = outwardMask(world, instance);
+    return mask === instance.mask ? instance : { ...instance, mask };
+  });
+}
 
 // Per cell: 'plinth', a module, or null
 export function supportsUnder(world, instance) {

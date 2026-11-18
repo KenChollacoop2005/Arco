@@ -1,5 +1,6 @@
 import { STORY_MM } from '../config.js';
 import { box, prismX, prismY, cyl, pyramid, octagon } from './kit.js';
+import { openSides } from './catalog.js';
 import { makeStyle, applyFacades } from './facade.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
@@ -217,9 +218,13 @@ const CAPS = {
     // A 45 degree corbel carries a deck that reaches the cell edges
     kit.add('concrete', pyramid(x, y, top - deck - (half - post), top - deck + SINK_MM, post, half));
     kit.add('concrete', box(kit.clear, kit.clear, top - deck, kit.W - kit.clear, kit.D - kit.clear, top));
-    kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.clear + rail, kit.H));
-    kit.add('steel', box(kit.clear, kit.D - kit.clear - rail, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
-    kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.clear + rail, kit.D - kit.clear, kit.H));
+    // Rails on outward sides; a free standing lookout keeps its +x way in
+    const open = openSides(kit.variant);
+    const railed = (side) => !((open >> side) & 1) && (side !== 0 || open !== 0);
+    if (railed(0)) kit.add('steel', box(kit.W - kit.clear - rail, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
+    if (railed(3)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.clear + rail, kit.H));
+    if (railed(1)) kit.add('steel', box(kit.clear, kit.D - kit.clear - rail, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, kit.H));
+    if (railed(2)) kit.add('steel', box(kit.clear, kit.clear, top - SINK_MM, kit.clear + rail, kit.D - kit.clear, kit.H));
     capSign(kit);
   },
 };
