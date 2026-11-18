@@ -130,6 +130,9 @@ export const END_STEP = 2; // meets a roof at deck level
 // Code of one end, 0 the local low x end, 1 the high
 export const endCode = (variant, end) => ((variant.ends || 0) >> (end * 2)) & 3;
 
+// Families kept in code but never generated or placed
+export const DISABLED_FAMILIES = ['wheelup'];
+
 // Families that may stand on the stream
 export const STREAM_FAMILIES = ['wheel', 'arch'];
 
@@ -163,11 +166,12 @@ for (const row of TABLE) {
     dockFootprints: DOCK_BRIDGES.includes(id) ? DOCK_SPAN : [],
     category: CATEGORIES.find((name) => CATEGORY_LISTS[name].includes(id)) || 'base',
     amenity: AMENITY_TYPES[id] || null,
+    disabled: DISABLED_FAMILIES.includes(id),
   };
 }
 
 // True when a family may be generated with these categories on
-export const categoryOn = (familyId, categories) => FAMILIES[familyId].category === 'base' || categories.includes(FAMILIES[familyId].category);
+export const categoryOn = (familyId, categories) => !FAMILIES[familyId].disabled && (FAMILIES[familyId].category === 'base' || categories.includes(FAMILIES[familyId].category));
 
 export const FAMILY_IDS = Object.keys(FAMILIES);
 

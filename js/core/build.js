@@ -1,10 +1,11 @@
 import { CELL_MM, MAX_MODULES } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
-import { isDocked, normalizeVariant } from './catalog.js';
+import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 
 const UNDO_LIMIT = 100; // most steps kept for undo
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
+const DISABLED_REASON = 'This part is switched off for now'; // draft UI copy
 
 // Footprint origin cell that centers it on a point
 export function snapOrigin(xMm, yMm, footprintId, rot) {
@@ -83,11 +84,13 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       const world = worldFromModules(modules);
       const instance = { ...normalizeVariant(variant), x: originX, y: originY, z: restLevel(world, variant.fp, turn, originX, originY), rot: turn };
       if (isDocked(instance)) instance.z = dockLevel(world, instance, placeCap);
+      if (FAMILIES[instance.family].disabled) return { instance, ok: false, reason: DISABLED_REASON };
       const result = checkPlacement(world, instance, { cap: placeCap, stream: placeStream });
       return { instance, ok: result.ok, reason: result.reason };
     },
     place(spec) {
       const instance = { ...normalizeVariant(spec), x: spec.x, y: spec.y, z: spec.z, rot: spec.rot & 3 };
+      if (FAMILIES[instance.family].disabled) return { ok: false, reason: DISABLED_REASON };
       const result = check(instance);
       if (!result.ok) return { ok: false, reason: result.reason };
       instance.id = Math.max(0, ...modules.map((placed) => placed.id)) + 1;

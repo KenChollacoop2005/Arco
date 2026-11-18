@@ -1121,7 +1121,7 @@ function services(ctx) {
   for (let count = roll(SPRINGS); count > 0; count--) keep(groundSpot(ctx, rng, 'spring', rng.pick(FAMILIES.spring.footprints), 1));
   for (let count = roll(WELLS); count > 0; count--) keep(groundSpot(ctx, rng, 'well', '1x1', 1));
   for (let count = roll(RAIN_CATCHERS); count > 0; count--) keep(roofSpot(ctx, rng, 'raincatcher', THIRSTY));
-  for (let count = roll(RAISED_WHEELS); count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
+  for (let count = categoryOn('wheelup', opts.categories) ? roll(RAISED_WHEELS) : 0; count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
   for (let count = roll(RUNOFFS); count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'runoff', THIRSTY)));
   for (let count = categoryOn('disposal', opts.categories) ? roll(DISPOSALS) : 0; count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'disposal', INDUSTRY)));
   // Water wheels stand on open stream cells, turned with the flow

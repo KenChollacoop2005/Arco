@@ -1,6 +1,7 @@
 import { createBuild, nextRot } from '../core/build.js';
 import { COPY } from './copy.js';
 import { renderCards } from './collection.js';
+import { FAMILIES } from '../core/catalog.js';
 
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 
@@ -139,7 +140,8 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
 
   app.modeListeners.push(refreshGhost);
   collectionPanel.onChange((list) => {
-    entries = list;
+    // Switched off families stay out of the palette
+    entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled);
     if (picked && !entries.some((entry) => entry.key === picked.key)) picked = null;
     refreshPalette();
     refreshGhost();
