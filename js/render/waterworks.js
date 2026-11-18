@@ -1,7 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
-import { instancePose, poseApply, worldFromModules, columnTop, cellInPlinth } from '../core/grid.js';
-import { buildRecipe } from '../core/recipes.js';
+import { CELL_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
+import { pourQuads } from '../core/falls.js';
 import { sharedUniforms, sectionPlanes } from './materials.js';
 
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
@@ -9,17 +8,13 @@ const CHANNEL_MM = 14; // stream width
 const STREAM_LIFT_MM = 0.35; // water sits this far over the plinth top
 const BANK_MM = [1.4, 0.7]; // bank strip width and height
 const RIM_FALL_MM = 70; // a fall off the rim drops this far as it fades
-const POUR_PAST_MM = 60; // a pour past the plinth edge drops this far as it fades
-const POUR_WIDE_MM = 2.2; // pour ribbon width
-const POUR_OUT_MM = 1.5; // pour leaves the outlet this far out
 const FLOW_SPEED = 0.9; // ripple speed, cycles per second
 const RIPPLE_MM = 9; // ripple spacing along the flow
 export const STREAM_COLOR = 0x6fa7bd; // stream water
 export const STREAM_OPACITY = 0.85; // stream water opacity
-const POUR_LOOK = { runoff: [0xcfe6ee, 0.75], disposal: [0x6b6840, 0.85] }; // pour color and opacity
+const POUR_LOOK = { runoff: [0xcfe6ee, 0.75], disposal: [0x5c5a33, 0.9] }; // clear runoff, murky brown-green sewage
 const BANK_COLOR = 0x8a857b; // stream bank strips
 const BOX_LOOK = [0x5d635b, 3, 3.8, 2.2]; // junction box color, width, height, depth
-const POURING = ['runoff', 'disposal']; // families that pour
 
 // Flowing water: ripples move with Effects on; clip follows the section cut
 export function flowMaterial(color, opacity, clip = false) {
@@ -80,30 +75,12 @@ export function quadGeometry(quads) {
   return geometry;
 }
 
-// Vertical ribbon falling from a point, its width across a side direction
-function fallQuads(top, side, drop, startAlong, fadeOut) {
-  const half = side.map((value) => (value * POUR_WIDE_MM) / 2);
-  const corner = (point, along, fade) => ({ point, along, fade });
-  const low = [top[0], top[1], top[2] - drop];
-  const quads = [];
-  // Two crossed ribbons read from every side
-  for (const across of [half, [-half[1], half[0], 0]]) {
-    quads.push([
-      corner([top[0] - across[0], top[1] - across[1], top[2]], startAlong, 1),
-      corner([top[0] + across[0], top[1] + across[1], top[2]], startAlong, 1),
-      corner([low[0] + across[0], low[1] + across[1], low[2]], startAlong + drop, fadeOut ? 0 : 1),
-      corner([low[0] - across[0], low[1] - across[1], low[2]], startAlong + drop, fadeOut ? 0 : 1),
-    ]);
-  }
-  return quads;
-}
-
 // Stream, pours and junction boxes; render only, never picked or exported
 export function createWaterworks(view) {
   const group = new THREE.Group();
   view.scene.add(group);
   const streamMaterial = flowMaterial(STREAM_COLOR, STREAM_OPACITY);
-  const pourMaterials = Object.fromEntries(Object.entries(POUR_LOOK).map(([family, [color, opacity]]) => [family, flowMaterial(color, opacity)]));
+  const pourMaterials = Object.fromEntries(Object.entries(POUR_LOOK).map(([family, [color, opacity]]) => [family, flowMaterial(color, opacity, true)]));
   const bankMaterial = new THREE.MeshStandardMaterial({ color: BANK_COLOR, roughness: 0.9 });
   const boxMaterial = new THREE.MeshStandardMaterial({ color: BOX_LOOK[0], roughness: 0.6, metalness: 0.2 });
   const cube = new THREE.BoxGeometry(1, 1, 1);
@@ -165,26 +142,11 @@ export function createWaterworks(view) {
     refreshFlowing();
   }
 
-  // Pours from runoff and disposal outlets, down to what is below or past the rim
-  function setPours(modules) {
+  // Pours from the stubs, as the analysis worker traced them
+  function setPours(pours) {
     drop('pours');
-    const world = worldFromModules(modules);
     const byFamily = {};
-    for (const instance of modules) {
-      if (!POURING.includes(instance.family)) continue;
-      const pose = instancePose(instance);
-      for (const outlet of buildRecipe(instance).anchors.outlet) {
-        const at = poseApply(pose, ...outlet.at);
-        const dir = poseApply({ turns: pose.turns, x: 0, y: 0, z: 0 }, ...outlet.dir).map(Math.round);
-        const top = at.map((value, axis) => value + dir[axis] * POUR_OUT_MM);
-        const cellX = Math.floor(top[0] / CELL_MM);
-        const cellY = Math.floor(top[1] / CELL_MM);
-        const inside = cellInPlinth(cellX, cellY);
-        const landing = inside ? columnTop(world, cellX, cellY, Math.floor(top[2] / STORY_MM)) * STORY_MM : -POUR_PAST_MM;
-        const quads = fallQuads(top, [-dir[1], dir[0], 0], top[2] - landing, 0, !inside);
-        (byFamily[instance.family] = byFamily[instance.family] || []).push(...quads);
-      }
-    }
+    for (const pour of pours) (byFamily[pour.family] = byFamily[pour.family] || []).push(...pourQuads(pour));
     for (const [family, quads] of Object.entries(byFamily)) keep('pours', new THREE.Mesh(quadGeometry(quads), pourMaterials[family]));
     refreshFlowing();
   }

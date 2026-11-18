@@ -1048,6 +1048,21 @@ function roofSpot(ctx, rng, family, near) {
   return null;
 }
 
+// Turns an outlet's stub face (local +x) to its deepest open drop
+function faceOut(world, instance) {
+  if (!instance) return instance;
+  const top = worldHeight(world);
+  let best = null;
+  for (let turn = 0; turn < 4; turn++) {
+    const rot = (instance.rot + turn) & 3;
+    const [stepX, stepY] = SIDES[rot];
+    const drop = instance.z - columnTop(world, instance.x + stepX, instance.y + stepY, top);
+    if (drop > 0 && (!best || drop > best.drop)) best = { rot, drop };
+  }
+  if (best) instance.rot = best.rot;
+  return instance;
+}
+
 // Water main column from the ground up beside a building
 function mainColumn(ctx, rng) {
   const { world } = ctx;
@@ -1106,8 +1121,8 @@ function services(ctx) {
   for (let count = roll(WELLS); count > 0; count--) keep(groundSpot(ctx, rng, 'well', '1x1', 1));
   for (let count = roll(RAIN_CATCHERS); count > 0; count--) keep(roofSpot(ctx, rng, 'raincatcher', THIRSTY));
   for (let count = roll(RAISED_WHEELS); count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
-  for (let count = roll(RUNOFFS); count > 0; count--) keep(roofSpot(ctx, rng, 'runoff', THIRSTY));
-  for (let count = categoryOn('disposal', opts.categories) ? roll(DISPOSALS) : 0; count > 0; count--) keep(roofSpot(ctx, rng, 'disposal', INDUSTRY));
+  for (let count = roll(RUNOFFS); count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'runoff', THIRSTY)));
+  for (let count = categoryOn('disposal', opts.categories) ? roll(DISPOSALS) : 0; count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'disposal', INDUSTRY)));
   // Water wheels stand on open stream cells, turned with the flow
   if (ctx.stream) {
     let wheels = rng.int(0, STREAM_WHEELS[opts.density]);

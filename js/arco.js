@@ -292,9 +292,10 @@ view.onFrame(() => sharedUniforms.uEffects.value > 0 && (waterworks.flowing() ||
 app.structureListeners.push((result, phase) => {
   if (phase !== 'start') return;
   waterworks.setStream(result.stream || null);
-  waterworks.setPours(result.modules);
+  waterworks.setPours([]);
 });
 app.analysisListeners.push(() => waterworks.setBoxes(app.analysis && app.analysis.flows ? app.analysis.flows.ports : []));
+app.analysisListeners.push(() => waterworks.setPours(app.analysis && app.analysis.flows ? app.analysis.flows.pours || [] : []));
 app.modeListeners.push(() => waterworks.setShown(app.mode !== 'drawing'));
 
 // Decor shows on a finished, still structure only

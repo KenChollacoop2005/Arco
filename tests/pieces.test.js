@@ -12,7 +12,8 @@ import { createBuild } from '../js/core/build.js';
 import { variantOf } from '../js/core/collection.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { variantMounts, MOUNT_PORTS, structureMounts } from '../js/core/mounts.js';
-import { stringContext } from '../js/core/strings.js';
+import { stringContext, pathBlocked } from '../js/core/strings.js';
+import { pourPaths, pourQuads, POURING } from '../js/core/falls.js';
 import { planWater, solveWater } from '../js/core/water.js';
 import { planPower, powerRole } from '../js/core/power.js';
 import { planServices } from '../js/core/services.js';
@@ -266,4 +267,46 @@ test('a junction box is a small relay of its own on its module', () => {
   assert.ok(box, 'junction box node');
   assert.deepEqual([box.kind, box.reach, box.throughput], ['relay', POWER_RELAYS.junction[0], POWER_RELAYS.junction[1]]);
   assert.ok(power.nodes.some((node) => node.id === '2' && node.kind === 'consumer'));
+});
+
+test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring, and pours that arc out, fall and fade, clear of modules', async () => {
+  const solids = await getSolids();
+  const counts = new Set();
+  for (const family of POURING) {
+    for (let seed = 1; seed <= 24; seed++) {
+      const variant = normalizeVariant({ family, fp: '1x1', h: 1, seed: seed * 7919, mask: 15, roof: true });
+      const { ops, anchors } = buildRecipe(variant);
+      const stubs = ops.filter((op) => !op.cut && (op.group === 'steel' || op.group === 'rust') && op.shape.kind === 'prism');
+      counts.add(stubs.length);
+      assert.ok(stubs.length >= 2 && stubs.length <= 5, `${family} ${seed} stubs ${stubs.length}`);
+      assert.ok(anchors.outlet.length >= 1 && anchors.outlet.length <= 2, `${family} ${seed} pouring ${anchors.outlet.length}`);
+      // Stubs are printed: the whole part passes the print rules
+      const built = solids.buildVariant(variant, { connectors: seed % 2 === 0, render: false, edges: false });
+      assert.equal(checkPrintability(built.solid, { pieces: built.parts }).status, 'pass', `${family} ${seed} prints`);
+    }
+  }
+  assert.ok(counts.size >= 3, `stub counts vary: ${[...counts]}`);
+  // Pours in generated structures
+  let pours = 0;
+  for (let index = 0; index < 30; index++) {
+    const seed = 'p' + index;
+    const { modules } = generate({ seed, scale: index % 2 ? 'mega' : 'block', density: index % 3, height: 1, services: 2 });
+    const context = stringContext(modules);
+    const byId = new Map(modules.map((instance) => [instance.id, instance]));
+    for (const pour of pourPaths(modules, context)) {
+      pours++;
+      const name = `${seed} ${pour.family} ${pour.module}`;
+      const [first, second] = pour.points;
+      // Leaves the stub outward, never climbs
+      assert.ok((second[0] - first[0]) * pour.dir[0] + (second[1] - first[1]) * pour.dir[1] > 0, `${name} leaves outward`);
+      for (let step = 1; step < pour.points.length; step++) assert.ok(pour.points[step][2] <= pour.points[step - 1][2] + 1e-9, `${name} falls`);
+      // Fades out or stops where it lands, never through a module
+      const quads = pourQuads(pour);
+      assert.ok(quads[0][0].fade === 1 && quads.at(-1)[2].fade < quads[0][0].fade, `${name} fades`);
+      const above = pour.points.filter((point) => point[2] >= 0);
+      assert.equal(pathBlocked(context, above.slice(0, -1), [pour.module]), null, `${name} through a module`);
+      assert.ok(POURING.includes(byId.get(pour.module).family));
+    }
+  }
+  assert.ok(pours >= 8, `pours ${pours}`);
 });

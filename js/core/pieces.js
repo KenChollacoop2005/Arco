@@ -19,9 +19,14 @@ const WHEEL_SIDES_MM = 8; // wheel thickness across the flow
 const WHEEL_GROW_MM = 6; // wheel apothem added per story past one
 const WHEEL_UP_MM = 6; // raised wheel apothem, clear under the flume
 const FLUME_MM = [5, 1.2, 3]; // raised wheel flume half width, wall, depth
-const OUTLET_MM = [7, 6, 9, 2.3, 6]; // outlet box half x, half y, height, pipe apothem, pipe reach
-const OUTLET_WALL_MM = 1.4; // outlet pipe wall
-const DISPOSAL_TANK_MM = [5, 11]; // disposal tank radius and height
+const STUB_ZONE_MM = 5.5; // stub reach between the body and the cell line
+const STUB_MM = [2.2, 0.9, 1.15]; // stub half size, bore half size, keel depth share
+const STUB_COUNT = [2, 5]; // stubs on the outlet face, by seed
+const STUB_FLOWING = [1, 2]; // stubs that pour, by seed
+const STUB_BAND_MM = [2.5, 3]; // stubs keep this far off the floor and the top
+const STUB_GAP_MM = 1.2; // clear space between two stubs
+const BASIN_INSET_MM = [2, 1.6, 0.6]; // runoff roof basin inset, depth, water below the top
+const DISPOSAL_TANK_MM = [5, 4]; // disposal roof tank radius and height
 const ARCH_MM = [7.5, 6, 1.15]; // arch half width, springing height, crown rise per mm of half width
 const SUPPORT_FORMS = ['columns', 'struts']; // support frame forms by seed
 const BAY_USES = ['garden', 'stall', 'empty']; // what the open bay holds, by seed
@@ -170,29 +175,63 @@ function wheelup(kit) {
   return axleZ;
 }
 
-// Box with a pipe outlet on local +x
-function outletBox(kit, pipeGroup) {
-  const [centerX, centerY] = centre(kit);
-  const [halfX, halfY, height, pipe, reach] = OUTLET_MM;
-  kit.add('concrete', box(centerX - halfX, centerY - halfY, 0, centerX + halfX, centerY + halfY, height));
-  const end = Math.min(kit.W - kit.clear, centerX + halfX + reach);
-  const pipeZ = height - pipe - 1.5;
-  kit.add(pipeGroup, prismX(octagon(centerY, pipeZ, pipe), centerX + halfX - SINK_MM, end));
-  kit.cut(prismX(octagon(centerY, pipeZ, pipe - OUTLET_WALL_MM), centerX, end + 1), pipeGroup);
-  kit.anchors.outlet.push({ at: [end, centerY, pipeZ - pipe * 0.4], dir: [1, 0, 0] });
-  return { centerX, centerY, height };
+// Teardrop section: flat top, pointed keel steeper than 45 degrees
+function teardrop(centerY, centerZ, half, keel) {
+  const side = half * Math.tan(Math.PI / 8);
+  return [[centerY + half, centerZ - side], [centerY + half, centerZ + side], [centerY + side, centerZ + half], [centerY - side, centerZ + half], [centerY - half, centerZ + side], [centerY - half, centerZ - side], [centerY, centerZ - side - half * keel]];
 }
 
-// Runoff: a clean water outlet that pours off its edge
+// Evenly spread slot centers on one axis, and the jitter each may take
+function slotAxis(low, high, size) {
+  const count = Math.max(1, Math.floor((high - low) / (size + STUB_GAP_MM)) + 1);
+  const step = count > 1 ? (high - low) / (count - 1) : 0;
+  return { centers: Array.from({ length: count }, (unused, index) => low + index * step), jitter: count > 1 ? (step - size - STUB_GAP_MM) / 2 : 0 };
+}
+
+// Seeded stub spots on the outlet face, one per slot, none overlapping
+function stubSpots(kit, top) {
+  const [half, , keel] = STUB_MM;
+  const below = half * Math.tan(Math.PI / 8) + half * keel;
+  const across = slotAxis(kit.clear + half + STUB_GAP_MM, kit.D - kit.clear - half - STUB_GAP_MM, 2 * half);
+  const up = slotAxis(STUB_BAND_MM[0] + below, top - STUB_BAND_MM[1] - half, half + below);
+  const slots = across.centers.flatMap((centerY) => up.centers.map((centerZ) => [centerY, centerZ]));
+  const want = Math.min(slots.length, kit.rng.int(STUB_COUNT[0], STUB_COUNT[1]));
+  return kit.rng.shuffle(slots).slice(0, want).map(([centerY, centerZ]) => [centerY + kit.rng.range(-across.jitter, across.jitter), centerZ + kit.rng.range(-up.jitter, up.jitter)]);
+}
+
+// Full body with pipe stubs on local +x; one or two of them pour
+function outletBody(kit, stubGroup, top) {
+  const face = kit.W - kit.clear - STUB_ZONE_MM;
+  const [half, bore, keel] = STUB_MM;
+  const spots = stubSpots(kit, top);
+  const pouring = kit.rng.shuffle(spots.map((spot, index) => index)).slice(0, kit.rng.int(STUB_FLOWING[0], STUB_FLOWING[1]));
+  spots.forEach(([centerY, centerZ], index) => {
+    kit.add(stubGroup, prismX(teardrop(centerY, centerZ, half, keel), face - SINK_MM, kit.W - kit.clear));
+    kit.cut(prismX([[centerY + bore, centerZ], [centerY, centerZ + bore], [centerY - bore, centerZ], [centerY, centerZ - bore]], face + SINK_MM, kit.W - kit.clear + 1), stubGroup);
+    if (pouring.includes(index)) kit.anchors.outlet.push({ at: [kit.W - kit.clear, centerY, centerZ - bore / 2], dir: [1, 0, 0] });
+  });
+  return face;
+}
+
+// Runoff: a full block with steel stubs and a rain basin on top
 function runoff(kit) {
-  outletBox(kit, 'steel');
+  const face = kit.W - kit.clear - STUB_ZONE_MM;
+  kit.add('concrete', box(kit.clear, kit.clear, 0, face, kit.D - kit.clear, kit.H));
+  const [inset, depth, water] = BASIN_INSET_MM;
+  kit.cut(box(kit.clear + inset, kit.clear + inset, kit.H - depth, face - inset, kit.D - kit.clear - inset, kit.H + 1), 'concrete');
+  kit.add('water', box(kit.clear + inset - SINK_MM, kit.clear + inset - SINK_MM, kit.H - depth - SINK_MM, face - inset + SINK_MM, kit.D - kit.clear - inset + SINK_MM, kit.H - water));
+  outletBody(kit, 'steel', kit.H);
 }
 
-// Disposal: a rusty tank and outlet that pours murky water
+// Disposal: a full block with rusty stubs, a hazard band and a roof tank
 function disposal(kit) {
-  const { centerX, centerY } = outletBox(kit, 'rust');
   const [radius, height] = DISPOSAL_TANK_MM;
-  kit.add('rust', cyl(centerX - OUTLET_MM[0] + radius, centerY, OUTLET_MM[2] - SINK_MM, OUTLET_MM[2] + height * 0.5, radius, radius * 0.8, 10));
+  const top = kit.H - height;
+  const face = kit.W - kit.clear - STUB_ZONE_MM;
+  kit.add('concrete', box(kit.clear, kit.clear, 0, face, kit.D - kit.clear, top - GEN_BAND_MM));
+  kit.add('hazard', box(kit.clear, kit.clear, top - GEN_BAND_MM - SINK_MM, face, kit.D - kit.clear, top));
+  outletBody(kit, 'rust', top - GEN_BAND_MM);
+  kit.add('rust', cyl((kit.clear + face) / 2, kit.D / 2, top - SINK_MM, kit.H, radius, radius * 0.8, 10));
 }
 
 // Arched foundation: pointed arch along local x
