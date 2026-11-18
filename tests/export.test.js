@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { partsList } from '../js/core/exportplan.js';
 import { CELL_MM, STORY_MM, BED_MM, PLATE_GAP_MM, PLATE_EDGE_MM, CONNECTOR_CLEARANCE_MM, RAIL_DEPTH_MM } from '../js/config.js';
 import { generate } from '../js/core/generator.js';
 import { meshStats } from '../js/core/meshtools.js';
@@ -138,4 +139,20 @@ test('the fit coupon plate holds two blocks and a peg', async () => {
   assert.ok(stats.watertight);
   assert.ok(stats.max[0] < 50 && stats.max[1] < 50, 'coupon stays small');
   near(stats.min[2], 0, 'on the bed');
+});
+
+test('the parts list says which plate holds each module, every module once', async () => {
+  const solids = await getSolids();
+  const { modules } = generate({ seed: 'habitat', scale: 'block', density: 1, height: 1, daring: 1, theme: 1 });
+  const built = buildExport(solids, modules);
+  const text = partsList(built.layout, modules, 'arco-habitat');
+  const lines = text.trim().split(/\r?\n/);
+  assert.equal(lines[0], `arco-habitat: ${built.plates.length} plates`);
+  assert.equal(lines.filter((line) => line.startsWith('Plate ')).length, built.plates.length);
+  for (const instance of modules) {
+    const listed = lines.filter((line) => line.startsWith(`  module ${instance.id},`));
+    assert.equal(listed.length, 1, `module ${instance.id} listed once`);
+  }
+  assert.ok(lines[2].startsWith('Plate 01: '));
+  assert.ok(!/[–—]/.test(text), 'no long dashes');
 });

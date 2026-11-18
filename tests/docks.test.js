@@ -338,11 +338,11 @@ test('a dock side keeps the side rules, with one exception above its base', () =
   const base = [tower, part(3, 'core', '1x1', 1, 1, 0, 0), dock];
   const railed = (z, mask = 0) => part(4, 'housing', '1x1', 1, 1, 0, z, 0, { mask });
   assert.equal(allowed(base, railed(1)).reason, DOCK_REASON, 'a rail at the base would hit the lip');
-  assert.equal(allowed(base, railed(1, 4)).reason, 'Facade meets a connector face', 'a facade against a dock');
+  assert.equal(allowed(base, railed(1, 4)).reason, 'Facade meets a connector face. Try rotating it (R)', 'a facade against a dock');
   const low = part(5, 'pier', '1x1', 1, 1, 0, 1);
   assert.ok(allowed(base, low).ok, 'a part without rails may stand beside a dock');
   assert.ok(allowed([...base, low], railed(2)).ok, 'a railed module may start above the lip');
-  assert.equal(allowed([...base, low], railed(2, 4)).reason, 'Facade meets a connector face');
+  assert.equal(allowed([...base, low], railed(2, 4)).reason, 'Facade meets a connector face. Try rotating it (R)');
   const facing = dockHouse(4, 1, 0, 1, 2);
   assert.ok(allowed(base, facing).ok, 'two docks may face each other');
   // The dock module is checked the same way when it comes second

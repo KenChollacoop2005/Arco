@@ -58,7 +58,7 @@ export function hasTwoSupports(world, instance) {
 }
 
 // Draft UI copy
-const SIDE_REASON = 'Facade meets a connector face';
+const SIDE_REASON = 'Facade meets a connector face. Try rotating it (R)';
 const DOCK_REASON = 'A dock face only takes a bridge end at its base';
 const PLUG_REASON = 'A docked bridge needs a dock face at both ends, at its own level';
 const GAP_REASON = 'A docked bridge needs an open gap under it';

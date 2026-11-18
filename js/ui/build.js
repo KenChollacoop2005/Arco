@@ -117,9 +117,10 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     pointerEvent = event;
     if (active() && picked) refreshGhost();
   });
+  // Leaving hides the ghost but keeps the last reason, which a tap would otherwise lose
   canvas.addEventListener('pointerleave', () => {
     pointerEvent = null;
-    if (active() && picked) refreshGhost();
+    if (active() && picked) moduleView.setGhost(null, false);
   });
 
   window.addEventListener('keydown', (event) => {
