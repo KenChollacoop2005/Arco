@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createBuild, growOptions } from '../js/core/build.js';
 import { generate } from '../js/core/generator.js';
 import { worldFromModules } from '../js/core/grid.js';
-import { validateStructure } from '../js/core/placement.js';
+import { validateStructure, reopenSides, outwardMask } from '../js/core/placement.js';
+import { OPEN_SIDE_FAMILIES } from '../js/core/catalog.js';
 import { runChecks } from '../js/core/checks.js';
 
 const CHOICES = { density: 1, height: 1, daring: 1, theme: 1 };
@@ -11,9 +12,18 @@ const CHOICES = { density: 1, height: 1, daring: 1, theme: 1 };
 const BASE_SEEDS = ['habitat', 'nakagin', 'trellick', 'arco'];
 const byId = (modules) => new Map(modules.map((instance) => [instance.id, instance]));
 
+// Kept as given; platforms may only refresh their open sides
 function assertKept(grown, locked) {
   const after = byId(grown.modules);
-  for (const instance of locked) assert.deepEqual(after.get(instance.id), instance);
+  const world = worldFromModules(grown.modules);
+  for (const instance of locked) {
+    const kept = after.get(instance.id);
+    if (!OPEN_SIDE_FAMILIES.includes(instance.family)) assert.deepEqual(kept, instance);
+    else {
+      assert.deepEqual({ ...kept, mask: instance.mask }, instance);
+      assert.equal(kept.mask, outwardMask(world, kept), `${instance.family} ${instance.id} open sides`);
+    }
+  }
   assert.equal(after.size, grown.modules.length);
 }
 
@@ -77,6 +87,27 @@ test('grow extends a hand built start where it stands', () => {
   const nearX = added.reduce((sum, instance) => sum + instance.x, 0) / added.length;
   const nearY = added.reduce((sum, instance) => sum + instance.y, 0) / added.length;
   assert.ok(Math.hypot(nearX - 2, nearY - 2) < 3, `added modules center on ${nearX.toFixed(1)}, ${nearY.toFixed(1)}`);
+});
+
+test('grow opens the sides of kept platforms beside new modules, as Build edits do', () => {
+  // Seeds where Grow builds against a kept terrace or balcony
+  const cases = [['nakagin', 'mega'], ['trellick', 'mega'], ['arco', 'mega'], ['golden', 'block']];
+  let opened = 0;
+  for (const [seed, scale] of cases) {
+    const base = generate({ seed, scale, ...CHOICES });
+    const grown = generate(growOptions({ seed: 'grow-' + seed, scale, ...CHOICES }, base.modules));
+    // Same masks as the Build path gives the grown list
+    assert.deepEqual(reopenSides(grown.modules), grown.modules, `${seed} ${scale} masks`);
+    const after = byId(grown.modules);
+    for (const instance of base.modules.filter((entry) => OPEN_SIDE_FAMILIES.includes(entry.family))) {
+      const mask = after.get(instance.id).mask;
+      // Sides only open: a new neighbour never adds a rail
+      assert.equal(mask & ~instance.mask, 0, `${seed} ${instance.family} ${instance.id} gained a rail`);
+      if (mask !== instance.mask) opened++;
+    }
+    assertKept(grown, base.modules);
+  }
+  assert.ok(opened >= 4, `opened ${opened}`);
 });
 
 test('grow from an empty plinth is a plain generator run', () => {

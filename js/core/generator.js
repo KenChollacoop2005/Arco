@@ -18,8 +18,8 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { CATEGORIES, UTILITIES, OPEN_SIDE_FAMILIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
-import { checkPlacement, validateStructure, outwardMask } from './placement.js';
+import { CATEGORIES, UTILITIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { checkPlacement, validateStructure, reopenSides } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
@@ -1433,10 +1433,9 @@ export function generate(options) {
   setJetties(ctx);
   if (opts.scale !== 'unit') services(ctx);
   setBridgeEnds(world, ctx.locked);
-  // Platforms open toward walls, railed where they face out
-  for (const instance of world.modules.values()) if (OPEN_SIDE_FAMILIES.includes(instance.family) && !ctx.locked.has(instance.id)) instance.mask = outwardMask(world, instance);
-  const modules = [...world.modules.values()].sort(
+  // Platforms open toward walls, railed where they face out, locked ones too
+  const modules = reopenSides([...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
-  );
+  ));
   return { modules, seed: opts.seed, options: opts, capped: ctx.capped, hash: structureHash(modules), stream: streamRecord(ctx.stream) };
 }
