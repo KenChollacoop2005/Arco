@@ -1,3 +1,4 @@
+import { rigidGroups, bodyItems } from './supports.js';
 import { STABILITY_MARGIN } from '../config.js';
 import { convexHull, hullDistance, nearestInHull } from './hull.js';
 import { solveFeasible } from './simplex.js';
@@ -18,6 +19,7 @@ const topsOf = (body) => body.tops || [{ z: body.z1, rects: body.rects }];
 const restOf = (body) => Math.min(...bottomsOf(body).map((face) => face.z));
 
 function massOf(body) {
+  if (body.mass) return body.mass;
   let area = 0;
   let momentX = 0;
   let momentY = 0;
@@ -231,6 +233,8 @@ function greedyPass(bodies, contacts, grounded, masses, margin) {
     const hull = convexHull(points.map((point) => [point.x, point.y]));
     const inside = hullDistance(hull, loadX, loadY);
     resultants.set(body.id, { x: loadX, y: loadY, total });
+    // On or past the edge it may go either way, so it loads nothing below; only past the edge is a failure
+    const tips = inside < INSIDE_EPS;
     if (inside < -INSIDE_EPS) {
       failed.set(body.id, inside);
       [loadX, loadY] = nearestInHull(hull, loadX, loadY);
@@ -248,7 +252,8 @@ function greedyPass(bodies, contacts, grounded, masses, margin) {
     for (const [lower, entry] of perLower) {
       const load = { force: entry.force, x: entry.x / entry.force, y: entry.y / entry.force };
       interfaces.push({ upper: body.id, lower, force: load.force, x: load.x, y: load.y, z: body.z0 });
-      if (lower !== 0) {
+      // A body on or past its edge falls off or balances; either way it does not lean on what is under it
+      if (lower !== 0 && !tips) {
         if (!incoming.has(lower)) incoming.set(lower, []);
         incoming.get(lower).push(load);
       }
@@ -318,7 +323,34 @@ function interfaceMargins(interfaces, contacts) {
   }
 }
 
-export function quickStable(bodies, margin = STABILITY_MARGIN) {
+// A support's group stands as one rigid body: its parts' faces, their weight at their joint centre
+function mergeGroups(bodies) {
+  const groups = rigidGroups(bodyItems(bodies));
+  if (groups.length === 0) return { merged: bodies, groups };
+  const byId = new Map(bodies.map((body) => [body.id, body]));
+  const grouped = new Set(groups.flatMap((group) => group.members));
+  const merged = bodies.filter((body) => !grouped.has(body.id));
+  for (const group of groups) {
+    const parts = group.members.map((id) => byId.get(id));
+    const masses = parts.map(massOf);
+    const weight = masses.reduce((sum, mass) => sum + mass.weight, 0);
+    const mass = { weight, x: masses.reduce((sum, part) => sum + part.weight * part.x, 0) / weight, y: masses.reduce((sum, part) => sum + part.weight * part.y, 0) / weight };
+    merged.push({
+      id: group.members[0],
+      rects: parts.flatMap((part) => part.rects),
+      z0: Math.min(...parts.map((part) => part.z0)),
+      z1: Math.max(...parts.map((part) => part.z1)),
+      bottoms: parts.flatMap(bottomsOf),
+      tops: parts.flatMap(topsOf),
+      mass,
+      members: group.members,
+    });
+  }
+  return { merged, groups, byId };
+}
+
+export function quickStable(given, margin = STABILITY_MARGIN) {
+  const bodies = mergeGroups(given).merged;
   const contacts = findContacts(bodies);
   const grounded = findGrounded(bodies, contacts);
   if (grounded.size - 1 !== bodies.length) return false;
@@ -326,7 +358,8 @@ export function quickStable(bodies, margin = STABILITY_MARGIN) {
   return greedyPass(bodies, contacts, grounded, masses, margin).failed.size === 0;
 }
 
-export function checkStability(bodies, options = {}) {
+export function checkStability(given, options = {}) {
+  const { merged: bodies, groups, byId } = mergeGroups(given);
   const margin = options.margin === undefined ? STABILITY_MARGIN : options.margin;
   const contacts = findContacts(bodies);
   const grounded = findGrounded(bodies, contacts);
@@ -388,6 +421,16 @@ export function checkStability(bodies, options = {}) {
   for (const [bodyId, overshoot] of strict.failed) {
     const entry = modules.get(bodyId);
     if (entry.status === 'fail') entry.margin = Math.min(entry.margin, overshoot);
+  }
+  // Every part of a group shares the group's verdict, each with its own centre of mass, carried by the lead
+  for (const group of groups) {
+    const lead = group.members[0];
+    const shared = modules.get(lead);
+    for (const id of group.members) {
+      const com = massOf(byId.get(id));
+      modules.set(id, { ...shared, com, group: group.members, supports: id === lead ? shared.supports : [lead] });
+      if (id !== lead) interfaces.push({ upper: id, lower: lead, force: com.weight, x: com.x, y: com.y, z: byId.get(id).z0, margin: shared.margin, rigid: true });
+    }
   }
   let status = 'pass';
   for (const entry of modules.values()) {

@@ -5,6 +5,7 @@ import {
   footprintCells,
   instanceCells,
   plinthCells,
+  cellInPlinth,
   worldFromModules,
   addModule,
   removeModule,
@@ -127,6 +128,13 @@ const GROUND_INDUSTRIAL = [['pipes', 2], ['tankfarm', 2], ['cooling', 1.5], ['sm
 const GROUND_ECO = [['planter', 2], ['market', 2], ['farm', 2], ['greenhouse', 1.5], ['patio', 1], ['garden', 1.5]];
 const UNIT_SKIP = ['bridge', 'gantry', 'walkway', 'wheel']; // need two supports, or the stream
 const ARCH_SKIP = 0.25; // chance a stream cell inside the mass stays open water
+const SUPPORT_SEED = 0x5a990; // keeps support rolls apart from layout rolls
+const SUPPORT_CHANCE = 0.05; // chance a ground mass cell is a support instead
+const SUPPORT_TRIES = 24; // ground cells tried per free standing support
+const CANOPY_NEAR = 3; // a canopy stands within this many cells of the structure
+const SUPPORT_TREES = [[0, 1], [1, 2], [1, 3]]; // free standing supports with a canopy, by density: block, mega
+const CANOPY_FAMILIES = [['housing', 3], ['studio', 1.5], ['deck', 1], ['shacks', 1]]; // modules a support carries
+const CANOPY_SIDES = [[2, 2], [4, 1]]; // canopy neighbours: opposite pair or all four, weighted
 
 const cellKey = (cellX, cellY) => (cellX + 64) * 256 + (cellY + 64);
 const area = (footprintId) => FOOTPRINTS[footprintId].length;
@@ -440,6 +448,14 @@ function massing(ctx) {
     for (const cell of ctx.rng.shuffle(ctx.site)) {
       if (ctx.world.modules.size >= massLimit) return;
       if (!open(cell[0], cell[1])) continue;
+      // Now and then the ground mass stands on a support instead
+      if (level === 0 && ctx.supportRng.chance(SUPPORT_CHANCE)) {
+        const most = Math.min(FAMILIES.support.maxStories, (ctx.heights.get(cellKey(cell[0], cell[1])) || 0) - 1);
+        if (most >= 1 && !onStream(ctx.stream, cell[0], cell[1])) {
+          const placed = place(ctx, { family: 'support', fp: '1x1', h: ctx.supportRng.int(1, most), seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: 0 });
+          if (placed) continue;
+        }
+      }
       // Where the mass meets the stream it stands on an arch, or leaves the water open
       if (level === 0 && onStream(ctx.stream, cell[0], cell[1])) {
         if (!ctx.rng.chance(ARCH_SKIP)) place(ctx, { family: 'arch', fp: '1x1', h: 1, seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: ctx.stream.alongX ? 0 : 1 });
@@ -861,6 +877,44 @@ function props(ctx) {
   for (const strut of struts) removeModule(world, strut.id);
 }
 
+// Free standing supports, each carrying a module with a balanced ring of neighbours
+function supportTrees(ctx) {
+  const { world, opts } = ctx;
+  const rng = ctx.supportRng;
+  const trees = rng.int(0, SUPPORT_TREES[opts.density][opts.scale === 'mega' ? 1 : 0]);
+  // Open plinth near the structure, so a canopy has room to spread
+  const near = new Set();
+  for (const instance of world.modules.values()) {
+    for (const [x, y] of instanceCells(instance)) for (let stepX = -CANOPY_NEAR; stepX <= CANOPY_NEAR; stepX++) for (let stepY = -CANOPY_NEAR; stepY <= CANOPY_NEAR; stepY++) near.add(cellKey(x + stepX, y + stepY));
+  }
+  // A block keeps to its site; a megastructure may spread onto open plinth
+  const spots = opts.scale === 'mega' ? plinthCells().filter(([x, y]) => near.has(cellKey(x, y))) : ctx.site;
+  for (let tree = 0; tree < trees; tree++) {
+    for (const [cellX, cellY] of rng.shuffle(spots).slice(0, SUPPORT_TRIES)) {
+      const stories = rng.int(1, FAMILIES.support.maxStories);
+      const window = [];
+      for (let stepX = -1; stepX <= 1; stepX++) for (let stepY = -1; stepY <= 1; stepY++) window.push([cellX + stepX, cellY + stepY]);
+      const allowed = (x, y) => (opts.scale === 'mega' ? cellInPlinth(x, y) : ctx.inSite.has(cellKey(x, y)));
+      if (!window.every(([x, y]) => allowed(x, y) && ctx.groundOk(x, y) && !onStream(ctx.stream, x, y) && emptyAt(world, x, y, 0, stories + 1))) continue;
+      const added = [];
+      const add = (spec) => {
+        const placed = place(ctx, spec);
+        if (placed) added.push(placed);
+        return placed;
+      };
+      if (!add({ family: 'support', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: 0, rot: 0 })) continue;
+      const family = rng.weighted(CANOPY_FAMILIES);
+      const top = add({ family, fp: '1x1', h: 1, seed: rng.int(1, 0x7fffffff), x: cellX, y: cellY, z: stories, rot: rng.int(0, 3), mask: 15 });
+      const sides = rng.weighted(CANOPY_SIDES) === 4 ? SIDES : rng.pick([[SIDES[0], SIDES[2]], [SIDES[1], SIDES[3]]]);
+      if (top) for (const [stepX, stepY] of sides) add({ family, fp: '1x1', h: 1, seed: rng.int(1, 0x7fffffff), x: cellX + stepX, y: cellY + stepY, z: stories, rot: rng.int(0, 3), mask: 15 });
+      // A canopy that does not stand, or has no neighbours, comes down
+      const keep = top && added.length >= 3 && (opts.unstable || checkStability(bodiesOf(world)).status === 'pass');
+      if (!keep) for (const instance of added.reverse()) removeModule(world, instance.id);
+      if (keep) break;
+    }
+  }
+}
+
 // Empty ground cell beside a building, footprint turned to fit
 function groundSpot(ctx, rng, family, footprintId, stories) {
   const { world } = ctx;
@@ -958,7 +1012,7 @@ function services(ctx) {
     let wheels = rng.int(0, STREAM_WHEELS[opts.density]);
     for (const [cellX, cellY] of rng.shuffle(ctx.stream.cells)) {
       if (wheels <= 0) break;
-      if (!emptyAt(world, cellX, cellY, 0, FAMILIES.wheel.maxStories)) continue;
+      if (!ctx.inSite.has(cellKey(cellX, cellY)) || !emptyAt(world, cellX, cellY, 0, FAMILIES.wheel.maxStories)) continue;
       const placed = place(ctx, { family: 'wheel', fp: '1x1', h: rng.int(1, FAMILIES.wheel.maxStories), seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: 0, rot: (ctx.stream.alongX ? 0 : 1) + rng.int(0, 1) * 2 });
       if (placed) {
         keep(placed);
@@ -1058,6 +1112,7 @@ export function generate(options) {
     pool: Array.from({ length: STYLE_POOL }, () => rng.int(1, 0x7fffffff)),
     // A unit stands alone; larger scales share the seed's stream
     stream: opts.scale === 'unit' ? null : streamOf(opts.seed),
+    supportRng: makeRng(mixSeed(hashString(opts.seed), SUPPORT_SEED)),
   };
   const angle = rng.range(0, Math.PI * 2);
   ctx.themeAxis = [Math.cos(angle), Math.sin(angle)];
@@ -1084,6 +1139,8 @@ export function generate(options) {
     }
     prune(ctx);
   }
+  // Canopies go in before the facade pass, so their shared sides become connectors
+  if (opts.scale !== 'unit') supportTrees(ctx);
   dropIdleDocks(world, ctx.locked);
   setMasks(world, ctx.locked);
   setProfiles(ctx);

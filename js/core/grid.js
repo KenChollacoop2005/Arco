@@ -1,3 +1,4 @@
+import { SUPPORT_FAMILIES } from './supports.js';
 import { CELL_MM, STORY_MM, PLINTH_DIAMETER_CELLS, DOCK_LIP_MM } from '../config.js';
 import { hashString } from './rng.js';
 import { profileBoxes, profileClaims } from './profiles.js';
@@ -173,6 +174,7 @@ function bodyBlock(instance) {
     ]),
     z0: instance.z * STORY_MM,
     z1: (instance.z + instance.h) * STORY_MM,
+    ...(SUPPORT_FAMILIES.includes(instance.family) ? { support: true } : {}),
   };
 }
 

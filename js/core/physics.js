@@ -10,7 +10,8 @@ import {
   PHYSICS_SETTLE_S,
   PHYSICS_MOVE_TOL_CELLS,
 } from '../config.js';
-import { FOOTPRINTS, footprintSize, instancePose } from './grid.js';
+import { FOOTPRINTS, footprintSize, instancePose, instanceCells } from './grid.js';
+import { rigidGroups, moduleItems } from './supports.js';
 import { FAMILIES, isDocked } from './catalog.js';
 import { profileColliders } from './profiles.js';
 import { dockColliders, plugColliders } from './docks.js';
@@ -105,6 +106,16 @@ export function restPoses(modules) {
   return poses;
 }
 
+const conjugate = (turn) => ({ x: -turn.x, y: -turn.y, z: -turn.z, w: turn.w });
+// Quaternion product, first turn applied last
+const multiply = (first, second) => ({
+  x: first.w * second.x + first.x * second.w + first.y * second.z - first.z * second.y,
+  y: first.w * second.y - first.x * second.z + first.y * second.w + first.z * second.x,
+  z: first.w * second.z + first.x * second.y - first.y * second.x + first.z * second.w,
+  w: first.w * second.w - first.x * second.x - first.y * second.y - first.z * second.z,
+});
+const turnOf = (rest) => ({ x: rest[3], y: rest[4], z: rest[5], w: rest[6] });
+
 function turnPoint(turn, point) {
   const { x, y, z, w } = turn;
   const crossX = y * point[2] - z * point[1];
@@ -131,28 +142,49 @@ export function createPhysicsWorld(RAPIER, modules) {
       .setFriction(PHYSICS_FRICTION),
     plinth
   );
+  // A support's rigid group is one body carrying every member's colliders: a fixed joint with no give
+  const byId = new Map(modules.map((instance) => [instance.id, instance]));
+  const groupOf = new Map();
+  for (const group of rigidGroups(moduleItems(modules, instanceCells))) for (const id of group.members) groupOf.set(id, group);
+  const groupBodies = new Map();
+  const newBody = (rest) => world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(rest[0], rest[1], rest[2]).setRotation(turnOf(rest)));
   const entries = modules.map((instance) => {
     const rest = restPose(instance);
-    const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(rest[0], rest[1], rest[2])
-        .setRotation({ x: rest[3], y: rest[4], z: rest[5], w: rest[6] })
-    );
+    const group = groupOf.get(instance.id);
+    let body;
+    let local = { at: [0, 0, 0], turn: { x: 0, y: 0, z: 0, w: 1 } };
+    if (group) {
+      const lead = restPose(byId.get(group.members[0]));
+      if (!groupBodies.has(group)) groupBodies.set(group, newBody(lead));
+      body = groupBodies.get(group);
+      const back = conjugate(turnOf(lead));
+      local = { at: turnPoint(back, [0, 1, 2].map((axis) => rest[axis] - lead[axis])), turn: multiply(back, turnOf(rest)) };
+    } else body = newBody(rest);
     const shapes = variantColliders(instance);
     for (const shape of shapes) {
-      world.createCollider(SHAPE_BUILDERS[shape.kind](RAPIER, shape).setFriction(PHYSICS_FRICTION).setDensity(DENSITY), body);
+      const desc = SHAPE_BUILDERS[shape.kind](RAPIER, shape);
+      const centre = turnPoint(local.turn, [desc.translation.x, desc.translation.y, desc.translation.z]).map((value, axis) => value + local.at[axis]);
+      desc.setTranslation(centre[0], centre[1], centre[2]).setRotation(local.turn);
+      world.createCollider(desc.setFriction(PHYSICS_FRICTION).setDensity(DENSITY), body);
     }
     const corner = farCorner(shapes);
-    const startCorner = turnPoint({ x: rest[3], y: rest[4], z: rest[5], w: rest[6] }, corner);
-    return { id: instance.id, body, corner, rest, startCorner: startCorner.map((part, axis) => part + rest[axis]), gone: false };
+    const startCorner = turnPoint(turnOf(rest), corner);
+    return { id: instance.id, body, local, corner, rest, startCorner: startCorner.map((part, axis) => part + rest[axis]), gone: false };
   });
+  // Where a module is now: its body's pose, then its place on that body
+  const poseOf = (entry) => {
+    const position = entry.body.translation();
+    const turn = entry.body.rotation();
+    const at = turnPoint(turn, entry.local.at);
+    return { position: { x: position.x + at[0], y: position.y + at[1], z: position.z + at[2] }, turn: multiply(turn, entry.local.turn) };
+  };
   let steps = 0;
 
   function step() {
     world.step();
     steps++;
     for (const entry of entries) {
-      if (!entry.gone && entry.body.translation().z < FLOOR_CELLS) {
+      if (!entry.gone && poseOf(entry).position.z < FLOOR_CELLS) {
         entry.gone = true;
         entry.body.setEnabled(false);
       }
@@ -167,8 +199,7 @@ export function createPhysicsWorld(RAPIER, modules) {
         target.fill(0, at, at + POSE_SIZE);
         return;
       }
-      const position = entry.body.translation();
-      const turn = entry.body.rotation();
+      const { position, turn } = poseOf(entry);
       target[at] = position.x;
       target[at + 1] = position.y;
       target[at + 2] = position.z;
@@ -188,8 +219,8 @@ export function createPhysicsWorld(RAPIER, modules) {
         moved.set(entry.id, Infinity);
         continue;
       }
-      const position = entry.body.translation();
-      const corner = turnPoint(entry.body.rotation(), entry.corner);
+      const { position, turn } = poseOf(entry);
+      const corner = turnPoint(turn, entry.corner);
       const origin = Math.hypot(position.x - entry.rest[0], position.y - entry.rest[1], position.z - entry.rest[2]);
       const far = Math.hypot(
         corner[0] + position.x - entry.startCorner[0],

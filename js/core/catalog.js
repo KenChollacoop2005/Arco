@@ -84,6 +84,7 @@ const TABLE = [
   ['runoff', 'Expression', 'Runoff', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
   ['disposal', 'Industrial', 'Disposal', 'industrial', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
   ['arch', 'Structure', 'Arched foundation', 'neutral', ['1x1'], [1, 1], 1, 1, 0, 1, 0],
+  ['support', 'Structure', 'Support', 'neutral', ['1x1'], [1, 3], 1, 0, 0, 0, 0],
 ];
 
 // Sides a family always keeps open, as a local side mask
@@ -99,7 +100,7 @@ export const PROFILE_FAMILIES = ['core', 'transfer', 'housing', 'studio', 'hall'
 // Bridge families that dock between two buildings
 export const DOCK_BRIDGES = ['walkway', 'gantry'];
 // Railed families without a body at the slot foot
-const NO_DOCK = ['pilotis'];
+const NO_DOCK = ['pilotis', 'arch'];
 export const PLUG_ENDS = 5; // both end sides of a 1xN bridge
 
 export const FAMILIES = {};

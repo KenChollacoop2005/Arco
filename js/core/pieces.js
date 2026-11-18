@@ -23,6 +23,18 @@ const OUTLET_MM = [7, 6, 9, 2.3, 6]; // outlet box half x, half y, height, pipe 
 const OUTLET_WALL_MM = 1.4; // outlet pipe wall
 const DISPOSAL_TANK_MM = [5, 11]; // disposal tank radius and height
 const ARCH_MM = [7.5, 6, 1.15]; // arch half width, springing height, crown rise per mm of half width
+const SUPPORT_FORMS = ['columns', 'struts']; // support frame forms by seed
+const BAY_USES = ['garden', 'stall', 'empty']; // what the open bay holds, by seed
+const SUPPORT_POST_MM = 4.5; // column frame pillar width
+const STRUT_POST_MM = 3; // strut frame corner post width
+const SUPPORT_FLOOR_MM = 1.4; // floor plate under the frame and its bay
+const STRUT_MM = 2.4; // strut thickness
+const SUPPORT_SLAB_MM = 6; // top slab, deep enough for a socket
+const BAY_BED_MM = 4.5; // garden bed half width
+const BAY_SOIL_MM = 3.5; // garden bed soil height
+const BAY_BUSH_MM = 4; // garden bush height
+const BAY_COUNTER_MM = [5, 3, 7]; // stall counter half length, depth, height
+const BAY_TARP_MM = 1.4; // stall tarp under the slab
 export const TURBINE_FORMS = ['vertical', 'three', 'drum', 'frame', 'ducted']; // turbine forms by seed
 export const SOLAR_FORMS = ['rack', 'tracker', 'wall', 'awning']; // solar forms by seed
 const MAST_MM = [2, 1.5]; // turbine mast radius low and high
@@ -320,4 +332,43 @@ export function solarForm(kit, rack) {
   return null;
 }
 
-export const PIECE_RECIPES = { generator, spring, raincatcher, well, wheel, wheelup, runoff, disposal, arch };
+// Support: a frame that carries one module and, through it, its neighbours
+function support(kit) {
+  const form = kit.rng.pick(SUPPORT_FORMS);
+  const use = kit.rng.pick(BAY_USES);
+  const low = kit.clear;
+  const high = kit.W - kit.clear;
+  const middle = kit.W / 2;
+  const slab = kit.H - SUPPORT_SLAB_MM;
+  kit.add('concrete', box(low, low, slab, high, high, kit.H));
+  // A thin floor plate: the base rests on it and the bay's contents stand on it
+  kit.add('concrete', box(low, low, 0, high, high, SUPPORT_FLOOR_MM));
+  const post = form === 'columns' ? SUPPORT_POST_MM : STRUT_POST_MM;
+  for (const cornerX of [low, high - post]) for (const cornerY of [low, high - post]) kit.add('concrete', box(cornerX, cornerY, SUPPORT_FLOOR_MM - SINK_MM, cornerX + post, cornerY + post, slab + SINK_MM));
+  if (form === 'struts') {
+    // A raking pair up each edge, meeting under the middle of the slab
+    const foot = SUPPORT_FLOOR_MM - SINK_MM;
+    const head = slab + SINK_MM;
+    const pairs = [
+      [[low, foot], [low + STRUT_MM, foot], [middle, head], [middle - STRUT_MM, head]],
+      [[high - STRUT_MM, foot], [high, foot], [middle + STRUT_MM, head], [middle, head]],
+    ];
+    for (const strut of pairs) {
+      for (const [faceFrom, faceTo] of [[low, low + STRUT_MM], [high - STRUT_MM, high]]) {
+        kit.add('steel', prismY(strut, faceFrom, faceTo));
+        kit.add('steel', prismX(strut, faceFrom, faceTo));
+      }
+    }
+  }
+  // The open bay holds a small ground use inside the frame
+  if (use === 'garden') {
+    kit.add('soil', box(middle - BAY_BED_MM, middle - BAY_BED_MM, SUPPORT_FLOOR_MM - SINK_MM, middle + BAY_BED_MM, middle + BAY_BED_MM, BAY_SOIL_MM));
+    kit.add('plant', cyl(middle, middle, BAY_SOIL_MM - SINK_MM, BAY_SOIL_MM + BAY_BUSH_MM, BAY_BUSH_MM * 0.6, BAY_BUSH_MM * 0.3, 7));
+  } else if (use === 'stall') {
+    const [counterHalf, counterDeep, counterTall] = BAY_COUNTER_MM;
+    kit.add('wood', box(middle - counterHalf, low + post + 0.5, SUPPORT_FLOOR_MM - SINK_MM, middle + counterHalf, low + post + 0.5 + counterDeep, counterTall));
+    kit.add(kit.rng.pick(['tarpTerracotta', 'tarpMustard', 'tarpTeal']), box(low + post - SINK_MM, low + post - SINK_MM, slab - BAY_TARP_MM, high - post + SINK_MM, high - post + SINK_MM, slab + SINK_MM));
+  }
+}
+
+export const PIECE_RECIPES = { generator, spring, raincatcher, well, wheel, wheelup, runoff, disposal, arch, support };

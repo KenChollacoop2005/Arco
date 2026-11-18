@@ -1,3 +1,4 @@
+import { groupCarried } from './supports.js';
 import { streamReason } from './stream.js';
 import { MAX_MODULES } from '../config.js';
 import {
@@ -202,7 +203,8 @@ export function checkPlacement(world, instance, options = {}) {
   const docked = isDocked(instance);
   const supports = supportsUnder(world, instance);
   if (docked && !overGap(world, instance)) return { ok: false, reason: GAP_REASON };
-  if (!docked && !supports.some(Boolean)) return { ok: false, reason: 'No support below' };
+  // A module with nothing under it may hang in a support's rigid group
+  if (!docked && !supports.some(Boolean) && !groupCarried([...world.modules.values()], instance, instanceCells)) return { ok: false, reason: 'No support below' };
   for (const support of supports) {
     if (!docked && support && support !== 'plinth' && !canSupport(support)) {
       return { ok: false, reason: 'Nothing can sit on that part' };
