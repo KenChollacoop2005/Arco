@@ -97,7 +97,7 @@ export const PORT_FRONT_MM = 2; // space a port needs in front of it
 
 // Strings: water
 export const WATER_QUARTERS = 4; // units are counted in quarters inside the solver
-export const WATER_STEP = 0.5; // units split between branches in steps of this
+export const WATER_STEP = 0.5; // water and power split between branches in steps of this
 export const GRAVITY_HEAD = 3; // head of gravity water, which cannot climb
 export const HEAD_PER_CELL = 1; // head spent per cell of level pipe
 export const HEAD_PER_STORY_UP = 2; // head spent per story of rise; falling is free
@@ -143,13 +143,7 @@ export const MAX_PIPES_PER_PAIR = 1; // most pipes between two ports
 export const MAX_LINES_PER_PAIR = 1; // most plain lines between two ports
 
 // Strings: power
-export const POWER_SOURCES = ['turbine', 'solar']; // families that make power
 export const POWER_ROOMS = ['powerroom']; // families wires fan out from
-export const ROOM_NEAR_MM = 5 * 25; // a power room this close takes over from a source
-export const JUMPER_MAX_MM = 1.2 * 25; // longest wire between touching modules
-export const WIRE_CROSS_MM = 1.5 * 25; // cost added per wire crossed in plan
-export const WIRE_LINKS_MAX = 70; // most wire links per structure
-export const CABLES_PER_LINK = [1, 3]; // cables strung on one link
 export const CABLE_SHIFT_MM = 0.9; // seeded shift of each cable's ends
 export const CABLE_TILT = 0.35; // most sideways swing of a cable's sag, radians
 export const SPARE_SHARE = 0.15; // share of links with a slack spare cable
@@ -169,7 +163,6 @@ export const TARPS_MAX = 6; // most tarps per structure
 export const TARP_COLORS = [0xb5694a, 0xc9a23f, 0x5f9c95]; // terracotta, mustard, faded teal
 
 // Power: units, reach and throughput
-export const POWER_STEP = 0.5; // power splits between branches in steps of this
 // Power sources: supply in units, reach in cells
 export const POWER_SUPPLY = {
   turbine: [2, 6],

@@ -2,6 +2,22 @@ import { box, prismX, prismY, prismZ, cyl, octagon } from './kit.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
+const CUT_OVER_MM = 1; // cuts run this far past the face they open
+const ROUND_SIDES = 10; // facets on stacks and drums
+const FRAME_ROWS_MAX = 3; // most rotor rows on a frame turbine
+const FRAME_ROOM_MM = [6, 2]; // frame turbine room kept above the rows, cap over the top row
+const FRAME_BAR_MM = 0.7; // hub bar half height
+const FRAME_HUB_MM = [0.8, 1]; // rotor hub out from the post, gap past the rotor
+const DUCT_COUNT = [2, 3]; // ducts in a row, by seed
+const DUCT_GAP_MM = 1; // space between ducts
+const DUCT_FAN_GAP_MM = 0.3; // fan blade tip clear of the duct wall
+const SOLAR_BASE_MM = 2.5; // base slab under solar forms
+const POLE_TOP_MM = [10, 15, 1]; // tracker panel height range, room left under the top
+const POLE_SIDES = [8, 4, 45]; // tracker pole facets, cone facets, cone turn in degrees
+const PANEL_TILT = [0.25, 0.5]; // tracker panel rise per mm across, by seed
+const SOLAR_EDGE_MM = 1; // wall panels stop this far inside the top and ends
+const AWNING_END_MM = 4; // no extra awning post this close to the end post
+const AWNING_SKIN_IN_MM = 0.6; // awning panel skin inset from the roof edge
 const CURB_MM = 4; // low bases under roof parts
 const GEN_STACK_MM = [9, 3.4, 2.8, 2]; // generator stack zone height, radius low, high, soot cap
 const GEN_BAND_MM = 2.2; // generator hazard band
@@ -71,13 +87,13 @@ function generator(kit) {
   kit.slab('hazard', kit.clear, roomTop - GEN_BAND_MM, roomTop);
   const [slot, depth, pitch, margin] = GEN_LOUVRE_MM;
   const low = kit.clear;
-  for (let at = CURB_MM; at + slot < roomTop - GEN_BAND_MM - 1; at += pitch) {
-    kit.cut(box(low - 1, kit.D * margin, at, low + depth, kit.D * (1 - margin), at + slot));
-    kit.cut(box(kit.W - low - depth, kit.D * margin, at, kit.W - low + 1, kit.D * (1 - margin), at + slot));
+  for (let at = CURB_MM; at + slot < roomTop - GEN_BAND_MM - CUT_OVER_MM; at += pitch) {
+    kit.cut(box(low - CUT_OVER_MM, kit.D * margin, at, low + depth, kit.D * (1 - margin), at + slot));
+    kit.cut(box(kit.W - low - depth, kit.D * margin, at, kit.W - low + CUT_OVER_MM, kit.D * (1 - margin), at + slot));
   }
   const [centerX, centerY] = kit.cellCenters()[0];
-  kit.add('steel', cyl(centerX, centerY, roomTop - SINK_MM, kit.H - cap, radiusLow, radiusHigh, 10));
-  kit.add('soot', cyl(centerX, centerY, kit.H - cap, kit.H, radiusHigh, radiusHigh, 10));
+  kit.add('steel', cyl(centerX, centerY, roomTop - SINK_MM, kit.H - cap, radiusLow, radiusHigh, ROUND_SIDES));
+  kit.add('soot', cyl(centerX, centerY, kit.H - cap, kit.H, radiusHigh, radiusHigh, ROUND_SIDES));
   kit.anchors.smoke.push([centerX, centerY, kit.H]);
   const [halfX, halfY, tall] = GEN_VENT_MM;
   const [lastX, lastY] = kit.cellCenters()[kit.cells.length - 1];
@@ -293,28 +309,28 @@ export function turbineForm(kit, vertical) {
   }
   if (form === 'frame') {
     const [post, spacing, radius] = FRAME_MM;
-    const rows = Math.max(1, Math.min(3, Math.floor((kit.H - CURB_MM - 6) / (radius * 2 + spacing))));
-    const top = CURB_MM + rows * (radius * 2 + spacing) + 2;
+    const rows = Math.max(1, Math.min(FRAME_ROWS_MAX, Math.floor((kit.H - CURB_MM - FRAME_ROOM_MM[0]) / (radius * 2 + spacing))));
+    const top = CURB_MM + rows * (radius * 2 + spacing) + FRAME_ROOM_MM[1];
     for (const sign of [-1, 1]) kit.add('steel', box(centerX - post, centerY + sign * (kit.D / 2 - kit.clear - post) - post, CURB_MM - SINK_MM, centerX + post, centerY + sign * (kit.D / 2 - kit.clear - post) + post, top));
     kit.add('steel', box(centerX - post, kit.clear, top - post * 2, centerX + post, kit.D - kit.clear, top));
     for (let row = 0; row < rows; row++) {
       const hubZ = CURB_MM + spacing + radius + row * (radius * 2 + spacing);
-      kit.add('steel', box(centerX - post, kit.clear + post, hubZ - 0.7, centerX + post, kit.D - kit.clear - post, hubZ + 0.7));
-      for (const sign of [-1, 1]) threeBlade(kit, centerX + post + 0.8, centerY + sign * (radius + 1), hubZ, radius, turn + row);
+      kit.add('steel', box(centerX - post, kit.clear + post, hubZ - FRAME_BAR_MM, centerX + post, kit.D - kit.clear - post, hubZ + FRAME_BAR_MM));
+      for (const sign of [-1, 1]) threeBlade(kit, centerX + post + FRAME_HUB_MM[0], centerY + sign * (radius + FRAME_HUB_MM[1]), hubZ, radius, turn + row);
     }
     return null;
   }
   // Ducted: small square ducts on a curb, each with a fan
   const [half, wall, length] = DUCT_MM;
-  const count = Math.min(kit.rng.int(2, 3), Math.floor((kit.D - 2 * kit.clear) / (half * 2 + 1)));
+  const count = Math.min(kit.rng.int(DUCT_COUNT[0], DUCT_COUNT[1]), Math.floor((kit.D - 2 * kit.clear) / (half * 2 + DUCT_GAP_MM)));
   const levels = kit.stories > 2 ? 2 : 1;
   for (let level = 0; level < levels; level++) {
     for (let at = 0; at < count; at++) {
-      const ductY = kit.clear + half + at * (half * 2 + 1);
+      const ductY = kit.clear + half + at * (half * 2 + DUCT_GAP_MM);
       const ductZ = CURB_MM + half + level * (half * 2 - SINK_MM);
       kit.add('steel', box(centerX - length / 2, ductY - half, ductZ - half, centerX + length / 2, ductY + half, ductZ + half));
-      kit.cut(box(centerX - length / 2 - 1, ductY - half + wall, ductZ - half + wall, centerX + length / 2 + 1, ductY + half - wall, ductZ + half - wall), 'steel');
-      threeBlade(kit, centerX, ductY, ductZ, half - wall - 0.3, turn + at);
+      kit.cut(box(centerX - length / 2 - CUT_OVER_MM, ductY - half + wall, ductZ - half + wall, centerX + length / 2 + CUT_OVER_MM, ductY + half - wall, ductZ + half - wall), 'steel');
+      threeBlade(kit, centerX, ductY, ductZ, half - wall - DUCT_FAN_GAP_MM, turn + at);
     }
   }
   return null;
@@ -325,15 +341,15 @@ export function solarForm(kit, rack) {
   const form = kit.rng.pick(SOLAR_FORMS);
   if (form === 'rack') return rack(kit);
   const [skin, foot] = PANEL_MM;
-  kit.slab('concrete', kit.clear, 0, 2.5);
+  kit.slab('concrete', kit.clear, 0, SOLAR_BASE_MM);
   if (form === 'tracker') {
     const [pole, half, rise] = POLE_MM;
     for (const [centerX, centerY] of kit.cellCenters()) {
-      const top = Math.min(kit.H - half - 1, kit.rng.range(10, 15));
-      kit.add('steel', cyl(centerX, centerY, 2.5 - SINK_MM, top - rise, pole, pole, 8));
-      kit.add('steel', cyl(centerX, centerY, top - rise - SINK_MM, top, pole, half, 4, 45));
+      const top = Math.min(kit.H - half - POLE_TOP_MM[2], kit.rng.range(POLE_TOP_MM[0], POLE_TOP_MM[1]));
+      kit.add('steel', cyl(centerX, centerY, SOLAR_BASE_MM - SINK_MM, top - rise, pole, pole, POLE_SIDES[0]));
+      kit.add('steel', cyl(centerX, centerY, top - rise - SINK_MM, top, pole, half, POLE_SIDES[1], POLE_SIDES[2]));
       // Panel on a wedge, tilted to the seeded side
-      const tilt = kit.rng.range(0.25, 0.5);
+      const tilt = kit.rng.range(PANEL_TILT[0], PANEL_TILT[1]);
       const low = top;
       const thin = PANEL_MM[2];
       kit.add('steel', prismY([[centerX - half, low - SINK_MM], [centerX + half, low - SINK_MM], [centerX + half, low + half * 2 * tilt], [centerX - half, low + thin]], centerY - half, centerY + half));
@@ -343,13 +359,13 @@ export function solarForm(kit, rack) {
   }
   if (form === 'wall') {
     const [half, tall] = WALL_PANEL_MM;
-    const height = Math.min(kit.H - 1, tall);
+    const height = Math.min(kit.H - SOLAR_EDGE_MM, tall);
     const alongX = kit.W >= kit.D;
     const middle = alongX ? kit.D / 2 : kit.W / 2;
-    const span = (from, to, low, high) => (alongX ? box(kit.clear + 1, from, low, kit.W - kit.clear - 1, to, high) : box(from, kit.clear + 1, low, to, kit.D - kit.clear - 1, high));
-    kit.add('concrete', span(middle - half, middle + half, 2.5 - SINK_MM, height));
-    kit.add('solar', span(middle - half - skin, middle - half + SINK_MM, foot + 2.5, height - 1));
-    kit.add('solar', span(middle + half - SINK_MM, middle + half + skin, foot + 2.5, height - 1));
+    const span = (from, to, low, high) => (alongX ? box(kit.clear + SOLAR_EDGE_MM, from, low, kit.W - kit.clear - SOLAR_EDGE_MM, to, high) : box(from, kit.clear + SOLAR_EDGE_MM, low, to, kit.D - kit.clear - SOLAR_EDGE_MM, high));
+    kit.add('concrete', span(middle - half, middle + half, SOLAR_BASE_MM - SINK_MM, height));
+    kit.add('solar', span(middle - half - skin, middle - half + SINK_MM, foot + SOLAR_BASE_MM, height - SOLAR_EDGE_MM));
+    kit.add('solar', span(middle + half - SINK_MM, middle + half + skin, foot + SOLAR_BASE_MM, height - SOLAR_EDGE_MM));
     return null;
   }
   // Awning on one or two cells only: wider roofs would need posts inside
@@ -357,17 +373,17 @@ export function solarForm(kit, rack) {
   const [post, eave, roof] = AWNING_MM;
   const top = Math.min(kit.H - roof - skin, eave);
   for (const [cornerX, cornerY] of [[kit.clear + post, kit.clear + post], [kit.W - kit.clear - post, kit.clear + post], [kit.W - kit.clear - post, kit.D - kit.clear - post], [kit.clear + post, kit.D - kit.clear - post]]) {
-    kit.add('steel', box(cornerX - post, cornerY - post, 2.5 - SINK_MM, cornerX + post, cornerY + post, top));
+    kit.add('steel', box(cornerX - post, cornerY - post, SOLAR_BASE_MM - SINK_MM, cornerX + post, cornerY + post, top));
   }
   // Posts under long sides keep every roof bridge under the limit
-  for (let at = kit.clear + post + AWNING_STEP_MM; at < kit.W - kit.clear - post - 4; at += AWNING_STEP_MM) {
-    for (const cornerY of [kit.clear + post, kit.D - kit.clear - post]) kit.add('steel', box(at - post, cornerY - post, 2.5 - SINK_MM, at + post, cornerY + post, top));
+  for (let at = kit.clear + post + AWNING_STEP_MM; at < kit.W - kit.clear - post - AWNING_END_MM; at += AWNING_STEP_MM) {
+    for (const cornerY of [kit.clear + post, kit.D - kit.clear - post]) kit.add('steel', box(at - post, cornerY - post, SOLAR_BASE_MM - SINK_MM, at + post, cornerY + post, top));
   }
-  for (let at = kit.clear + post + AWNING_STEP_MM; at < kit.D - kit.clear - post - 4; at += AWNING_STEP_MM) {
-    for (const cornerX of [kit.clear + post, kit.W - kit.clear - post]) kit.add('steel', box(cornerX - post, at - post, 2.5 - SINK_MM, cornerX + post, at + post, top));
+  for (let at = kit.clear + post + AWNING_STEP_MM; at < kit.D - kit.clear - post - AWNING_END_MM; at += AWNING_STEP_MM) {
+    for (const cornerX of [kit.clear + post, kit.W - kit.clear - post]) kit.add('steel', box(cornerX - post, at - post, SOLAR_BASE_MM - SINK_MM, cornerX + post, at + post, top));
   }
   kit.add('concrete', box(kit.clear, kit.clear, top - SINK_MM, kit.W - kit.clear, kit.D - kit.clear, top + roof));
-  kit.add('solar', box(kit.clear + 0.6, kit.clear + 0.6, top + roof - SINK_MM, kit.W - kit.clear - 0.6, kit.D - kit.clear - 0.6, top + roof + skin));
+  kit.add('solar', box(kit.clear + AWNING_SKIN_IN_MM, kit.clear + AWNING_SKIN_IN_MM, top + roof - SINK_MM, kit.W - kit.clear - AWNING_SKIN_IN_MM, kit.D - kit.clear - AWNING_SKIN_IN_MM, top + roof + skin));
   return null;
 }
 

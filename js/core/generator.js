@@ -101,6 +101,7 @@ const POWER_ROOMS = [[0, 1], [1, 2], [1, 3]]; // power rooms per structure by de
 const HOMES = ['housing', 'studio', 'shacks', 'flared', 'penthouse', 'hall']; // families a power room goes near
 const INDUSTRY = ['smokestack', 'chimney', 'cooling', 'tankfarm', 'pipes', 'pumproom']; // families industry goes near
 const GENERATORS = [[0, 1], [0, 1], [1, 2]]; // generator rooms by density: block, mega
+const GENERATOR_GROUND_SHARE = 0.5; // share of generator rooms on the ground, not a roof
 const SPRINGS = [[0, 1], [0, 1], [0, 2]]; // springs by density: block, mega
 const WELLS = [[0, 1], [0, 1], [0, 1]]; // wells by density: block, mega
 const RAIN_CATCHERS = [[0, 1], [1, 2], [1, 3]]; // rain catchers by density: block, mega
@@ -1115,7 +1116,7 @@ function services(ctx) {
   const roll = (table) => rng.int(0, table[opts.density][mega]);
   for (let count = categoryOn('generator', opts.categories) ? roll(GENERATORS) : 0; count > 0; count--) {
     const family = FAMILIES.generator;
-    keep(rng.chance(0.5) ? groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)) : roofSpot(ctx, rng, family.id, INDUSTRY));
+    keep(rng.chance(GENERATOR_GROUND_SHARE) ? groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)) : roofSpot(ctx, rng, family.id, INDUSTRY));
   }
   for (let count = roll(SPRINGS); count > 0; count--) keep(groundSpot(ctx, rng, 'spring', rng.pick(FAMILIES.spring.footprints), 1));
   for (let count = roll(WELLS); count > 0; count--) keep(groundSpot(ctx, rng, 'well', '1x1', 1));
@@ -1260,7 +1261,8 @@ function fillServices(ctx) {
     for (const other of all()) if (!waterLeft.has(other.id)) waterLeft.set(other.id, ownWater(other));
   }
   // Power: pumps first, then the rest; each source serves up to its supply
-  for (const consumer of stillDry) {
+  // A copy, since served consumers leave the list
+  for (const consumer of [...stillDry]) {
     const piece = rng.chance(PLANNER_TANK_SHARE) ? keep(roofNear(ctx, rng, 'pumptank', consumer, PLANNER_WATER_REACH, consumer.z + consumer.h)) : null;
     if (piece) stillDry.splice(stillDry.indexOf(consumer), 1);
   }

@@ -112,24 +112,30 @@ export function createWaterworks(view) {
       const lineAt = (record.line + 0.5) * CELL_MM;
       const values = record.cells.map((cell) => cell[axis]);
       const upstream = record.flow > 0 ? Math.min(...values) * CELL_MM : (Math.max(...values) + 1) * CELL_MM;
-      const rimAt = record.flow * Math.sqrt(Math.max(0, RIM_MM * RIM_MM - lineAt * lineAt));
+      // Each edge of the channel meets the rim at its own spot
+      const rimAt = (across) => record.flow * Math.sqrt(Math.max(0, RIM_MM * RIM_MM - (lineAt + across) ** 2));
       const point = (along, across, z) => {
         const out = [0, 0, z];
         out[axis] = along;
         out[cross] = lineAt + across;
         return out;
       };
-      const length = Math.abs(rimAt - upstream);
       const half = CHANNEL_MM / 2;
-      const corner = (along, across, z, fade, distance) => ({ point: point(along, across, z), along: distance, fade });
-      const quads = [[corner(upstream, -half, STREAM_LIFT_MM, 1, 0), corner(rimAt, -half, STREAM_LIFT_MM, 1, length), corner(rimAt, half, STREAM_LIFT_MM, 1, length), corner(upstream, half, STREAM_LIFT_MM, 1, 0)]];
+      const lengthAt = (across) => Math.abs(rimAt(across) - upstream);
+      const corner = (across, onRim, z, fade, extra) => ({ point: point(onRim ? rimAt(across) : upstream, across, z), along: (onRim ? lengthAt(across) : 0) + extra, fade });
+      const quads = [[corner(-half, false, STREAM_LIFT_MM, 1, 0), corner(-half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, STREAM_LIFT_MM, 1, 0), corner(half, false, STREAM_LIFT_MM, 1, 0)]];
       // Off the rim: a sheet that falls and fades into nothing
-      quads.push([corner(rimAt, -half, STREAM_LIFT_MM, 1, length), corner(rimAt, half, STREAM_LIFT_MM, 1, length), corner(rimAt, half, -RIM_FALL_MM, 0, length + RIM_FALL_MM), corner(rimAt, -half, -RIM_FALL_MM, 0, length + RIM_FALL_MM)]);
+      quads.push([corner(-half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, STREAM_LIFT_MM, 1, 0), corner(half, true, -RIM_FALL_MM, 0, RIM_FALL_MM), corner(-half, true, -RIM_FALL_MM, 0, RIM_FALL_MM)]);
       keep('stream', new THREE.Mesh(quadGeometry(quads), streamMaterial));
       const banks = new THREE.InstancedMesh(cube, bankMaterial, 2);
       const matrix = new THREE.Matrix4();
       [-1, 1].forEach((sign, order) => {
-        const middle = point((upstream + rimAt) / 2, sign * (half + BANK_MM[0] / 2), BANK_MM[1] / 2);
+        // A bank stops where its inner edge meets the rim
+        const offset = sign * (half + BANK_MM[0] / 2);
+        const inner = sign * half;
+        const end = Math.abs(rimAt(inner + sign * BANK_MM[0])) < Math.abs(rimAt(inner)) ? rimAt(inner + sign * BANK_MM[0]) : rimAt(inner);
+        const length = Math.abs(end - upstream);
+        const middle = point((upstream + end) / 2, offset, BANK_MM[1] / 2);
         const size = [0, 0, BANK_MM[1]];
         size[axis] = length;
         size[cross] = BANK_MM[0];

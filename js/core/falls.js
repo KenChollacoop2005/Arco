@@ -81,7 +81,16 @@ function pourArc(context, instance, start, dir) {
     const onPlinth = Math.hypot(next[0], next[1]) <= RIM_MM;
     const floor = onPlinth ? 0 : -POUR_PAST_MM;
     let landed = false;
-    if (next[2] <= floor) {
+    // Leaving the plinth below its top: it lands on the top first
+    if (!onPlinth && next[2] < 0 && Math.hypot(last[0], last[1]) <= RIM_MM) {
+      const share = last[2] / (last[2] - next[2]);
+      const touch = last.map((value, axis) => value + (next[axis] - value) * share);
+      if (Math.hypot(touch[0], touch[1]) <= RIM_MM) {
+        next = touch;
+        landed = true;
+      }
+    }
+    if (!landed && next[2] <= floor) {
       // Lands on the plinth top, or falls past the rim to the end
       const share = (last[2] - floor) / (last[2] - next[2]);
       next = last.map((value, axis) => value + (next[axis] - value) * share);

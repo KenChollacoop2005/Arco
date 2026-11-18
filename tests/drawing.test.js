@@ -60,7 +60,7 @@ const pointsIn = (lines, from, to) => lines.positions.slice(from * 6, to * 6);
 test('services overlay draws strings, dashed blocked attempts and dry or partial consumers', () => {
   assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
   // A structure with a partly fed consumer under wall routed pipes
-  const structure = generate({ seed: 'brunswick', scale: 'mega' });
+  const structure = generate({ seed: 'arco', scale: 'block' });
   const services = planServices(structure.modules, 'brunswick');
   const lines = serviceLines(services, structure.modules);
   assert.equal(lines.positions.length, lines.statuses.length * 6);

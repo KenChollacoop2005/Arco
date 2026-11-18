@@ -290,7 +290,7 @@ test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring
   let pours = 0;
   for (let index = 0; index < 30; index++) {
     const seed = 'p' + index;
-    const { modules } = generate({ seed, scale: index % 2 ? 'mega' : 'block', density: index % 3, height: 1, services: 2 });
+    const { modules } = generate({ seed, scale: index % 2 ? 'mega' : 'block', density: index % 3, height: 1, services: 'high' });
     const context = stringContext(modules);
     const byId = new Map(modules.map((instance) => [instance.id, instance]));
     for (const pour of pourPaths(modules, context)) {
