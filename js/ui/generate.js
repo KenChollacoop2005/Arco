@@ -1,4 +1,5 @@
-import { normalizeOptions, openingOptions } from '../core/generator.js';
+import { normalizeOptions, openingOptions, categoryList } from '../core/generator.js';
+import { CATEGORIES } from '../core/catalog.js';
 import { randomSeedText } from '../core/rng.js';
 import { COPY } from './copy.js';
 import { readSetting, writeSetting } from './legend.js';
@@ -12,6 +13,8 @@ function readUrl() {
   const params = new URLSearchParams(window.location.search);
   if (!params.get('seed')) return null;
   const options = { seed: params.get('seed'), unstable: params.get('unstable') === '1' };
+  // Old links have no categories: all on
+  if (params.has('cats')) options.categories = params.get('cats');
   for (const [field, name] of Object.entries(URL_KEYS)) {
     if (params.has(name)) options[field] = params.get(name);
   }
@@ -23,6 +26,7 @@ function writeUrl(options, budget) {
   params.set('seed', options.seed);
   for (const [field, name] of Object.entries(URL_KEYS)) params.set(name, options[field]);
   if (options.unstable) params.set('unstable', '1');
+  if (options.categories.length < CATEGORIES.length) params.set('cats', options.categories.join(','));
   for (const [name, value] of Object.entries(budgetParams(budget))) params.set(name, value);
   window.history.replaceState(null, '', '?' + params.toString());
 }
@@ -76,17 +80,20 @@ export function setupGenerate(form, skipInput, generate) {
       daring: data.get('daring'),
       theme: data.get('theme'),
       services: data.get('services'),
+      categories: categoryList(data.getAll('cat')),
       unstable: data.get('unstable') === 'on',
     });
   }
 
   function writeForm(options) {
     seedInput.value = options.seed;
-    for (const name of ['scale', 'density', 'height', 'daring', 'theme', 'services']) {
+    for (const name of ['scale', 'density', 'height', 'daring', 'services']) {
       const input = form.querySelector(`input[name="${name}"][value="${options[name]}"]`);
       if (input) input.checked = true;
     }
     form.querySelector('#allowUnstable').checked = !!options.unstable;
+    form.querySelector('input[name="theme"]').value = options.theme;
+    for (const input of form.querySelectorAll('input[name="cat"]')) input.checked = options.categories.includes(input.value);
   }
 
   async function run(options, keepUrl, budget = makeBudget()) {

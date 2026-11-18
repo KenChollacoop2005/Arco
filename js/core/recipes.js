@@ -5,6 +5,7 @@ import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, gr
 import { addBalconies } from './balcony.js';
 import { addJetties } from './jetty.js';
 import { PIECE_RECIPES, turbineForm, solarForm } from './pieces.js';
+import { AMENITY_RECIPES } from './amenities.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const CUT_OVER_MM = 1; // cut overshoot past a face
@@ -1178,7 +1179,7 @@ const RECIPES = {
   },
 };
 
-Object.assign(RECIPES, PIECE_RECIPES);
+Object.assign(RECIPES, PIECE_RECIPES, AMENITY_RECIPES);
 
 export const RECIPE_IDS = Object.keys(RECIPES);
 

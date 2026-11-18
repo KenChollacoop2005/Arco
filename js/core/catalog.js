@@ -85,7 +85,36 @@ const TABLE = [
   ['disposal', 'Industrial', 'Disposal', 'industrial', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
   ['arch', 'Structure', 'Arched foundation', 'neutral', ['1x1'], [1, 1], 1, 1, 0, 1, 0],
   ['support', 'Structure', 'Support', 'neutral', ['1x1'], [1, 3], 1, 0, 0, 0, 0],
+  ['gym', 'Living', 'Gym', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['clinic', 'Living', 'Clinic', 'neutral', ['1x1', '1x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['school', 'Living', 'School', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['shrine', 'Outdoor', 'Shrine', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['bathhouse', 'Living', 'Bathhouse', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['foodstall', 'Living', 'Noodle bar', 'neutral', ['1x1', '1x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['laundromat', 'Living', 'Laundromat', 'neutral', ['1x1', '1x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['library', 'Living', 'Library', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['arcade', 'Living', 'Arcade', 'neutral', ['1x1', '1x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['playground', 'Outdoor', 'Rooftop playground', 'neutral', ['1x1', '1x2'], [1, 1], 0, 0, 0, 0, 0],
+  ['teahouse', 'Outdoor', 'Teahouse', 'neutral', ['1x1', '1x2'], [1, 1], 0, 0, 0, 0, 0],
+  ['barber', 'Living', 'Barber', 'neutral', ['1x1'], [1, 2], 1, 0, 0, 1, 0],
+  ['pharmacy', 'Living', 'Pharmacy', 'neutral', ['1x1', '1x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['workshop', 'Living', 'Repair workshop', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['courier', 'Living', 'Courier depot', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['canteen', 'Living', 'Canteen', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
+  ['lookout', 'Outdoor', 'Lookout', 'neutral', ['1x1'], [1, 2], 0, 0, 0, 0, 0],
 ];
+
+// Categories the Generate panel can switch off; everything else is always on
+export const CATEGORIES = ['social', 'nature', 'industrial', 'walled'];
+const AMENITY_IDS = ['gym', 'clinic', 'school', 'shrine', 'bathhouse', 'foodstall', 'laundromat', 'library', 'arcade', 'playground', 'teahouse', 'barber', 'pharmacy', 'workshop', 'courier', 'canteen', 'lookout'];
+const CATEGORY_LISTS = {
+  social: ['market', 'shop', 'hall', ...AMENITY_IDS],
+  nature: ['farm', 'garden', 'greenhouse', 'planted'],
+  industrial: ['smokestack', 'chimney', 'tankfarm', 'gantry', 'cooling', 'generator', 'disposal'],
+  walled: ['shacks', 'flared'],
+};
+// What a resident might walk to: one type per amenity, for the walking network
+const AMENITY_TYPES = { market: 'market', shop: 'shop', hall: 'hall', ...Object.fromEntries(AMENITY_IDS.map((id) => [id, id])) };
 
 // Sides a family always keeps open, as a local side mask
 const OPEN_SIDES = { arch: 0b0101 };
@@ -132,8 +161,13 @@ for (const row of TABLE) {
     profiles: PROFILE_FAMILIES.includes(id),
     docks: !!rails && !NO_DOCK.includes(id),
     dockFootprints: DOCK_BRIDGES.includes(id) ? DOCK_SPAN : [],
+    category: CATEGORIES.find((name) => CATEGORY_LISTS[name].includes(id)) || 'base',
+    amenity: AMENITY_TYPES[id] || null,
   };
 }
+
+// True when a family may be generated with these categories on
+export const categoryOn = (familyId, categories) => FAMILIES[familyId].category === 'base' || categories.includes(FAMILIES[familyId].category);
 
 export const FAMILY_IDS = Object.keys(FAMILIES);
 

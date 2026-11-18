@@ -18,7 +18,7 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { CATEGORIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
@@ -50,6 +50,7 @@ const GATE_LENGTHS = [2, 2, 4]; // bridged canyon stretch choices
 const GATE_START = [-3, 0]; // gate start range along the canyon
 const GATE_RISE = [1, 3]; // stories above the bridge level
 const BLOCK_CANYON_CHANCE = 0.3; // chance a large block gets a gate
+const GATE_RETRIES = 2; // levels a gate bridge may move up when its ends are not ready
 const MASS_SHARE = 0.62; // share of the budget for massing
 const MASS_TRIES = 4; // family tries per cell
 const BIG_FIRST = 0.65; // chance large footprints go first
@@ -128,19 +129,23 @@ const THIRSTY = ['farm', 'greenhouse', 'planted', 'garden', 'planter']; // famil
 const NEAR_CELLS = 2; // reach of near, in cells
 const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
 
-const GROUND_MASS = [['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8]];
+const GROUND_MASS = [
+  ['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8],
+  ['foodstall', 0.4], ['laundromat', 0.3], ['barber', 0.25], ['pharmacy', 0.4], ['workshop', 0.5], ['courier', 0.4], ['canteen', 0.4], ['gym', 0.25], ['clinic', 0.3], ['arcade', 0.25],
+];
 const UPPER_MASS = [
   ['housing', 5], ['studio', 2], ['hall', 1.5], ['deck', 1.5], ['brise', 1.2], ['fins', 1.2],
   ['panel', 1.2], ['transfer', 0.8], ['spout', 0.4], ['pilotis', 0.7], ['stair', 0.3],
   ['shacks', 1.5], ['flared', 1.2],
+  ['school', 0.3], ['library', 0.3], ['bathhouse', 0.25], ['clinic', 0.2], ['gym', 0.2],
 ];
 const CANTILEVER_FAMILIES = ['housing', 'studio', 'deck', 'brise', 'fins', 'hall'];
 const CANTILEVER_SHAPES = ['2x3', 'L4', 'L3', '2x2'];
-const SETBACK_CAPS = [['balcony', 2], ['terrace', 3], ['skylight', 0.6], ['garden', 1]];
-const ROOF_CAPS = [['tank', 2], ['plant', 2], ['vent', 2], ['skylight', 1.5], ['antenna', 1.2], ['terrace', 1], ['penthouse', 1.5]];
+const SETBACK_CAPS = [['balcony', 2], ['terrace', 3], ['skylight', 0.6], ['garden', 1], ['playground', 0.4], ['teahouse', 0.3], ['lookout', 0.4], ['shrine', 0.3]];
+const ROOF_CAPS = [['tank', 2], ['plant', 2], ['vent', 2], ['skylight', 1.5], ['antenna', 1.2], ['terrace', 1], ['penthouse', 1.5], ['playground', 0.6], ['lookout', 0.5], ['teahouse', 0.5], ['shrine', 0.4]];
 const ROOF_INDUSTRIAL = [['smokestack', 3], ['pipes', 2], ['tankfarm', 2], ['chimney', 2], ['cooling', 2]];
 const ROOF_ECO = [['solar', 3], ['turbine', 2], ['farm', 2], ['greenhouse', 2], ['market', 1], ['planted', 2], ['garden', 2]];
-const GROUND_CAPS = [['steps', 2], ['planter', 2], ['patio', 2], ['ramp', 1], ['buttress', 1.5]];
+const GROUND_CAPS = [['steps', 2], ['planter', 2], ['patio', 2], ['ramp', 1], ['buttress', 1.5], ['shrine', 0.6]];
 const GROUND_INDUSTRIAL = [['pipes', 2], ['tankfarm', 2], ['cooling', 1.5], ['smokestack', 1], ['chimney', 1]];
 const GROUND_ECO = [['planter', 2], ['market', 2], ['farm', 2], ['greenhouse', 1.5], ['patio', 1], ['garden', 1.5]];
 const UNIT_SKIP = ['bridge', 'gantry', 'walkway', 'wheel']; // need two supports, or the stream
@@ -393,12 +398,13 @@ function nextDatum(ctx, level) {
 function bridgeGate(ctx, level) {
   if (!ctx.canyon || ctx.canyon.level !== level) return;
   const { alongY, line, start, length } = ctx.canyon;
+  let placed = 0;
   for (let step = 0; step + 1 < length; step += 2) {
     const originX = alongY ? line - 1 : start + step;
     const originY = alongY ? start + step : line - 1;
     const room = Math.min(2, (ctx.heights.get(cellKey(alongY ? line : start + step, alongY ? start + step : line)) || 0) - level);
     if (room < 1) continue;
-    place(ctx, {
+    if (place(ctx, {
       family: 'bridge',
       fp: '2x3',
       h: ctx.rng.int(1, room),
@@ -407,15 +413,24 @@ function bridgeGate(ctx, level) {
       y: originY,
       z: level,
       rot: alongY ? 0 : 1,
-    });
+    })) placed++;
+  }
+  // No gate bridge fits yet: keep the canyon open a level more and try again
+  if (placed === 0 && (ctx.canyon.retries || 0) < GATE_RETRIES) {
+    ctx.canyon.level++;
+    ctx.canyon.retries = (ctx.canyon.retries || 0) + 1;
   }
 }
 
+// A weighted table without families whose category is off
+const allowedIn = (ctx, table) => table.filter(([id]) => categoryOn(id, ctx.opts.categories));
+
 function massCell(ctx, cell, level, open) {
   const { rng } = ctx;
-  const table = level === 0 ? GROUND_MASS : UPPER_MASS;
+  const table = allowedIn(ctx, level === 0 ? GROUND_MASS : UPPER_MASS);
   const heightOf = (target) => ctx.heights.get(cellKey(target[0], target[1])) || 0;
   for (let attempt = 0; attempt < MASS_TRIES; attempt++) {
+    if (table.length === 0) break;
     const family = FAMILIES[rng.weighted(table)];
     for (const footprintId of shapeOrder(ctx, family.footprints)) {
       const fit = fits(ctx, footprintId, cell, open);
@@ -475,7 +490,9 @@ function massing(ctx) {
       }
       // Stream cells get an arch or stay open
       if (level === 0 && onStream(ctx.stream, cell[0], cell[1])) {
-        if (!ctx.rng.chance(ARCH_SKIP)) place(ctx, { family: 'arch', fp: '1x1', h: 1, seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: ctx.stream.alongX ? 0 : 1 });
+        // Beside a gate the stream always gets an arch, so the canyon wall can rise
+        const skip = ctx.rng.chance(ARCH_SKIP);
+        if (!skip || nearGate(ctx, cell[0], cell[1])) place(ctx, { family: 'arch', fp: '1x1', h: 1, seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: ctx.stream.alongX ? 0 : 1 });
         continue;
       }
       massCell(ctx, cell, level, (cellX, cellY) => open(cellX, cellY) && !(level === 0 && onStream(ctx.stream, cellX, cellY)));
@@ -495,7 +512,7 @@ function cantilevers(ctx) {
     const side = SIDES[rng.int(0, 3)];
     const air = [cellX + side[0], cellY + side[1]];
     if (!ctx.inSite.has(cellKey(air[0], air[1])) || columnTop(world, air[0], air[1], worldHeight(world)) >= level) continue;
-    const family = FAMILIES[rng.pick(CANTILEVER_FAMILIES)];
+    const family = FAMILIES[rng.pick(CANTILEVER_FAMILIES.filter((id) => categoryOn(id, ctx.opts.categories)))];
     const shapes = opts.unstable ? [...CANTILEVER_SHAPES, '1x2'] : CANTILEVER_SHAPES;
     const footprintId = rng.pick(shapes.filter((shape) => family.footprints.includes(shape)));
     const stories = rng.int(family.minStories, Math.min(family.maxStories, 2));
@@ -540,7 +557,8 @@ function spans(ctx) {
       const level = topOf(ends[0][0], ends[0][1]);
       if (level === 0 || topOf(ends[1][0], ends[1][1]) !== level || topOf(cellX, cellY) >= level) continue;
       if (!ends.every((end) => supportedAt(world, end[0], end[1], level))) continue;
-      const family = themed(ctx, cellX, cellY, 'walkway', 'gantry', 'walkway');
+      const themedFamily = themed(ctx, cellX, cellY, 'walkway', 'gantry', 'walkway');
+      const family = categoryOn(themedFamily, ctx.opts.categories) ? themedFamily : 'walkway';
       if (!place(ctx, { family, fp: '1x3', h: 1, seed: rng.int(1, CAP_SEEDS), x: ends[0][0], y: ends[0][1], z: level, rot })) continue;
       left--;
       break;
@@ -565,8 +583,10 @@ function themed(ctx, cellX, cellY, neutral, industrial, eco) {
   return (cellX + 0.5) * ctx.themeAxis[0] + (cellY + 0.5) * ctx.themeAxis[1] > 0 ? industrial : eco;
 }
 
-function capCell(ctx, cell, level, table) {
+function capCell(ctx, cell, level, given) {
   const { rng, world } = ctx;
+  const table = allowedIn(ctx, given);
+  if (table.length === 0) return null;
   const family = FAMILIES[rng.weighted(table)];
   if (family.ground && level !== 0) return null;
   const stories = rng.int(family.minStories, family.maxStories);
@@ -663,7 +683,8 @@ function dressGround(ctx, chance) {
     if (!emptyAt(world, cellX, cellY, 0) || !ctx.groundOk(cellX, cellY)) continue;
     const beside = SIDES.some(([stepX, stepY]) => moduleAt(world, cellX + stepX, cellY + stepY, 0));
     if ((!beside && !mega) || !rng.chance(beside ? chance : chance / 2)) continue;
-    const table = themed(ctx, cellX, cellY, GROUND_CAPS, GROUND_INDUSTRIAL, GROUND_ECO);
+    const table = allowedIn(ctx, themed(ctx, cellX, cellY, GROUND_CAPS, GROUND_INDUSTRIAL, GROUND_ECO));
+    if (table.length === 0) continue;
     const family = rng.weighted(table);
     if (family === 'buttress') leanButtress(ctx, [cellX, cellY]);
     else if (BUTT_SIDES[family] !== undefined) climbTo(ctx, [cellX, cellY], family);
@@ -741,7 +762,7 @@ function dockEnd(ctx, rng, cell, level, side) {
     return undo ? { undo } : null;
   }
   if (columnTop(world, cellX, cellY, worldHeight(world)) !== level || !supportedAt(world, cellX, cellY, level)) return null;
-  const family = FAMILIES[rng.weighted(DOCK_HOUSES)];
+  const family = FAMILIES[rng.weighted(allowedIn(ctx, DOCK_HOUSES))];
   const seed = ctx.towers.length > 0 ? nearestTower(ctx, cellX, cellY).seed : ctx.pool[0];
   const placed = place(ctx, { family: family.id, fp: '1x1', h: family.minStories, seed, x: cellX, y: cellY, z: level, rot: 0, dock: 1 << side });
   return placed ? { undo: () => removeModule(world, placed.id) } : null;
@@ -784,7 +805,7 @@ function dockSpan(ctx, rng, start, side, level) {
   }
   const industrial = (gap[0][0] + 0.5) * ctx.themeAxis[0] + (gap[0][1] + 0.5) * ctx.themeAxis[1] > 0;
   const bridge = place(ctx, {
-    family: rng.chance(THEME_SHARE[opts.theme]) && industrial ? 'gantry' : 'walkway',
+    family: rng.chance(THEME_SHARE[opts.theme]) && industrial && categoryOn('gantry', opts.categories) ? 'gantry' : 'walkway',
     fp: '1x' + gap.length,
     h: 1,
     seed: rng.int(1, CAP_SEEDS),
@@ -967,7 +988,7 @@ function supportTrees(ctx) {
         return placed;
       };
       if (!add({ family: 'support', fp: '1x1', h: stories, seed: rng.int(1, CAP_SEEDS), x: cellX, y: cellY, z: 0, rot: 0 })) continue;
-      const family = rng.weighted(CANOPY_FAMILIES);
+      const family = rng.weighted(allowedIn(ctx, CANOPY_FAMILIES));
       const top = add({ family, fp: '1x1', h: 1, seed: rng.int(1, 0x7fffffff), x: cellX, y: cellY, z: stories, rot: rng.int(0, 3), mask: 15 });
       const sides = rng.weighted(CANOPY_SIDES) === 4 ? SIDES : rng.pick([[SIDES[0], SIDES[2]], [SIDES[1], SIDES[3]]]);
       if (top) for (const [stepX, stepY] of sides) add({ family, fp: '1x1', h: 1, seed: rng.int(1, 0x7fffffff), x: cellX + stepX, y: cellY + stepY, z: stories, rot: rng.int(0, 3), mask: 15 });
@@ -1061,7 +1082,7 @@ function services(ctx) {
   for (let room = 0; room < rooms; room++) keep(roofSpot(ctx, rng, 'powerroom', HOMES));
   // Power and water pieces, each a few per structure
   const roll = (table) => rng.int(0, table[opts.density][mega]);
-  for (let count = roll(GENERATORS); count > 0; count--) {
+  for (let count = categoryOn('generator', opts.categories) ? roll(GENERATORS) : 0; count > 0; count--) {
     const family = FAMILIES.generator;
     keep(rng.chance(0.5) ? groundSpot(ctx, rng, family.id, rng.pick(family.footprints), rng.int(family.minStories, family.maxStories)) : roofSpot(ctx, rng, family.id, INDUSTRY));
   }
@@ -1070,7 +1091,7 @@ function services(ctx) {
   for (let count = roll(RAIN_CATCHERS); count > 0; count--) keep(roofSpot(ctx, rng, 'raincatcher', THIRSTY));
   for (let count = roll(RAISED_WHEELS); count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
   for (let count = roll(RUNOFFS); count > 0; count--) keep(roofSpot(ctx, rng, 'runoff', THIRSTY));
-  for (let count = roll(DISPOSALS); count > 0; count--) keep(roofSpot(ctx, rng, 'disposal', INDUSTRY));
+  for (let count = categoryOn('disposal', opts.categories) ? roll(DISPOSALS) : 0; count > 0; count--) keep(roofSpot(ctx, rng, 'disposal', INDUSTRY));
   // Water wheels stand on open stream cells, turned with the flow
   if (ctx.stream) {
     let wheels = rng.int(0, STREAM_WHEELS[opts.density]);
@@ -1188,7 +1209,7 @@ function fillServices(ctx) {
   const all = () => [...world.modules.values()];
   // A source near a module: on a roof when one is free, else on the ground beside a building
   const powerNear = (target) => {
-    const family = rng.weighted(opts.services === 'high' ? PLANNER_SOURCES_HIGH : PLANNER_SOURCES);
+    const family = rng.weighted(allowedIn(ctx, opts.services === 'high' ? PLANNER_SOURCES_HIGH : PLANNER_SOURCES));
     return keep(roofNear(ctx, rng, family, target, PLANNER_POWER_REACH)) || keep(groundNear(ctx, rng, family, target, PLANNER_POWER_REACH));
   };
   // Water: dry consumers get a pump room beside them now; rain catchers wait until power has its roofs
@@ -1248,7 +1269,7 @@ function fillServices(ctx) {
 
 function unit(ctx) {
   const { rng } = ctx;
-  const family = FAMILIES[rng.pick(FAMILY_IDS.filter((id) => !UNIT_SKIP.includes(id)))];
+  const family = FAMILIES[rng.pick(FAMILY_IDS.filter((id) => !UNIT_SKIP.includes(id) && categoryOn(id, ctx.opts.categories)))];
   const footprintId = rng.pick(family.footprints);
   const rot = rng.int(0, 3);
   const cells = footprintCells(footprintId, rot);
@@ -1269,6 +1290,13 @@ function unit(ctx) {
   });
 }
 
+// Categories from a list, a comma string or an object of flags; unknown names drop out
+export function categoryList(given) {
+  if (given === undefined || given === null) return CATEGORIES.slice();
+  const names = Array.isArray(given) ? given : typeof given === 'string' ? given.split(',') : Object.keys(given).filter((name) => given[name]);
+  return CATEGORIES.filter((name) => names.map((entry) => String(entry).trim()).includes(name));
+}
+
 export function normalizeOptions(options = {}) {
   const level = (value) => Math.min(2, Math.max(0, Number.isFinite(+value) ? Math.round(+value) : 1));
   return {
@@ -1286,6 +1314,8 @@ export function normalizeOptions(options = {}) {
     rise: !!options.rise,
     // Services planner level; its own rolls, so the layout stays the same
     services: SERVICE_LEVELS.includes(options.services) ? options.services : 'low',
+    // Categories on, as a sorted list; all on by default
+    categories: categoryList(options.categories),
     locked: options.locked || [],
   };
 }
@@ -1307,7 +1337,8 @@ export function openingOptions(seed) {
 
 export function generate(options) {
   const opts = normalizeOptions(options);
-  const choiceText = [opts.scale, opts.density, opts.height, opts.daring, opts.theme, opts.unstable ? 1 : 0, opts.budget].join(':');
+  // Categories join the seed only when some are off, so all on keeps the layout
+  const choiceText = [opts.scale, opts.density, opts.height, opts.daring, opts.theme, opts.unstable ? 1 : 0, opts.budget].join(':') + (opts.categories.length < CATEGORIES.length ? ':' + opts.categories.join(',') : '');
   const rng = makeRng(mixSeed(hashString(opts.seed), hashString(choiceText)));
   const world = worldFromModules(opts.locked);
   const ctx = {

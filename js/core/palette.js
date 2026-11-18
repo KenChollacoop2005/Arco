@@ -29,6 +29,7 @@ export const GROUPS = {
   tarpTeal: [0x4b8985, KIND_SWAY, true],
   rotor: [0xd9d6cf, KIND_SPIN, true],
   paintTeal: [0x7f9e98, KIND_DETAIL, true],
+  signSocial: [0xc4553b, KIND_DETAIL, false],
   paintRose: [0xb8897d, KIND_DETAIL, true],
   paintOchre: [0xc4ae7c, KIND_DETAIL, true],
   tinGrey: [0x8e9297, KIND_DETAIL, true],
