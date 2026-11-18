@@ -8,7 +8,7 @@ import { variantOf } from '../js/core/collection.js';
 import { generate } from '../js/core/generator.js';
 import { getSolids } from './helpers.js';
 
-const SEEDS = ['arco', 'habitat', 'barbican', 'nakagin', 'x9', 'blacksburg', 'golden', 'lumen', 'trellick', 'brunswick'];
+const SEEDS = ['arco', 'habitat', 'barbican', 'nakagin', 'x9', 'blacksburg', 'golden', 'lumen', 'trellick', 'brunswick', 'pruitt', 'kowloon'];
 let built = null;
 const structures = () => (built = built || SEEDS.flatMap((seed, index) => ['block', 'mega'].map((scale) => generate({ seed, scale, density: 2 - (index % 2), height: 2, daring: 1, theme: 2 }))));
 const key = (x, y) => x + ',' + y;

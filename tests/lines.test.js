@@ -42,7 +42,7 @@ test('lines and tarps of generated structures use line hooks only, within capaci
   let lines = 0;
   let laundry = 0;
   let tarps = 0;
-  for (const seed of ['barbican', 'habitat', 'arco', 'nakagin']) {
+  for (const seed of ['barbican', 'habitat', 'arco', 'nakagin', 'heygate']) {
     for (const options of [{ seed, ...MEGA }, { seed, scale: 'block' }]) {
       const { modules } = generate(options);
       const { ports, context, plan } = linesOf(modules, seed);

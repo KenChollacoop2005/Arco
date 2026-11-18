@@ -42,6 +42,7 @@ const FIXED = makeBudget();
 const FANTASY = makeBudget({ mode: 'fantasy' });
 const MEGA = choicesOf('barbican mega 2');
 const BLOCK = choicesOf('habitat block 1');
+const ROOMY = choicesOf('golden block 1'); // a block that fantasy Grow can still extend
 // Grow under a budget, as the Build panel runs it
 const growUnder = (budget, choices, modules) => generate({ ...growOptions(choices, modules), ...growLimits(budget, choices.seed, modules.length) });
 // Stands, follows the rules and has an assembly order
@@ -105,11 +106,11 @@ test('fantasy Grow adds a seeded count in range, repeats for a seed, and never p
     assert.equal(limits.cap, Math.min(BUDGET_HARD_CAP, count + roll));
     assert.ok(limits.cap <= BUDGET_HARD_CAP);
   }
-  let modules = generate({ ...BLOCK, ...generateLimits(FANTASY) }).modules;
+  let modules = generate({ ...ROOMY, ...generateLimits(FANTASY) }).modules;
   for (let press = 0; press < 3; press++) {
-    const roll = growRoll(BLOCK.seed, modules.length);
-    const grown = growUnder(FANTASY, BLOCK, modules);
-    assert.deepEqual(growUnder(FANTASY, BLOCK, modules), grown, 'same seed, same Grow');
+    const roll = growRoll(ROOMY.seed, modules.length);
+    const grown = growUnder(FANTASY, ROOMY, modules);
+    assert.deepEqual(growUnder(FANTASY, ROOMY, modules), grown, 'same seed, same Grow');
     const added = grown.modules.length - modules.length;
     assert.ok(added <= roll, `press ${press} added ${added} of ${roll}`);
     // The low end holds while there is room; a capped block runs out after a few presses

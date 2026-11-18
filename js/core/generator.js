@@ -716,19 +716,35 @@ function prune(ctx) {
 
 // Facade where no railed neighbour touches the side
 function setMasks(world, locked) {
-  const closed = (other, side) => locked.has(other.id) && sideType(other, (side + 2) & 3) === 'facade';
-  for (const instance of world.modules.values()) {
-    if (!FAMILIES[instance.family].rails || locked.has(instance.id)) continue;
+  // World sides forced to facade: they meet a locked facade, or a forced one
+  const forced = new Map();
+  const closed = (other, side) => (locked.has(other.id) ? sideType(other, (side + 2) & 3) === 'facade' : !!forced.get(other.id) && forced.get(other.id).has((side + 2) & 3));
+  const meets = (instance, side, test) => {
+    for (const [cellX, cellY] of instanceCells(instance)) {
+      for (let level = instance.z; level < instance.z + instance.h; level++) {
+        const other = moduleAt(world, cellX + SIDES[side][0], cellY + SIDES[side][1], level);
+        if (other && other.id !== instance.id && FAMILIES[other.family].rails && test(other)) return true;
+      }
+    }
+    return false;
+  };
+  const free = [...world.modules.values()].filter((instance) => FAMILIES[instance.family].rails && !locked.has(instance.id));
+  for (let changed = locked.size > 0; changed; ) {
+    changed = false;
+    for (const instance of free) {
+      for (let side = 0; side < 4; side++) {
+        if ((forced.get(instance.id) || new Set()).has(side) || !meets(instance, side, (other) => closed(other, side))) continue;
+        if (!forced.has(instance.id)) forced.set(instance.id, new Set());
+        forced.get(instance.id).add(side);
+        changed = true;
+      }
+    }
+  }
+  for (const instance of free) {
     let mask = 0;
     for (let side = 0; side < 4; side++) {
-      let joined = false;
-      for (const [cellX, cellY] of instanceCells(instance)) {
-        for (let level = instance.z; level < instance.z + instance.h && !joined; level++) {
-          const other = moduleAt(world, cellX + SIDES[side][0], cellY + SIDES[side][1], level);
-          joined = !!other && other.id !== instance.id && FAMILIES[other.family].rails && !closed(other, side);
-        }
-        if (joined) break;
-      }
+      const shut = !!forced.get(instance.id) && forced.get(instance.id).has(side);
+      const joined = !shut && meets(instance, side, (other) => !closed(other, side));
       if (!joined) mask |= 1 << ((side - instance.rot + 4) & 3);
     }
     // A dock side stays a connector side
