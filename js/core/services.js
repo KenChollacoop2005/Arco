@@ -32,7 +32,7 @@ export function drawnPorts(ports, services) {
 export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules) } = {}) {
   const byKey = new Map(mounts.map((port) => [portKey(port.module, port.index), port]));
   const portOf = (end) => byKey.get(portKey(end.module, end.index));
-  // Gravity water first, then power (wheels run on that), then water with the powered pumps
+  // Gravity water, then power, then pumped water
   const shared = {};
   const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared });
   const wheels = {};

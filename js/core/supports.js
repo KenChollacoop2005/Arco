@@ -5,7 +5,7 @@ export const GROUP_REACH = 1; // cells a group reaches past its support, so at m
 
 const sideBySide = (first, second) => first.cells.some(([x, y]) => second.cells.some(([otherX, otherY]) => Math.abs(otherX - x) + Math.abs(otherY - y) === 1));
 
-// Rigid groups: the module right on a support plus the modules joined to it at that level, all inside the 3 by 3 window
+// Rigid groups over supports, within a 3 by 3 window
 export function rigidGroups(items) {
   const groups = [];
   const taken = new Set();
@@ -17,7 +17,7 @@ export function rigidGroups(items) {
     if (!above) continue;
     const inWindow = (item) => item.cells.every(([x, y]) => Math.abs(x - cellX) <= GROUP_REACH && Math.abs(y - cellY) <= GROUP_REACH);
     if (!inWindow(above)) continue;
-    // Everything in the window joined to it side by side, corners through their neighbours
+    // Window modules joined side by side
     const members = [above];
     const pool = level.filter((item) => item !== above && inWindow(item));
     for (let grew = true; grew; ) {

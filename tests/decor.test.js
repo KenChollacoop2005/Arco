@@ -8,7 +8,8 @@ import { instanceCells, structureHash } from '../js/core/grid.js';
 import { generate } from '../js/core/generator.js';
 import { runChecks } from '../js/core/checks.js';
 
-const MEGA = { seed: 'barbican', scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 };
+// A megastructure that keeps a few open carrying roofs, now that roofs take more pieces
+const MEGA = { seed: 'x9', scale: 'mega', density: 1, height: 2, daring: 2, theme: 2 };
 
 test('decor is the same for the same structure and seed', () => {
   const { modules } = generate(MEGA);

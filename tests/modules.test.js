@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CELL_MM, STORY_MM, CONNECTOR_CLEARANCE_MM, SIDE_CLEAR_MM } from '../js/config.js';
-import { FAMILIES, FAMILY_IDS } from '../js/core/catalog.js';
+import { BUTT_SIDES, FAMILIES, FAMILY_IDS } from '../js/core/catalog.js';
 import { footprintSize, variantKey } from '../js/core/grid.js';
 import { GROUPS } from '../js/core/palette.js';
 import { RECIPE_IDS, buildRecipe } from '../js/core/recipes.js';
@@ -55,17 +55,24 @@ test('railed bodies equal the grid minus clearance within 0.01 mm', async () => 
   }
 });
 
-test('parts without rails stay 3 mm inside their cells', async () => {
+test('parts without rails stay 3 mm inside their cells, but for the one side that meets a building', async () => {
   const solids = await getSolids();
+  const face = CONNECTOR_CLEARANCE_MM / 2;
   for (const variant of sampleVariants()) {
     if (FAMILIES[variant.family].rails) continue;
     const stats = meshStats(solids.buildVariant(variant, { render: false, edges: false }).solid);
     const [cellsX, cellsY] = footprintSize(variant.fp);
     const key = variantKey(variant);
+    // Buttresses, steps, ramps and strut heads reach the cell face on their contact side, local -x (2) or +x (0)
+    const butt = BUTT_SIDES[variant.family];
+    const lowX = butt === 2 ? face : SIDE_CLEAR_MM;
+    const highX = cellsX * CELL_MM - (butt === 0 ? face : SIDE_CLEAR_MM);
     near(stats.min[2], 0, key + ' base');
-    assert.ok(stats.min[0] >= SIDE_CLEAR_MM - TOL_MM && stats.min[1] >= SIDE_CLEAR_MM - TOL_MM, key + ' low side');
-    assert.ok(stats.max[0] <= cellsX * CELL_MM - SIDE_CLEAR_MM + TOL_MM, key + ' high x');
+    assert.ok(stats.min[0] >= lowX - TOL_MM && stats.min[1] >= SIDE_CLEAR_MM - TOL_MM, key + ' low side');
+    assert.ok(stats.max[0] <= highX + TOL_MM, key + ' high x');
     assert.ok(stats.max[1] <= cellsY * CELL_MM - SIDE_CLEAR_MM + TOL_MM, key + ' high y');
+    if (butt === 2) near(stats.min[0], face, key + ' meets its wall');
+    if (butt === 0) near(stats.max[0], cellsX * CELL_MM - face, key + ' meets its wall');
     assert.ok(stats.max[2] <= variant.h * STORY_MM + TOL_MM, key + ' height');
   }
 });

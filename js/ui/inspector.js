@@ -28,7 +28,7 @@ function powerReason(report) {
   return report.reason ? COPY[POWER_REASON[report.reason]] : '';
 }
 
-// Power lines for a module: what it makes, takes or relays, and whether a pump runs
+// Power lines: makes, takes, relays, pump state
 export function powerText(flows, id) {
   const power = flows && flows.services && flows.services.power;
   if (!power || !power.consumers) return null;

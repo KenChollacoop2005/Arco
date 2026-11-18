@@ -213,7 +213,7 @@ export function variantKey(variant) {
     variant.seed >>> 0,
     variant.mask & 15,
     variant.roof ? 1 : 0,
-  ].join(':') + (variant.prof ? ':' + variant.prof : '') + (variant.dock ? ':d' + variant.dock : '') + (variant.jb ? ':j' : '');
+  ].join(':') + (variant.prof ? ':' + variant.prof : '') + (variant.dock ? ':d' + variant.dock : '') + (variant.jb ? ':j' : '') + (variant.ends ? ':e' + variant.ends : '');
 }
 
 // Claimed cells; side -1 marks a corner

@@ -233,7 +233,7 @@ function greedyPass(bodies, contacts, grounded, masses, margin) {
     const hull = convexHull(points.map((point) => [point.x, point.y]));
     const inside = hullDistance(hull, loadX, loadY);
     resultants.set(body.id, { x: loadX, y: loadY, total });
-    // On or past the edge it may go either way, so it loads nothing below; only past the edge is a failure
+    // Past the edge fails; on the edge only warns
     const tips = inside < INSIDE_EPS;
     if (inside < -INSIDE_EPS) {
       failed.set(body.id, inside);
@@ -252,7 +252,7 @@ function greedyPass(bodies, contacts, grounded, masses, margin) {
     for (const [lower, entry] of perLower) {
       const load = { force: entry.force, x: entry.x / entry.force, y: entry.y / entry.force };
       interfaces.push({ upper: body.id, lower, force: load.force, x: load.x, y: load.y, z: body.z0 });
-      // A body on or past its edge falls off or balances; either way it does not lean on what is under it
+      // A body at or past its edge loads nothing below
       if (lower !== 0 && !tips) {
         if (!incoming.has(lower)) incoming.set(lower, []);
         incoming.get(lower).push(load);
@@ -323,7 +323,7 @@ function interfaceMargins(interfaces, contacts) {
   }
 }
 
-// A support's group stands as one rigid body: its parts' faces, their weight at their joint centre
+// A support group as one rigid body
 function mergeGroups(bodies) {
   const groups = rigidGroups(bodyItems(bodies));
   if (groups.length === 0) return { merged: bodies, groups };
@@ -422,7 +422,7 @@ export function checkStability(given, options = {}) {
     const entry = modules.get(bodyId);
     if (entry.status === 'fail') entry.margin = Math.min(entry.margin, overshoot);
   }
-  // Every part of a group shares the group's verdict, each with its own centre of mass, carried by the lead
+  // Members share the group verdict, carried by the lead
   for (const group of groups) {
     const lead = group.members[0];
     const shared = modules.get(lead);

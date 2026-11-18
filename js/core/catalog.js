@@ -91,6 +91,16 @@ const TABLE = [
 const OPEN_SIDES = { arch: 0b0101 };
 // Families that may carry a junction box on an outward wall
 export const JUNCTION_FAMILIES = ['housing', 'studio', 'hall', 'penthouse', 'shacks', 'flared', 'shop', 'stair', 'deck', 'core', 'podium', 'pumproom'];
+// Local side that meets the building a ground piece leans on or climbs to
+export const BUTT_SIDES = { buttress: 2, steps: 0, ramp: 0, strut: 2 };
+// Bridge families whose ends get a cap, steps or nothing, by what they meet
+export const END_FAMILIES = ['walkway', 'gantry'];
+export const END_OPEN = 0; // meets a wall or a dock
+export const END_CAP = 1; // meets open air
+export const END_STEP = 2; // meets a roof at deck level
+// Code of one end, 0 the local low x end, 1 the high
+export const endCode = (variant, end) => ((variant.ends || 0) >> (end * 2)) & 3;
+
 // Families that may stand on the stream
 export const STREAM_FAMILIES = ['wheel', 'arch'];
 
@@ -182,6 +192,8 @@ export function normalizeVariant(variant) {
   if (dock) record.dock = dock;
   // A junction box is a render only option, kept only where it may go
   if (variant.jb && JUNCTION_FAMILIES.includes(variant.family)) record.jb = 1;
+  // Bridge ends; docked ends plug into their docks and stay open
+  if (Number.isInteger(variant.ends) && variant.ends > 0 && END_FAMILIES.includes(variant.family) && !record.dock) record.ends = variant.ends & 15;
   return record;
 }
 

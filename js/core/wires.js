@@ -38,7 +38,7 @@ function boundedOps(ops) {
   return boundsCache.get(ops);
 }
 
-// True when a point sits in a module's real solid, glass excluded, or under the plinth top
+// True inside a real solid, glass excluded
 export function solidPoint(context, near, point) {
   const group = groupPoint(context, near, point);
   return !!group && !SEE_THROUGH.has(group);
@@ -51,7 +51,7 @@ function opsFor(context, instance) {
   return instanceOps.get(instance);
 }
 
-// Group at a local point: adds and cuts in order per group, skipping ops whose bounds miss it
+// Group at a local point, ops prefiltered by bounds
 function groupIn(bounded, local) {
   const inside = new Map();
   for (let index = 0; index < bounded.length; index++) {
@@ -79,7 +79,7 @@ export function groupPoint(context, near, point) {
   return null;
 }
 
-// True when the first thing behind a cable is wall, not glass or an open bay; recessed panels count as wall
+// True when wall, not glass or air, is behind
 function wallBehind(context, near, point, step) {
   for (const depth of step[2] < 0 ? ROOF_DEPTHS_MM : WALL_DEPTHS_MM) {
     const group = groupPoint(context, near, add(point, step, PIPE_OFF_MM + depth));
@@ -88,7 +88,7 @@ function wallBehind(context, near, point, step) {
   return false;
 }
 
-// Surface graph for wires: corner brackets, spans up to the wire limit, drapes on one mass allowed
+// Surface graph with wire options
 export function wireGraph(modules, ports, context) {
   const graph = pipeGraph(modules, ports, context, { crossMax: WIRE_SPAN_MAX_MM, facing: WIRE_SPAN_FACING, sameMass: true, bands: true });
   graph.solids = boxIndex(context.boxes);
@@ -96,7 +96,7 @@ export function wireGraph(modules, ports, context) {
   return graph;
 }
 
-// True when a conduit piece hugs solid wall all along and passes no protrusion; any side may be the wall
+// True when a conduit run hugs wall, no protrusion
 export function conduitClear(context, near, from, to) {
   const run = [0, 1, 2].map((axis) => to[axis] - from[axis]);
   const steps = Math.max(1, Math.ceil(distance(from, to) / WIRE_SAMPLE_MM));
@@ -237,7 +237,7 @@ export function catenaryPoints(from, to, length, steps = CATENARY_STEPS) {
   return { points, a, vertex };
 }
 
-// Cable on a route: total length is the route times one plus slack; spans share the leftover by chord
+// Cable on a route; spans share the slack by chord
 export function layCable(route, slack) {
   const total = route.length * (1 + slack);
   const spans = route.pieces.filter((piece) => piece.kind === 'span');
@@ -311,7 +311,7 @@ export function bundleCables(cables, fits = () => true) {
       return Math.abs(dot) > PARALLEL * Math.hypot(...first) * Math.hypot(...second) ? first : first.map((value, axis) => value + second[axis]);
     };
     const moved = pieces.map((piece) => piece.points.map((point) => (piece.shift && piece.kind !== 'span' ? add(point, piece.shift) : [...point])));
-    // Runs keep their own shift at their ends so they stay straight; two runs on one wall share a mitred joint
+    // Runs keep their shift; one wall's runs share a mitre
     pieces.forEach((piece, index) => {
       if (index === 0) return;
       const before = pieces[index - 1];
@@ -330,8 +330,24 @@ export function bundleCables(cables, fits = () => true) {
     pieces.forEach((piece, index) => {
       piece.points = moved[index];
     });
+    rehang(cable.laid);
   }
   return cables;
+}
+
+// A laid cable again on its own route: total from the route and slack, spans share the extra
+export function rehang(laid) {
+  const chordOf = (piece) => distance(piece.points[0], piece.points[piece.points.length - 1]);
+  const spans = laid.pieces.filter((piece) => piece.kind === 'span');
+  const route = laid.pieces.reduce((sum, piece) => sum + (piece.kind === 'span' ? chordOf(piece) : pathLength(piece.points)), 0);
+  const chords = spans.reduce((sum, piece) => sum + chordOf(piece), 0);
+  laid.total = route * (1 + laid.slack);
+  for (const piece of spans) {
+    const chord = chordOf(piece);
+    piece.cable = chord + (chords > 0 ? ((laid.total - route) * chord) / chords : 0);
+    piece.points = catenaryPoints(piece.points[0], piece.points[piece.points.length - 1], piece.cable).points;
+  }
+  return laid;
 }
 
 // First module or the plinth a laid cable runs into, ends checked on their solids

@@ -28,6 +28,11 @@ export const GROUPS = {
   tarpMustard: [0xc8982c, KIND_SWAY, true],
   tarpTeal: [0x4b8985, KIND_SWAY, true],
   rotor: [0xd9d6cf, KIND_SPIN, true],
+  paintTeal: [0x7f9e98, KIND_DETAIL, true],
+  paintRose: [0xb8897d, KIND_DETAIL, true],
+  paintOchre: [0xc4ae7c, KIND_DETAIL, true],
+  tinGrey: [0x8e9297, KIND_DETAIL, true],
+  tinBlue: [0x6f8296, KIND_DETAIL, true],
   blade: [0xe4e1da, KIND_SPIN_X, false],
   wheel: [0x7a5a3c, KIND_SPIN_Y, true],
 };

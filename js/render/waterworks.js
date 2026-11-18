@@ -21,7 +21,7 @@ const BANK_COLOR = 0x8a857b; // stream bank strips
 const BOX_LOOK = [0x5d635b, 3, 3.8, 2.2]; // junction box color, width, height, depth
 const POURING = ['runoff', 'disposal']; // families that pour
 
-// Flowing water: ripples move along aAlong while Effects is on; aFade dims the end of a fall
+// Flowing water: ripples move with Effects on
 function flowMaterial(color, opacity) {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: sharedUniforms.uTime, uEffects: sharedUniforms.uEffects, uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
@@ -50,7 +50,7 @@ void main() {
   });
 }
 
-// Quads as one geometry: each quad is four corners with along and fade per corner
+// Quads with along and fade per corner
 function quadGeometry(quads) {
   const positions = [];
   const along = [];
@@ -211,7 +211,7 @@ export function createWaterworks(view) {
       group.visible = on;
       view.requestRender();
     },
-    // True when something on the plinth flows, so frames keep coming with Effects on
+    // True when something flows on the plinth
     flowing: () => flowing && group.visible,
   };
 }

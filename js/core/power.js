@@ -8,7 +8,7 @@ import { hashString, mixSeed, makeRng } from './rng.js';
 import { splitWater, topoOrder } from './water.js';
 import { makeString } from './strings.js';
 import { createHeap } from './pipes.js';
-import { wireGraph, wireSearch, wirePath, drapeRoute, layCable, cablePoints, bundleCables, cableBlocked, conduitClear } from './wires.js';
+import { wireGraph, wireSearch, wirePath, drapeRoute, layCable, cablePoints, bundleCables, cableBlocked, conduitClear, rehang } from './wires.js';
 
 const POWER_SEED = 0x90e4; // keeps wire rolls apart from other rolls
 const MID_SLACK = (WIRE_SLACK[0] + WIRE_SLACK[1]) / 2; // slack used to test a route
@@ -170,7 +170,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     node.fails = new Set();
   }
   const searches = new Map();
-  // Route search from a node's free ports, grown only when a longer reach is asked for
+  // Route search from free ports, regrown for longer reach
   const searchOf = (node, reach) => {
     const free = node.ports.filter((port) => port.left > 0 && port.node !== null);
     const key = node.id + ':' + free.map((port) => port.index).join(',');
@@ -187,7 +187,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     for (const first of from.ports) for (const second of to.ports) best = Math.min(best, Math.hypot(...[0, 1, 2].map((axis) => first.position[axis] - second.position[axis])));
     return best / CELL_MM;
   };
-  // Shortest clear route from a feeder's free ports to a node's, within a reach; one search per feeder serves every child
+  // Shortest clear route within reach, searched from the feeder
   function bestRoute(from, to, reach) {
     const { free: fromPorts, search } = searchOf(from, reach);
     const free = to.ports.filter((port) => port.left > 0);
@@ -238,7 +238,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     entries.push(entry);
     heap.push(cost, entries.length - 1);
   };
-  // A feeder offers to its nearest waiting nodes a few at a time, more when those are spent
+  // A feeder offers to its nearest nodes in batches
   const offer = (from) => {
     if (!canFeed(from)) return;
     if (!from.queue) {
@@ -337,7 +337,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     if (best) connect(leaf, best.relay, best.found);
   }
   const solved = solvePower({ nodes, links });
-  // Why a node with no wire got none: one search from every feeder, started at what each has left to spend
+  // Why unwired nodes got nothing: one search from all feeders
   const feeders = nodes.filter((node) => node.connected && node.reachLeft > 0);
   const spend = Math.max(0, ...feeders.map((node) => node.reachLeft)) * CELL_MM;
   const feederPorts = feeders.flatMap((node) => node.ports.filter((port) => port.node !== null).map((port) => ({ port, offset: spend - node.reachLeft * CELL_MM })));
@@ -372,7 +372,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     if (node.kind === 'consumer') report[node.module] = powerStatus(node, solved, links, fail);
     else report[node.id] = { relay: true, fed: solved.nodes[node.id].received > 0, received: solved.nodes[node.id].received, capped: solved.nodes[node.id].capped, reason: node.in.length === 0 ? fail && fail.reason : null };
   }
-  // Cables: one or two per link, each with its own slack, kept under the pair cap
+  // Cables per link, own slack, under the pair cap
   const cables = [];
   const perPair = new Map();
   const pairOf = (link) => [link.fromPort.module + ':' + link.fromPort.index, link.toPort.module + ':' + link.toPort.index].sort().join('|');
@@ -394,12 +394,15 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
       cables.push({ link, laid });
     }
   }
-  // Shared conduit runs become bundles; a shifted cable that hits something goes back
+  // Bundle shared runs; undo shifts that hit something
   const unshifted = cables.map((cable) => cable.laid.pieces.map((piece) => piece.points.map((point) => [...point])));
   bundleCables(cables, ([first, second]) => conduitClear(context, graph.solids, first, second).ok);
   cables.forEach((cable, index) => {
     const offWall = cable.laid.pieces.some((piece) => piece.kind === 'run' && !conduitClear(context, graph.solids, piece.points[0], piece.points[1]).ok);
-    if (offWall || cableBlocked(context, cable.laid, [cable.link.fromPort.module, cable.link.toPort.module])) cable.laid.pieces.forEach((piece, at) => (piece.points = unshifted[index][at]));
+    if (offWall || cableBlocked(context, cable.laid, [cable.link.fromPort.module, cable.link.toPort.module])) {
+      cable.laid.pieces.forEach((piece, at) => (piece.points = unshifted[index][at]));
+      rehang(cable.laid);
+    }
   });
   const strings = cables.map(({ link, laid }) => {
     const { points, spans } = cablePoints(laid);

@@ -52,7 +52,7 @@ const AWNING_STEP_MM = 16; // awning post spacing along a long side
 
 const centre = (kit) => [kit.W / 2, kit.D / 2];
 
-// Form a turbine or solar variant takes: the first roll of its shape rng, as the recipe makes it
+// Turbine or solar form, as the recipe rolls it
 export function formOf(variant) {
   const forms = variant.family === 'turbine' ? TURBINE_FORMS : SOLAR_FORMS;
   return makeRng(mixSeed(variant.seed >>> 0, hashString(variant.family))).pick(forms);
@@ -170,7 +170,7 @@ function wheelup(kit) {
   return axleZ;
 }
 
-// Box with a pipe outlet out of its local +x side; the outlet is kept for the pour
+// Box with a pipe outlet on local +x
 function outletBox(kit, pipeGroup) {
   const [centerX, centerY] = centre(kit);
   const [halfX, halfY, height, pipe, reach] = OUTLET_MM;
@@ -195,7 +195,7 @@ function disposal(kit) {
   kit.add('rust', cyl(centerX - OUTLET_MM[0] + radius, centerY, OUTLET_MM[2] - SINK_MM, OUTLET_MM[2] + height * 0.5, radius, radius * 0.8, 10));
 }
 
-// Arched foundation: a block with a pointed arch cut along local x, for a stream to run under
+// Arched foundation: pointed arch along local x
 function arch(kit) {
   kit.slab('concrete', kit.inset, 0, kit.H);
   const [half, spring, rise] = ARCH_MM;
@@ -341,7 +341,7 @@ function support(kit) {
   const middle = kit.W / 2;
   const slab = kit.H - SUPPORT_SLAB_MM;
   kit.add('concrete', box(low, low, slab, high, high, kit.H));
-  // A thin floor plate: the base rests on it and the bay's contents stand on it
+  // Floor plate under the frame and bay
   kit.add('concrete', box(low, low, 0, high, high, SUPPORT_FLOOR_MM));
   const post = form === 'columns' ? SUPPORT_POST_MM : STRUT_POST_MM;
   for (const cornerX of [low, high - post]) for (const cornerY of [low, high - post]) kit.add('concrete', box(cornerX, cornerY, SUPPORT_FLOOR_MM - SINK_MM, cornerX + post, cornerY + post, slab + SINK_MM));

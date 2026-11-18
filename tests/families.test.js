@@ -125,44 +125,58 @@ test('generated penthouses have balconies on all sides but one', () => {
   assert.ok(loaded, 'a penthouse carries a module');
 });
 
-test('stacked shacks put 2 to 4 seeded boxes on each outward side', () => {
-  const boxesOf = (variant) => buildRecipe(variant, CONNECTOR_CLEARANCE_MM).ops.filter((op) => !op.cut && op.group !== 'glass' && op.shape.kind === 'prism');
+test('stacked shacks crowd each outward side with many seeded boxes', () => {
+  const shacksOf = (variant) => buildRecipe(variant, CONNECTOR_CLEARANCE_MM).ops.filter((op) => op.part === 'shack');
   const counts = new Set();
   for (let seed = 1; seed <= 24; seed++) {
     const oneSide = normalizeVariant({ family: 'shacks', fp: '1x2', h: 3, seed, mask: 1, roof: false });
-    const count = boxesOf(oneSide).length;
-    assert.ok(count >= 2 && count <= 4, `seed ${seed}: ${count} boxes`);
+    const count = shacksOf(oneSide).length;
+    assert.ok(count >= 3 && count <= 12, `seed ${seed}: ${count} shacks`);
     counts.add(count);
-    const allSides = boxesOf({ ...oneSide, mask: 15 }).length;
-    assert.ok(allSides >= 8 && allSides <= 16, `seed ${seed}: ${allSides} boxes on four sides`);
-    assert.equal(boxesOf({ ...oneSide, mask: 0 }).length, 0, 'no shacks on connector sides');
+    const allSides = shacksOf({ ...oneSide, mask: 15 }).length;
+    assert.ok(allSides >= 12 && allSides <= 48, `seed ${seed}: ${allSides} shacks on four sides`);
+    assert.equal(shacksOf({ ...oneSide, mask: 0 }).length, 0, 'no shacks on connector sides');
   }
-  assert.ok(counts.size >= 2, 'the count varies by seed');
+  assert.ok(counts.size >= 3, 'the count varies by seed');
   const low = normalizeVariant({ family: 'shacks', fp: '1x1', h: 1, seed: 3, mask: 1, roof: false });
-  assert.equal(boxesOf(low).length, 2, 'one story still stacks two');
+  assert.ok(shacksOf(low).length >= 2, 'one story still stacks two');
   const first = buildRecipe(low, CONNECTOR_CLEARANCE_MM).ops;
   assert.deepEqual(buildRecipe(low, CONNECTOR_CLEARANCE_MM).ops, first);
   assert.notDeepEqual(buildRecipe({ ...low, seed: 4 }, CONNECTOR_CLEARANCE_MM).ops, first);
 });
 
-test('shack boxes differ in size, shift and windows', () => {
+test('shacks differ in size, shift, depth, roof and windows, and read as lived in', () => {
   let compared = 0;
+  const groups = new Set();
+  const seen = { turned: 0, balconies: 0, pitched: 0, lean: 0, pairs: 0 };
   for (let seed = 1; seed <= 12; seed++) {
-    const variant = normalizeVariant({ family: 'shacks', fp: '1x2', h: 3, seed, mask: 1, roof: false });
+    const variant = normalizeVariant({ family: 'shacks', fp: '1x2', h: 3, seed, mask: 15, roof: false });
     const ops = buildRecipe(variant, CONNECTOR_CLEARANCE_MM).ops;
-    const boxes = ops.filter((op) => !op.cut && op.group !== 'glass' && op.shape.kind === 'prism');
-    const starts = new Set(boxes.map((op) => op.shape.from.toFixed(3)));
-    const widths = new Set(boxes.map((op) => (op.shape.to - op.shape.from).toFixed(3)));
-    assert.equal(starts.size, boxes.length, `seed ${seed} shifts`);
-    assert.equal(widths.size, boxes.length, `seed ${seed} widths`);
-    // The first cut is the bay, the rest are windows
-    const windows = ops.filter((op) => op.cut).slice(1);
+    const shacks = ops.filter((op) => op.part === 'shack');
+    const starts = new Set(shacks.map((op) => op.shape.from.toFixed(3)));
+    const widths = new Set(shacks.map((op) => (op.shape.to - op.shape.from).toFixed(3)));
+    // Most shacks differ; two in one column may sit flush to the same edge
+    assert.ok(starts.size >= 0.75 * shacks.length, `seed ${seed} shifts`);
+    assert.ok(widths.size >= 0.75 * shacks.length, `seed ${seed} widths`);
+    const fronts = new Set(shacks.map((op) => Math.min(...op.shape.poly.map((point) => point[0])).toFixed(3)));
+    assert.ok(fronts.size >= Math.min(3, shacks.length), `seed ${seed} depths`);
+    for (const op of shacks) groups.add(op.group);
+    // Lean-to tops slope; pitched roofs add a ridge piece
+    seen.lean += shacks.filter((op) => { const tops = op.shape.poly.map((point) => point[1]); const top = Math.max(...tops); return tops.filter((value) => Math.abs(value - top) < 1e-6).length === 1; }).length;
+    seen.pitched += ops.filter((op) => !op.cut && op.shape.kind === 'prism' && op.shape.poly.length === 3 && !op.part).length;
+    seen.turned += ops.filter((op) => op.part === 'side window').length;
+    seen.balconies += ops.filter((op) => op.group === 'steel').length / 2;
+    const windows = ops.filter((op) => op.part === 'window');
+    const shacksWithTwo = shacks.filter((shack) => windows.filter((window) => window.shape.from >= shack.shape.from - 1e-6 && window.shape.to <= shack.shape.to + 1e-6).length === 2).length;
+    seen.pairs += shacksWithTwo;
     if (windows.length < 2) continue;
     compared++;
     const sizes = new Set(windows.map((op) => (op.shape.to - op.shape.from).toFixed(3)));
-    assert.equal(sizes.size, windows.length, `seed ${seed} windows`);
+    assert.ok(sizes.size >= Math.ceil(windows.length / 2), `seed ${seed} windows mismatched`);
   }
   assert.ok(compared >= 6, `variants with two or more windows: ${compared}`);
+  for (const [kind, count] of Object.entries(seen)) assert.ok(count > 0, `some ${kind}`);
+  assert.ok(groups.size >= 5, `palette ${[...groups]}`);
 });
 
 test('shack overhangs stay inside the overhang rule', async () => {

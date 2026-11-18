@@ -16,7 +16,7 @@ import {
   claimedCells,
   structureHash,
 } from './grid.js';
-import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
@@ -456,7 +456,7 @@ function massing(ctx) {
           if (placed) continue;
         }
       }
-      // Where the mass meets the stream it stands on an arch, or leaves the water open
+      // Stream cells get an arch or stay open
       if (level === 0 && onStream(ctx.stream, cell[0], cell[1])) {
         if (!ctx.rng.chance(ARCH_SKIP)) place(ctx, { family: 'arch', fp: '1x1', h: 1, seed: styleSeed(ctx, cell[0], cell[1]), x: cell[0], y: cell[1], z: 0, rot: ctx.stream.alongX ? 0 : 1 });
         continue;
@@ -593,6 +593,52 @@ function leanButtress(ctx, cell) {
   return null;
 }
 
+// Steps and ramps turned so their high end meets a building all along
+function climbTo(ctx, cell, familyId) {
+  const { rng, world } = ctx;
+  const family = FAMILIES[familyId];
+  const top = worldHeight(world);
+  for (const footprintId of shapeOrder(ctx, family.footprints)) {
+    for (const rot of rng.shuffle([0, 1, 2, 3])) {
+      const shape = footprintCells(footprintId, rot);
+      for (const [offsetX, offsetY] of rng.shuffle(shape)) {
+        const cells = shape.map(([x, y]) => [cell[0] - offsetX + x, cell[1] - offsetY + y]);
+        if (!cells.every(([x, y]) => ctx.inSite.has(cellKey(x, y)) && ctx.groundOk(x, y) && columnTop(world, x, y, top) === 0)) continue;
+        const [stepX, stepY] = SIDES[(BUTT_SIDES[familyId] + rot) & 3];
+        const own = new Set(cells.map(([x, y]) => cellKey(x, y)));
+        const edge = cells.filter(([x, y]) => !own.has(cellKey(x + stepX, y + stepY)));
+        if (!edge.every(([x, y]) => {
+          const other = moduleAt(world, x + stepX, y + stepY, 0);
+          return other && FAMILIES[other.family].stack;
+        })) continue;
+        const placed = place(ctx, { family: familyId, fp: footprintId, h: rng.int(family.minStories, family.maxStories), seed: rng.int(1, CAP_SEEDS), x: cell[0] - offsetX, y: cell[1] - offsetY, z: 0, rot });
+        if (placed) return placed;
+      }
+    }
+  }
+  return null;
+}
+
+// Bridge ends: open at walls, steps to roofs, else capped
+function setBridgeEnds(world, locked) {
+  for (const instance of world.modules.values()) {
+    if (!END_FAMILIES.includes(instance.family) || isDocked(instance) || locked.has(instance.id)) continue;
+    const cells = instanceCells(instance);
+    const own = new Set(cells.map(([x, y]) => cellKey(x, y)));
+    let ends = 0;
+    for (const end of [0, 1]) {
+      const [stepX, stepY] = SIDES[((end === 0 ? 2 : 0) + instance.rot) & 3];
+      const next = cells.filter(([x, y]) => !own.has(cellKey(x + stepX, y + stepY))).map(([x, y]) => [x + stepX, y + stepY]);
+      const walled = next.some(([x, y]) => moduleAt(world, x, y, instance.z));
+      const roofed = next.every(([x, y]) => cellInPlinth(x, y) && instance.z > 0 && columnTop(world, x, y, instance.z) === instance.z && supportedAt(world, x, y, instance.z));
+      const code = walled ? END_OPEN : roofed ? END_STEP : END_CAP;
+      ends |= code << (end * 2);
+    }
+    if (ends) instance.ends = ends;
+    else delete instance.ends;
+  }
+}
+
 function dressGround(ctx, chance) {
   const { rng, world } = ctx;
   const mega = ctx.opts.scale === 'mega';
@@ -603,6 +649,7 @@ function dressGround(ctx, chance) {
     const table = themed(ctx, cellX, cellY, GROUND_CAPS, GROUND_INDUSTRIAL, GROUND_ECO);
     const family = rng.weighted(table);
     if (family === 'buttress') leanButtress(ctx, [cellX, cellY]);
+    else if (BUTT_SIDES[family] !== undefined) climbTo(ctx, [cellX, cellY], family);
     else capCell(ctx, [cellX, cellY], 0, [[family, 1]]);
   }
 }
@@ -877,7 +924,7 @@ function props(ctx) {
   for (const strut of struts) removeModule(world, strut.id);
 }
 
-// Free standing supports, each carrying a module with a balanced ring of neighbours
+// Free standing supports with a balanced canopy
 function supportTrees(ctx) {
   const { world, opts } = ctx;
   const rng = ctx.supportRng;
@@ -1139,7 +1186,7 @@ export function generate(options) {
     }
     prune(ctx);
   }
-  // Canopies go in before the facade pass, so their shared sides become connectors
+  // Canopies first, so shared sides become rails
   if (opts.scale !== 'unit') supportTrees(ctx);
   dropIdleDocks(world, ctx.locked);
   setMasks(world, ctx.locked);
@@ -1147,6 +1194,7 @@ export function generate(options) {
   if (opts.scale !== 'unit') props(ctx);
   setJetties(ctx);
   if (opts.scale !== 'unit') services(ctx);
+  setBridgeEnds(world, ctx.locked);
   const modules = [...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id
   );

@@ -142,7 +142,7 @@ export function createPhysicsWorld(RAPIER, modules) {
       .setFriction(PHYSICS_FRICTION),
     plinth
   );
-  // A support's rigid group is one body carrying every member's colliders: a fixed joint with no give
+  // A support group is one rigid body
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
   const groupOf = new Map();
   for (const group of rigidGroups(moduleItems(modules, instanceCells))) for (const id of group.members) groupOf.set(id, group);

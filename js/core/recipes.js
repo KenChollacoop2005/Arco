@@ -1,5 +1,5 @@
 import { CELL_MM, STORY_MM, DOCK_LIP_MM, DOCK_HEAD_MM } from '../config.js';
-import { isDocked, hasPump } from './catalog.js';
+import { isDocked, hasPump, endCode, END_CAP, END_STEP } from './catalog.js';
 import { box, prismX, prismY, prismZ, cyl, pyramid, octagon, createKit } from './kit.js';
 import { makeStyle, applyFacade, applyFacades, recess, railRecess, glassPane, groove, roofTray } from './facade.js';
 import { addBalconies } from './balcony.js';
@@ -119,24 +119,45 @@ const IVY_MM = [0.8, 5]; // ivy thickness and drop
 const SPAN_DECK_MM = 5.5; // bridge deck, deep enough for sockets
 const SPAN_RAIL_MM = 10.5; // bridge walkway parapet height
 const SEAT_MM = [16, 6.5, 1.5]; // gantry seat length, height, side margin
+const END_STEPS = 3; // steps down at a walkway end
+const END_TREAD_MM = 1.6; // walkway end step tread, clear of the end socket
+const GANTRY_STOP_MM = [2.2, 3]; // gantry end stop length and height over the belt
 const POOL_MM = [5, 0.9]; // penthouse pool half width and depth
 const GLAZING_MM = [2.5, 3]; // penthouse window sill and head
 const SHACK_DEPTH_MM = 5.5; // bay the shacks stand in
 const SHACK_FOOT_MM = 2.5; // floor band under the shacks
 const SHACK_HEAD_MM = 1.5; // roof band over the shacks
-const SHACK_STORY_MM = 11; // least height of one shack
-const SHACK_MOST = 4; // most shacks per side
 const SHACK_JITTER_MM = 1.5; // shack floor height shift
 const SHACK_LAP_MM = 0.6; // shack top sunk into the next
 const SHACK_FRONT_MM = [0.4, 3.1]; // shack front behind the face
 const SHACK_STEP_MM = 0.7; // least front step between neighbours
 const SHACK_EDGE_MM = 1.6; // shacks kept off the bay ends
-const SHACK_WIDTH = [7, 0.8]; // shack width: least mm, most as share
 const SHACK_WINDOW_MM = [2.6, 5, 3, 5.5, 1.4]; // width range, height range, depth
 const SHACK_FRAME_MM = 1.6; // wall around a shack window
 const SHACK_PANE_MM = [0.3, 0.25, 0.2]; // pane edge gap, front, buried
 const SHACK_MIN_WINDOW_MM = [2, 2.4]; // smallest window width and height
-const SHACK_GROUPS = ['concrete', 'concrete', 'rust', 'wood', 'dark']; // shack materials, concrete twice as likely
+const SHACK_GROUPS = ['concrete', 'paintTeal', 'paintRose', 'paintOchre', 'tinGrey', 'tinBlue', 'rust', 'wood', 'dark']; // faded paints, tin and rust; colour only
+const SHACK_ROOF_GROUPS = ['tinGrey', 'tinBlue', 'rust']; // pitched shack roofs
+const SHACK_COLUMNS_MAX = 3; // most shack columns across one side
+const SHACK_COLUMN_MIN_MM = 6; // narrowest shack column
+const SHACK_NARROW = 0.85; // narrowest shack as a share of that
+const SHACK_COLUMN_MOST_MM = 18; // widest shack column
+const SHACK_ROWS_LEAST = 3; // fewest shacks up a column where they fit
+const SHACK_MOST_SIDE = 12; // most shacks on one side
+const SHACK_ROW_MM = [6.5, 11]; // shack height range
+const SHACK_ROOFS = [['flat', 1], ['lean', 2], ['pitched', 1.5]]; // roofs on a short column's top shack, weighted
+const SHACK_SHORT_CHANCE = 0.45; // chance a column stops short with open bay above
+const SHACK_ROOF_ROOM_MM = 3; // room kept under the bay's sloped head for a roof
+const SHACK_LEAN_MM = 1.4; // lean-to drop at the front
+const SHACK_PITCH_MM = 1.5; // pitched roof rise
+const SHACK_TURN_CHANCE = 0.3; // chance an open-ended shack looks along the bay
+const SHACK_SIDE_GAP_MM = 1.2; // gap that leaves a shack end open
+const SHACK_SIDE_WINDOW_MM = [4, 1.2]; // least shack depth for a side window, its frame
+const SHACK_PAIR_MM = 8; // least width for two front windows
+const SHACK_PAIR_CHANCE = 0.3; // chance of two small front windows
+const SHACK_BALCONY_MM = [1.8, 1.2, 1.2, 1.8]; // balcony reach, slab, rail thickness, rail height
+const SHACK_BALCONY_CHANCE = 0.35; // chance a shack above the first row has a balcony
+const SHACK_FACE_GAP_MM = 0.3; // balconies kept this far inside the face and shack ends
 const FLARE_DEPTH_MM = [3.5, 5]; // flared base inset range
 const FLARE_DEG = [35, 45]; // flare slope from vertical
 const FLARE_BAND_MM = 14; // upright band above the flare
@@ -266,7 +287,7 @@ function styled(kit, types, low = 0, high = kit.H) {
   return style;
 }
 
-// Offset boxes stacked in a bay on one side
+// Crowded shacks in a bay: columns of small boxes
 function shackSide(kit, run) {
   const { rng } = kit;
   const depth = SHACK_DEPTH_MM;
@@ -275,39 +296,83 @@ function shackSide(kit, run) {
   kit.cut(recess(run, run.lo, run.hi, low, high, depth));
   const from = depth + SHACK_EDGE_MM;
   const room = run.length - 2 * from;
-  const count = rng.int(2, Math.max(2, Math.min(SHACK_MOST, Math.floor((high - low) / SHACK_STORY_MM))));
+  // Columns across the bay, each at least the narrowest shack
+  const fewest = Math.ceil(room / SHACK_COLUMN_MOST_MM);
+  const columns = Math.max(1, Math.min(SHACK_COLUMNS_MAX, Math.floor(room / SHACK_COLUMN_MIN_MM), rng.int(fewest, SHACK_COLUMNS_MAX)));
+  const cuts = [from];
+  for (let column = 1; column < columns; column++) cuts.push(from + (room * column) / columns + rng.range(-SHACK_JITTER_MM, SHACK_JITTER_MM));
+  cuts.push(from + room);
+  const rowsCap = Math.max(2, Math.floor(SHACK_MOST_SIDE / columns));
   const [windowLow, windowHigh, headLow, headHigh, windowDepth] = SHACK_WINDOW_MM;
   const [paneEdge, paneFront, paneBack] = SHACK_PANE_MM;
   const frame = SHACK_FRAME_MM;
-  const floors = [low];
-  for (let shack = 1; shack < count; shack++) floors.push(low + ((high - low) * shack) / count + rng.range(-SHACK_JITTER_MM, SHACK_JITTER_MM));
-  let lastFront = -SHACK_STEP_MM;
-  for (let shack = 0; shack < count; shack++) {
-    const last = shack === count - 1;
-    const base = floors[shack];
-    const top = last ? high : floors[shack + 1] + SHACK_LAP_MM;
-    let front = rng.range(SHACK_FRONT_MM[0], SHACK_FRONT_MM[1]);
-    if (Math.abs(front - lastFront) < SHACK_STEP_MM) front = lastFront + SHACK_STEP_MM > SHACK_FRONT_MM[1] ? lastFront - SHACK_STEP_MM : lastFront + SHACK_STEP_MM;
-    lastFront = front;
-    const reach = depth - front;
-    const width = rng.range(Math.min(SHACK_WIDTH[0], room), Math.max(SHACK_WIDTH[0], room * SHACK_WIDTH[1]));
-    const start = from + rng.range(0, Math.max(0, room - width));
-    const end = Math.min(start + width, from + room);
-    const group = rng.pick(SHACK_GROUPS);
-    // 45 degree underside, flat on the bay floor
-    const section = shack === 0
-      ? [[depth + SINK_MM, base - SINK_MM], [front, base - SINK_MM], [front, top], [depth + SINK_MM, top]]
-      : [[depth + SINK_MM, base], [depth, base], [front, base + reach], [front, top], [depth + SINK_MM, top]];
-    kit.add(group, run.prismU(section, start, end));
-    const sill = (shack === 0 ? base : base + reach) + frame;
-    const head = Math.min(sill + rng.range(headLow, headHigh), (last ? high - front - windowDepth : top) - frame);
-    const opening = Math.min(rng.range(windowLow, windowHigh), end - start - 2 * frame);
-    if (opening < SHACK_MIN_WINDOW_MM[0] || head - sill < SHACK_MIN_WINDOW_MM[1]) continue;
-    const left = start + frame + rng.range(0, end - start - 2 * frame - opening);
-    const back = front + windowDepth;
-    kit.cut(run.prismU([[front - CUT_OVER_MM, sill], [back, sill], [back, head - windowDepth], [front - CUT_OVER_MM, head + CUT_OVER_MM]], left, left + opening), group);
-    // Glass only where the pane sits in concrete
-    if (group === 'concrete') kit.add('glass', run.box(left + paneEdge, left + opening - paneEdge, sill, head - windowDepth, back - paneFront, back + paneBack));
+  for (let column = 0; column < columns; column++) {
+    const [left, right] = [cuts[column], cuts[column + 1]];
+    // Short columns stop under the sloped head for a roof
+    const short = rng.chance(SHACK_SHORT_CHANCE) && high - depth - SHACK_ROOF_ROOM_MM - low >= SHACK_ROW_MM[0];
+    const ceiling = short ? high - depth - SHACK_ROOF_ROOM_MM : high;
+    // Floors up the column, each shack its own height
+    const floors = [low];
+    const rowsMost = rng.int(Math.min(SHACK_ROWS_LEAST, rowsCap), rowsCap);
+    while (floors.length < rowsMost && floors[floors.length - 1] + SHACK_ROW_MM[0] * 2 <= ceiling) floors.push(floors[floors.length - 1] + rng.range(SHACK_ROW_MM[0], SHACK_ROW_MM[1]));
+    if (floors.length > 1 && floors[floors.length - 1] > ceiling - SHACK_ROW_MM[0]) floors.pop();
+    if (!short && floors.length < 2 && high - low >= SHACK_ROW_MM[0] * 2) floors.push(low + (high - low) / 2);
+    let lastFront = -SHACK_STEP_MM;
+    floors.forEach((base, row) => {
+      const last = row === floors.length - 1;
+      const roof = last && short ? rng.weighted(SHACK_ROOFS) : 'flat';
+      const top = !last ? floors[row + 1] + SHACK_LAP_MM : short ? Math.min(ceiling, base + rng.range(SHACK_ROW_MM[0], SHACK_ROW_MM[1])) : high;
+      let front = rng.range(SHACK_FRONT_MM[0], SHACK_FRONT_MM[1]);
+      if (Math.abs(front - lastFront) < SHACK_STEP_MM) front = lastFront + SHACK_STEP_MM > SHACK_FRONT_MM[1] ? lastFront - SHACK_STEP_MM : lastFront + SHACK_STEP_MM;
+      lastFront = front;
+      const reach = depth - front;
+      const span = right - left;
+      const width = rng.range(Math.min(span, SHACK_COLUMN_MIN_MM) * SHACK_NARROW, span);
+      const start = left + rng.range(0, span - width);
+      const end = start + width;
+      const group = rng.pick(SHACK_GROUPS);
+      const lean = roof === 'lean' ? SHACK_LEAN_MM : 0;
+      // 45 degree underside, flat on the bay floor for the first row
+      const section = row === 0
+        ? [[depth + SINK_MM, base - SINK_MM], [front, base - SINK_MM], [front, top - lean], [depth + SINK_MM, top]]
+        : [[depth + SINK_MM, base], [depth, base], [front, base + reach], [front, top - lean], [depth + SINK_MM, top]];
+      kit.ops.push({ group, cut: false, shape: run.prismU(section, start, end), part: 'shack' });
+      if (roof === 'pitched') kit.add(rng.pick(SHACK_ROOF_GROUPS), run.prismU([[front, top - SINK_MM], [(front + depth) / 2, top + SHACK_PITCH_MM], [depth + SINK_MM, top - SINK_MM]], start, end));
+      const floor = row === 0 ? base : base + reach;
+      const sill = floor + frame;
+      const head = Math.min(sill + rng.range(headLow, headHigh), top - lean - frame);
+      // Turned shacks look along the bay from an open end
+      const openStart = start - left > SHACK_SIDE_GAP_MM;
+      const openEnd = right - end > SHACK_SIDE_GAP_MM;
+      if ((openStart || openEnd) && reach >= SHACK_SIDE_WINDOW_MM[0] && rng.chance(SHACK_TURN_CHANCE) && head - sill >= SHACK_MIN_WINDOW_MM[1]) {
+        const [deepest, sideFrame] = SHACK_SIDE_WINDOW_MM;
+        const face = openEnd ? end : start;
+        const inward = openEnd ? -1 : 1;
+        const [from, to] = [Math.min(face + inward * windowDepth, face - inward), Math.max(face + inward * windowDepth, face - inward)];
+        kit.ops.push({ group, cut: true, shape: run.prismU([[front + sideFrame, sill], [Math.min(depth - sideFrame, front + deepest), sill], [Math.min(depth - sideFrame, front + deepest), head], [front + sideFrame, head]], from, to), part: 'side window' });
+        return;
+      }
+      // Front windows: one of a seeded size, or two small ones side by side
+      const pairs = width - 2 * frame >= SHACK_PAIR_MM && rng.chance(SHACK_PAIR_CHANCE) ? 2 : 1;
+      const slot = (width - (pairs + 1) * frame) / pairs;
+      const opening = Math.min(rng.range(windowLow, windowHigh), slot);
+      if (opening < SHACK_MIN_WINDOW_MM[0] || head - sill < SHACK_MIN_WINDOW_MM[1]) return;
+      const back = front + windowDepth;
+      for (let pane = 0; pane < pairs; pane++) {
+        const at = start + frame + pane * (slot + frame) + rng.range(0, slot - opening);
+        kit.ops.push({ group, cut: true, shape: run.prismU([[front - CUT_OVER_MM, sill], [back, sill], [back, head - windowDepth], [front - CUT_OVER_MM, head + CUT_OVER_MM]], at, at + opening), part: 'window' });
+        // Glass only where the pane sits in concrete
+        if (group === 'concrete') kit.add('glass', run.box(at + paneEdge, at + opening - paneEdge, sill, head - windowDepth, back - paneFront, back + paneBack));
+      }
+      // A tiny balcony under the window, inside the face
+      const [ledge, slab, rail, railTall] = SHACK_BALCONY_MM;
+      const out = Math.min(ledge, front - SHACK_FACE_GAP_MM);
+      if (out >= rail + SHACK_FACE_GAP_MM && row > 0 && rng.chance(SHACK_BALCONY_CHANCE)) {
+        const level = sill - SINK_MM;
+        kit.add('steel', run.prismU([[front + SINK_MM, level - out - SINK_MM], [front - out, level], [front - out, level + slab], [front + SINK_MM, level + slab]], start + SHACK_FACE_GAP_MM, end - SHACK_FACE_GAP_MM));
+        kit.add('steel', run.prismU([[front - out, level + slab - SINK_MM], [front - out + rail, level + slab - SINK_MM], [front - out + rail, level + slab + railTall], [front - out, level + slab + railTall]], start + SHACK_FACE_GAP_MM, end - SHACK_FACE_GAP_MM));
+      }
+    });
   }
 }
 
@@ -389,7 +454,8 @@ const RECIPES = {
     const half = middle - clear;
     const slabBase = kit.H - STRUT_HEAD_MM;
     kit.slab('concrete', clear, 0, STRUT_BASE_MM);
-    kit.slab('concrete', clear, slabBase, kit.H);
+    // The head reaches the cell face under the bulge it props
+    kit.add('concrete', box(kit.inset, clear, slabBase, kit.W - clear, kit.D - clear, kit.H));
     const foot = STRUT_BASE_MM - SINK_MM;
     if (kit.rng.chance(BUNDLE_CHANCE)) {
       const [offset, radius, core] = BUNDLE_MM;
@@ -437,12 +503,14 @@ const RECIPES = {
     const { alongX, length, width } = axes(kit);
     const clear = kit.clear;
     kit.slab('concrete', clear, 0, DECK_MM);
+    // The tall end reaches its cell face, against the wall it leans on
+    const back = kit.inset;
     const profile = [
-      [clear, 0],
+      [back, 0],
       [length - clear, 0],
       [length - clear, BUTTRESS_TOE_MM],
-      [clear + BUTTRESS_HEAD_MM, kit.H],
-      [clear, kit.H],
+      [back + BUTTRESS_HEAD_MM, kit.H],
+      [back, kit.H],
     ];
     kit.add('concrete', cross(alongX, profile, width / 2 - BUTTRESS_HALF_MM, width / 2 + BUTTRESS_HALF_MM));
   },
@@ -535,6 +603,20 @@ const RECIPES = {
     kit.add('concrete', span(alongX, end, length - end, clear, clear + THIN_MM, 0, SPAN_RAIL_MM));
     kit.add('concrete', span(alongX, end, length - end, width - clear - THIN_MM, width - clear, 0, SPAN_RAIL_MM));
     if (docked) dockHeads(kit, alongX, length, width);
+    // Ends: wall in open air, steps down to a roof
+    for (const [index, face] of [[0, end], [1, length - end]]) {
+      const inward = index === 0 ? 1 : -1;
+      const reach = (far) => [Math.min(face - inward, face + inward * far), Math.max(face - inward, face + inward * far)];
+      if (endCode(kit.variant, index) === END_CAP) {
+        const [from, to] = [Math.min(face, face + inward * THIN_MM), Math.max(face, face + inward * THIN_MM)];
+        kit.add('concrete', span(alongX, from, to, clear, width - clear, 0, SPAN_RAIL_MM));
+      }
+      if (endCode(kit.variant, index) !== END_STEP) continue;
+      for (let step = 1; step <= END_STEPS; step++) {
+        const [from, to] = reach((END_STEPS + 1 - step) * END_TREAD_MM);
+        kit.cut(span(alongX, from, to, clear + THIN_MM, width - clear - THIN_MM, SPAN_DECK_MM - (step * SPAN_DECK_MM) / (END_STEPS + 1), SPAN_DECK_MM + 1));
+      }
+    }
   },
 
   bridge(kit) {
@@ -567,7 +649,9 @@ const RECIPES = {
   ramp(kit) {
     const { alongX, length, width } = axes(kit);
     const clear = kit.clear;
-    const slope = (lift) => [[clear, 0], [length - clear, 0], [length - clear, RAMP_TOP_MM + lift], [clear, RAMP_LIP_MM + lift]];
+    // The high end reaches its cell face, against the building it climbs to
+    const top = length - kit.inset;
+    const slope = (lift) => [[clear, 0], [top, 0], [top, RAMP_TOP_MM + lift], [clear, RAMP_LIP_MM + lift]];
     kit.add('concrete', cross(alongX, slope(0), clear, width - clear));
     kit.add('concrete', cross(alongX, slope(RAMP_CURB_MM), clear, clear + THIN_MM));
     kit.add('concrete', cross(alongX, slope(RAMP_CURB_MM), width - clear - THIN_MM, width - clear));
@@ -764,10 +848,12 @@ const RECIPES = {
     const count = Math.round((kit.W / CELL_MM) * STEP_COUNT_PER_CELL);
     const tread = (kit.W - clear * 2) / count;
     const rise = Math.min(STEP_RISE_MM, (kit.H - RAMP_CURB_MM - 1) / count);
+    // The top step reaches its cell face, against the building it climbs to
+    const top = kit.W - kit.inset;
     for (let step = 0; step < count; step++) {
-      kit.add('concrete', box(clear + step * tread, clear, 0, kit.W - clear, kit.D - clear, (step + 1) * rise));
+      kit.add('concrete', box(clear + step * tread, clear, 0, top, kit.D - clear, (step + 1) * rise));
     }
-    kit.add('concrete', box(clear, clear, 0, kit.W - clear, clear + THIN_MM, count * rise + RAMP_CURB_MM));
+    kit.add('concrete', box(clear, clear, 0, top, clear + THIN_MM, count * rise + RAMP_CURB_MM));
   },
 
   planter(kit) {
@@ -873,6 +959,19 @@ const RECIPES = {
     kit.add('soot', span(alongX, end, length - end, width / 2 - beltWidth / 2, width / 2 + beltWidth / 2, beamHeight, beamHeight + beltHeight));
     kit.add('hazard', span(alongX, end, length - end, near, near + railWidth, beamHeight, beamHeight + railHeight));
     kit.add('hazard', span(alongX, end, length - end, far - railWidth, far, beamHeight, beamHeight + railHeight));
+    // Ends: stop in open air, ramp down to a roof
+    for (const [index, face] of [[0, clear], [1, length - clear]]) {
+      const inward = index === 0 ? 1 : -1;
+      const code = endCode(kit.variant, index);
+      if (code === END_CAP) {
+        const [from, to] = [Math.min(face, face + inward * GANTRY_STOP_MM[0]), Math.max(face, face + inward * GANTRY_STOP_MM[0])];
+        kit.add('hazard', span(alongX, from, to, near, far, beamHeight - SINK_MM, beamHeight + beltHeight + GANTRY_STOP_MM[1]));
+      }
+      if (code === END_STEP) {
+        const inner = face + inward * seatLength;
+        kit.add('concrete', cross(alongX, [[face, seatHeight - SINK_MM], [inner, seatHeight - SINK_MM], [inner, beamHeight + beltHeight]].map(([along, z]) => [along, z]).sort((first, second) => first[0] - second[0] || first[1] - second[1]), near, far));
+      }
+    }
   },
 
   chimney(kit) {

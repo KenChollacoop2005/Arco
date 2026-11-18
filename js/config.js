@@ -206,4 +206,4 @@ export const WIRE_SLACK = [0.015, 0.045]; // extra cable over the route length, 
 export const WIRE_CABLES = [1, 3]; // cables strung on one link; the pair cap trims the rest
 export const WIRE_BUNDLE_MM = 0.9; // spacing of cables sharing a conduit
 export const WIRE_SAMPLE_MM = 1.5; // sample spacing along a conduit check
-export const CATENARY_STEPS = 12; // straight pieces per free span
+export const CATENARY_STEPS = 16; // straight pieces per free span

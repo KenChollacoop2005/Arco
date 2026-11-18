@@ -278,7 +278,7 @@ const toggles = setupToggles();
 app.toggles = toggles;
 bindToggle(toggles, query('#effectsToggle'), { id: 'effects', on: true, lightOn: false });
 
-// Effects drive the turning and flowing parts; reduced motion keeps them still
+// Effects turn and flow; reduced motion stays still
 function applyEffects() {
   sharedUniforms.uEffects.value = toggles.get('effects') && !reducedMotion ? 1 : 0;
   view.requestRender();
