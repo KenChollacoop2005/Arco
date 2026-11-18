@@ -15,6 +15,7 @@ const HEAD_ROUND = 1e6; // head sizes round to a millionth
 const HEAD_SLACK = 1e-9; // rounding allowance on a search's head limit
 const BODY_MIN_TALL_MM = 1; // thinnest solid counted as body
 const RIM_MM = (PLINTH_DIAMETER_CELLS * CELL_MM) / 2; // plinth radius
+const WIRE_STUB_STEPS = 4; // most offsets a wire stub steps out to get clear
 const NEIGHBOUR_MM = 2 * OFF; // boxes this close shape a face's node lines
 const WALL_STEP_MM = OFF + 1; // step back from a pipe point into its wall
 const PROBES = []; // directions probed for a real surface near a drop
@@ -163,6 +164,9 @@ export function boxIndex(boxes) {
     }
     return [...found].sort((first, second) => first - second);
   };
+  // Box indexes in the plan cell holding a point
+  const none = [];
+  near.at = (point) => cells.get(keyAt(Math.floor(point[0] / CELL_MM), Math.floor(point[1] / CELL_MM))) || none;
   // Nearest box distance from a point, past the reach counts as the reach
   near.distance = (point, reach) => {
     let best = reach;
@@ -213,7 +217,7 @@ export function pathHead(points) {
 const isCentre = (value, step) => Math.abs(value / step - Math.floor(value / step) - 0.5) < EPS_MM;
 
 // Surface graph of a structure: runs on faces, corner wraps, gap spans, port stubs
-export function pipeGraph(modules, ports, context) {
+export function pipeGraph(modules, ports, context, { crossMax = PIPE_CROSS_MAX_MM, facing = PIPE_CROSS_FACING, sameMass = false, bands = false } = {}) {
   const bodies = worldBodies(modules, context);
   const near = boxIndex(bodies);
   const massAt = massesOf(modules);
@@ -310,7 +314,9 @@ export function pipeGraph(modules, ports, context) {
       const ahead = (plane - port.position[axis]) * sign;
       if (ahead >= 0 && (!best || ahead < best.ahead)) best = { ahead, plane };
     }
-    const point = port.position.map((value, other) => (best ? (other === axis ? best.plane : value) : value + port.normal[other] * OFF));
+    let point = port.position.map((value, other) => (best ? (other === axis ? best.plane : value) : value + port.normal[other] * OFF));
+    // A wire stub steps further out until it is clear
+    for (let step = 2; bands && !best && step <= WIRE_STUB_STEPS && !free(point); step++) point = port.position.map((value, other) => value + port.normal[other] * OFF * step);
     return { point, axis, sign, onPlane: !!best };
   });
   const planeKey = (axis, plane) => axis + ':' + Math.round(plane * KEY_SCALE);
@@ -330,6 +336,8 @@ export function pipeGraph(modules, ports, context) {
     // Story and half story lines up a wall, cell centres across
     if (other === 2) for (let line = Math.ceil(low / (STORY_MM / 2)) * (STORY_MM / 2); line <= high; line += STORY_MM / 2) values.push(line);
     else for (let line = (Math.floor(low / CELL_MM) + 0.5) * CELL_MM; line <= high; line += CELL_MM) values.push(line);
+    // Wires also get lines on cell edges, where piers stand between windows
+    if (bands && other !== 2) for (let line = Math.ceil(low / CELL_MM) * CELL_MM; line <= high; line += CELL_MM) values.push(line);
     if (other === 2 && low <= EPS_MM) values.push(OFF);
     for (const index of neighbours) values.push(bodies[index].min[other] - OFF, bodies[index].max[other] + OFF);
     for (const point of onPlanes.get(planeKey(axis, plane)) || []) values.push(point[other]);
@@ -361,7 +369,11 @@ export function pipeGraph(modules, ports, context) {
             point[second] = valueB;
             if (!free(point)) continue;
             const id = addNode(point);
-            if (axis < 2 && isCentre(point[first === 2 ? second : first], CELL_MM) && isCentre(point[2], STORY_MM)) {
+            const across = first === 2 ? second : first;
+            const atCorner = Math.abs(point[across] - box.min[across]) < EPS_MM || Math.abs(point[across] - box.max[across]) < EPS_MM;
+            // Pipes span from cell centres, wires from brackets at corners
+            const onStory = point[2] > EPS_MM && Math.abs(point[2] / STORY_MM - Math.round(point[2] / STORY_MM)) < EPS_MM;
+            if (axis < 2 && (bands ? atCorner && onStory : isCentre(point[across], CELL_MM) && isCentre(point[2], STORY_MM))) {
               const normal = [0, 0, 0];
               normal[axis] = sign;
               anchors.push({ id, normal });
@@ -490,10 +502,12 @@ export function pipeGraph(modules, ports, context) {
       const target = keyed.get(keyOf([stub.point[0], stub.point[1], landing]));
       // A drop must hug a body or the real solid all the way down
       const touching = (point) => hugs(point) || (free(point) && PROBES.some((probe) => insideSolid(context, point.map((value, axis) => value + probe[axis] * (OFF + EPS_MM)))));
-      if (target === undefined || !along(stub.point, nodes[target].p, touching)) return null;
+      // A wire may hang free down to the surface below
+      if (target === undefined || !along(stub.point, nodes[target].p, bands ? free : touching)) return null;
       addEdge(stubId, target, [], 'drop');
     }
-    if (stub.onPlane && stub.axis < 2) anchors.push({ id: stubId, normal: port.normal });
+    // Every wire port stub is a bracket a span may leave from
+    if ((stub.onPlane || bands) && stub.axis < 2) anchors.push({ id: stubId, normal: port.normal });
     const id = nodes.length;
     nodes.push({ p: port.position, edges: [], port: index });
     addEdge(id, stubId, [], 'stub');
@@ -507,7 +521,7 @@ export function pipeGraph(modules, ports, context) {
     if (!anchorCells.has(key)) anchorCells.set(key, []);
     anchorCells.get(key).push(index);
   });
-  const reach = Math.ceil(PIPE_CROSS_MAX_MM / CELL_MM);
+  const reach = Math.ceil(crossMax / CELL_MM);
   const spanned = new Set();
   anchors.forEach((anchor, index) => {
     const from = nodes[anchor.id].p;
@@ -520,12 +534,12 @@ export function pipeGraph(modules, ports, context) {
           const to = nodes[other.id].p;
           const step = [0, 1, 2].map((axis) => to[axis] - from[axis]);
           const length = Math.hypot(...step);
-          if (length > PIPE_CROSS_MAX_MM || length < EPS_MM) continue;
+          if (length > crossMax || length < EPS_MM) continue;
           const leave = step.reduce((sum, value, axis) => sum + value * anchor.normal[axis], 0) / length;
           const meet = -step.reduce((sum, value, axis) => sum + value * other.normal[axis], 0) / length;
-          if (leave < PIPE_CROSS_FACING || meet < PIPE_CROSS_FACING) continue;
+          if (leave < facing || meet < facing) continue;
           const pair = Math.min(anchor.id, other.id) + ',' + Math.max(anchor.id, other.id);
-          if (spanned.has(pair) || !apart(massAt, from, wallOf(from, anchor.normal), to, wallOf(to, other.normal)) || !along(from, to, free)) continue;
+          if (spanned.has(pair) || (!sameMass && !apart(massAt, from, wallOf(from, anchor.normal), to, wallOf(to, other.normal))) || !along(from, to, free)) continue;
           spanned.add(pair);
           addEdge(anchor.id, other.id, [], 'cross');
         }
@@ -536,7 +550,7 @@ export function pipeGraph(modules, ports, context) {
 }
 
 // Small binary heap on cost, then node id, in two flat lists
-function createHeap() {
+export function createHeap() {
   const costs = [];
   const ids = [];
   const less = (first, second) => costs[first] < costs[second] || (costs[first] === costs[second] && ids[first] < ids[second]);

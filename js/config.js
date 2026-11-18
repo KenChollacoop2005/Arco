@@ -162,3 +162,43 @@ export const TARP_RISE_MM = 25; // most height difference between tarp corners
 export const TARP_MIN_AREA_MM2 = 60; // smallest tarp in plan
 export const TARPS_MAX = 6; // most tarps per structure
 export const TARP_COLORS = [0xb5694a, 0xc9a23f, 0x5f9c95]; // terracotta, mustard, faded teal
+
+// Power: units, reach and throughput
+export const POWER_STEP = 0.5; // power splits between branches in steps of this
+// Power sources: supply in units, reach in cells
+export const POWER_SUPPLY = {
+  turbine: [2, 6],
+  solar: [1, 6],
+  generator: [6, 8],
+  wheel: [3, 6],
+  wheelup: [0, 6],
+};
+export const TURBINE_EXTRA_PER_STORY = 0.5; // turbine supply added per story past its shortest
+export const SOLAR_PER_CELL = 0.5; // solar supply per footprint cell, at least the base row
+export const WHEEL_PER_UNIT = 1; // elevated wheel power per unit of gravity water through it
+export const WHEEL_UP_CAP = 3; // most power one elevated wheel makes
+// Power relays: reach in cells, throughput in units
+export const POWER_RELAYS = { powerroom: [12, 8], junction: [6, 3] };
+// Power demand per module
+export const POWER_DEMAND = {
+  housing: 0.5, studio: 0.5, penthouse: 0.5, shacks: 0.5, flared: 0.5,
+  smokestack: 1, chimney: 1, cooling: 1, tankfarm: 1,
+  smallpump: 0.5, pumptank: 0.5, plantpump: 0.5, pumproom: 1, well: 0.5,
+  hall: 0.5, shop: 0.5,
+};
+export const POWER_FANOUT = [1, 3]; // children a source or relay feeds, seeded
+export const POWER_CHILD_FANOUT = [0, 3]; // children a fed consumer passes power on to, seeded
+export const MAX_CHAIN_LINKS = 2; // most one-in-one-out links in a row
+export const REJOIN_CHANCE = 0.25; // share of branch ends that rejoin a relay higher up
+export const POWER_SHORT_REACH = 4; // cells past the reach searched to report a shortfall
+export const POWER_JITTER = 0.15; // seeded cells added to a link cost, for variety
+export const POWER_OVERBOOK = 1.5; // a tree wires up to this many times its supply; the rest report source empty
+
+// Wires: routing and hang
+export const WIRE_SPAN_MAX_MM = 5 * 25; // longest free span between brackets
+export const WIRE_SPAN_FACING = 0.1; // a span leaves and meets each bracket at least this square on
+export const WIRE_SLACK = [0.015, 0.045]; // extra cable over the route length, share
+export const WIRE_CABLES = [1, 3]; // cables strung on one link; the pair cap trims the rest
+export const WIRE_BUNDLE_MM = 0.9; // spacing of cables sharing a conduit
+export const WIRE_SAMPLE_MM = 1.5; // sample spacing along a conduit check
+export const CATENARY_STEPS = 12; // straight pieces per free span

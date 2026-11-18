@@ -47,7 +47,7 @@ test('a hanging string sags lowest at mid span, keeps exact ends and counts the 
 test('no string of a generated structure passes through a module or below the plinth', () => {
   let pipes = 0;
   let sheets = 0;
-  for (const seed of ['barbican', 'habitat', 'arco']) {
+  for (const seed of ['barbican', 'habitat', 'arco', 'brunswick']) {
     const { modules } = generate({ seed, ...MEGA });
     const context = stringContext(modules);
     const plan = planServices(modules, seed, { context });

@@ -4,17 +4,44 @@ import { buildRecipe } from './recipes.js';
 import { groupAt, worldColliders } from './mounts.js';
 
 const SOLID_STEP_MM = 0.5; // sample spacing near an end module
+const INDEX_CELL_MM = 25; // plan grid cell for box lookups
+const INDEX_PAD_MM = 1; // boxes grow by this in the grid, past any string margin
 const TURN_COS_SIN = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
 const distance = (first, second) => Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
 export const pathLength = (points) => points.slice(1).reduce((sum, point, index) => sum + distance(points[index], point), 0);
 
+// Plan grid over boxes: indexes of boxes whose plan bounds meet a plan rectangle, in order
+function planIndex(boxes) {
+  const cells = new Map();
+  const range = (low, high) => [Math.floor(low / INDEX_CELL_MM), Math.floor(high / INDEX_CELL_MM)];
+  boxes.forEach((box, index) => {
+    const [fromX, toX] = range(box.min[0] - INDEX_PAD_MM, box.max[0] + INDEX_PAD_MM);
+    const [fromY, toY] = range(box.min[1] - INDEX_PAD_MM, box.max[1] + INDEX_PAD_MM);
+    for (let cellX = fromX; cellX <= toX; cellX++) for (let cellY = fromY; cellY <= toY; cellY++) {
+      const key = cellX + ',' + cellY;
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(index);
+    }
+  });
+  return (from, to) => {
+    const [fromX, toX] = range(Math.min(from[0], to[0]), Math.max(from[0], to[0]));
+    const [fromY, toY] = range(Math.min(from[1], to[1]), Math.max(from[1], to[1]));
+    if (fromX === toX && fromY === toY) return cells.get(fromX + ',' + fromY) || [];
+    const found = new Set();
+    for (let cellX = fromX; cellX <= toX; cellX++) for (let cellY = fromY; cellY <= toY; cellY++) for (const index of cells.get(cellX + ',' + cellY) || []) found.add(index);
+    return [...found].sort((first, second) => first - second);
+  };
+}
+
 // Collision context of a structure: boxes, modules and their solids
 export function stringContext(modules) {
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
   const ops = new Map();
+  const boxes = worldColliders(modules);
   return {
-    boxes: worldColliders(modules),
+    boxes,
+    boxesNear: planIndex(boxes),
     byId,
     opsOf(instance) {
       const key = variantKey(instance);
@@ -47,7 +74,7 @@ export function segmentHitsBox(from, to, shape, margin = STRING_CLEAR_MM) {
 }
 
 // World point to a module's local mesh frame
-function toLocal(instance, point) {
+export function toLocal(instance, point) {
   const pose = instancePose(instance);
   const [cos, sin] = TURN_COS_SIN[pose.turns];
   const shiftX = point[0] - pose.x;
@@ -73,7 +100,8 @@ export function pathBlocked(context, points, ends = []) {
     const from = points[index - 1];
     const to = points[index];
     if (from[2] < 0 || to[2] < 0) return { module: null, reason: 'plinth' };
-    for (const shape of context.boxes) {
+    for (const boxIndex of context.boxesNear ? context.boxesNear(from, to) : context.boxes.map((unused, index) => index)) {
+      const shape = context.boxes[boxIndex];
       if (!segmentHitsBox(from, to, shape)) continue;
       if (!ends.includes(shape.module)) return { module: shape.module, reason: 'module' };
       if (hitsSolid(context, context.byId.get(shape.module), from, to)) return { module: shape.module, reason: 'module' };

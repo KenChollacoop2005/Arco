@@ -26,3 +26,4 @@ One line per source or library, with its license.
 - Zip container with stored (uncompressed) entries. PKWARE, "APPNOTE.TXT, .ZIP File Format Specification", sections 4.3.7, 4.3.12 and 4.3.16.
 - CRC-32 for zip entries, checked against the standard value 0xCBF43926 for "123456789". Williams, "A Painless Guide to CRC Error Detection Algorithms" (1993).
 - Simplex method, phase one feasibility with Bland's rule against cycling. Chvatal, "Linear Programming" (1983), chapters 2 and 3.
+- Catenary through two points with a given cable length (sinh relation and low point offset). Irvine, "Cable Structures" (1981), chapter 1.

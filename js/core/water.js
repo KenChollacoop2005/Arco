@@ -18,6 +18,7 @@ const SPLIT_ROUNDS_MAX = 1000; // safety cap on split rounds
 const SEARCH_SLACK = 1e-6; // head slack when a search stops early
 const SHORT_REACH = 4; // shortfalls past this much head are reported without a number
 export const WATER_REASONS = ['out of head', 'no route', 'no wall route', 'source empty', 'no free port'];
+const UNPOWERED_TANKS = ['pumptank']; // pumped tanks that drain by gravity when off
 
 const toQuarters = (units) => Math.round(units * WATER_QUARTERS);
 const toUnits = (quarters) => quarters / WATER_QUARTERS;
@@ -63,7 +64,7 @@ export function splitWater(available, branches) {
 }
 
 // Nodes in an order where every link runs forward
-function topoOrder(nodes, links) {
+export function topoOrder(nodes, links) {
   const incoming = new Map(nodes.map((node) => [node.id, 0]));
   for (const link of links) incoming.set(link.to, incoming.get(link.to) + 1);
   const ready = nodes.filter((node) => incoming.get(node.id) === 0);
@@ -81,8 +82,12 @@ function topoOrder(nodes, links) {
   return order;
 }
 
+// A pump without full power passes water as a plain junction
+const asJunction = (node) => (node.kind === 'pump' && node.powered === false ? { ...node, kind: 'junction', supply: 0, head: null, throughput: null, off: true } : node);
+
 // Flow over a built network; nodes and links as plain data, units as numbers
-export function solveWater({ nodes, links }) {
+export function solveWater({ nodes: given, links }) {
+  const nodes = given.map(asJunction);
   const order = topoOrder(nodes, links);
   const outOf = new Map(nodes.map((node) => [node.id, links.filter((link) => link.from === node.id)]));
   const supply = new Map(nodes.map((node) => [node.id, toQuarters(node.supply || 0)]));
@@ -171,6 +176,7 @@ export function solveWater({ nodes, links }) {
     result.totals.delivered += toUnits(entry.taken);
     result.totals.unused += toUnits(entry.unused);
     result.nodes[node.id] = { received: toUnits(entry.received), taken: toUnits(entry.taken), head: entry.head, gravity: entry.gravity, overflow: toUnits(entry.overflow), trickled: toUnits(entry.trickled || 0), demand: toUnits(demand.get(node.id)) };
+    if (given.find((entry) => entry.id === node.id).kind === 'pump') result.nodes[node.id].runs = !node.off;
   }
   for (const link of links) {
     const entry = linkState.get(link.id) || { units: 0, headLeft: -1, short: linkCost(link), runs: false };
@@ -194,10 +200,16 @@ export function consumerStatus(node, solved, inLinks, noLink) {
 }
 
 // Source, pump, main and consumer roles of one module
-function rolesOf(instance, roofOpen) {
+function rolesOf(instance, roofOpen, powered) {
   const roles = [];
   const pump = hasPump(instance) ? PUMP_KINDS[instance.family] : null;
-  if (pump) {
+  const live = !powered || powered.has(instance.id);
+  if (pump && !live && UNPOWERED_TANKS.includes(instance.family)) {
+    // An unpowered pumped tank still drains its own water by gravity
+    roles.push({ kind: 'source', supply: WATER_SOURCES[pump][0], head: null, row: pump, pumpOff: true });
+  } else if (pump && !live) {
+    roles.push({ kind: 'main', supply: 0, head: null, row: pump, pumpOff: true });
+  } else if (pump) {
     const [own, head, throughput] = WATER_SOURCES[pump];
     roles.push({ kind: 'pump', supply: own, head, throughput, row: pump });
   } else if (SOURCE_FAMILIES[instance.family]) {
@@ -242,7 +254,7 @@ function spillOf(world, node, instances, consumerAt, context) {
 }
 
 // Water network of a structure: nodes, pipes, flows and diagnostics, seeded
-export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules) } = {}) {
+export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules), powered = null, shared = {} } = {}) {
   const world = worldFromModules(modules);
   const rng = makeRng(mixSeed(hashString(String(seedText)), WATER_SEED));
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
@@ -260,11 +272,14 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     mainOf.set(instance.id, under && mainOf.has(under.id) ? mainOf.get(under.id) : instance.id);
   }
   const waterPorts = [...portsOf.values()].flat();
-  const graph = pipeGraph(modules, waterPorts, context);
+  // The surface graph depends only on the ports, so runs share it
+  if (!shared.graph) shared.graph = pipeGraph(modules, waterPorts, context);
+  const graph = shared.graph;
   waterPorts.forEach((port, index) => {
     port.node = graph.portNodes[index];
   });
-  const parts = graphParts(graph);
+  if (!shared.parts) shared.parts = graphParts(graph);
+  const parts = shared.parts;
   const nodes = [];
   const consumerAt = new Map();
   for (const instance of modules) {
@@ -272,7 +287,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const members = mainOf.has(instance.id) ? modules.filter((other) => mainOf.get(other.id) === instance.id) : [instance];
     const roofOpen = instanceCells(instance).every(([cellX, cellY]) => !moduleAt(world, cellX, cellY, instance.z + instance.h));
     const level = Math.max(...members.map((member) => member.z + member.h));
-    for (const role of rolesOf(instance, roofOpen)) {
+    for (const role of rolesOf(instance, roofOpen, powered)) {
       const own = members.flatMap((member) => portsOf.get(member.id) || []);
       const gutter = role.roof ? own.filter((port) => port.type === 'water-out' && port.roof) : own.filter((port) => !port.roof);
       const node = { id: role.roof ? `${instance.id}:roof` : String(instance.id), module: instance.id, members: members.map((member) => member.id), level, ...role, ins: gutter.filter((port) => port.type === 'water-in'), outs: gutter.filter((port) => port.type === 'water-out') };
@@ -429,5 +444,8 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const fail = noLink.get(node.id);
     report[node.module] = consumerStatus(node, solved, links.filter((link) => link.to === node.id), fail && { reason: fail.reason, short: fail.short === undefined ? 0 : fail.short });
   }
-  return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report };
+  // Pumps say whether they run
+  const pumps = {};
+  for (const node of nodes) if (node.row && PUMP_KINDS[byId.get(node.module).family]) pumps[node.module] = { runs: !node.pumpOff, row: node.row };
+  return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report, pumps };
 }
