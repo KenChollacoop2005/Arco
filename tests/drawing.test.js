@@ -59,8 +59,8 @@ const pointsIn = (lines, from, to) => lines.positions.slice(from * 6, to * 6);
 
 test('services overlay draws strings, dashed blocked attempts and dry or partial consumers', () => {
   assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
-  // A structure with a partly fed consumer under wall routed pipes
-  const structure = generate({ seed: 'arco', scale: 'block' });
+  // A structure with a partly fed consumer under wall routed pipes, with no trickle
+  const structure = generate({ seed: 'quarry', scale: 'mega' });
   const services = planServices(structure.modules, 'brunswick');
   const lines = serviceLines(services, structure.modules);
   assert.equal(lines.positions.length, lines.statuses.length * 6);
@@ -70,7 +70,8 @@ test('services overlay draws strings, dashed blocked attempts and dry or partial
   const pipeSteps = steps(services.pipes);
   const sheetSteps = steps(services.sheets);
   const wireSteps = steps(services.wires);
-  assert.ok(pipeSteps > 0 && sheetSteps > 0 && wireSteps > 0 && services.blocked.length > 0);
+  // Surplus water is not drawn, so no sheet steps
+  assert.ok(pipeSteps > 0 && sheetSteps === 0 && wireSteps > 0 && services.blocked.length > 0);
   assert.deepEqual(pointsIn(lines, 0, 1), [...services.pipes[0].points[0], ...services.pipes[0].points[1]]);
   assert.ok(lines.statuses.slice(0, pipeSteps + sheetSteps).every((status) => status === 'water'));
   assert.ok(lines.statuses.slice(pipeSteps + sheetSteps, pipeSteps + sheetSteps + wireSteps).every((status) => status === 'power'));

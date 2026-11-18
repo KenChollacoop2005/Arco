@@ -10,13 +10,13 @@ import { runChecks } from '../js/core/checks.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { makeBudget, budgetCap, withinBudget, growRoll, generateLimits, growLimits, placeCap, budgetParams, budgetFromParams } from '../js/core/budget.js';
 
-// Generate and Grow results, re-recorded after the services run
+// Generate and Grow results, re-recorded after the raised wheel and platform sides changes
 const BEFORE = {
-  'barbican mega 2': [203, '68e9ea4e65551a4d', 197, '5a562c7a14566af1'],
-  'habitat block 1': [31, 'dd3c05b95e16c809', 32, '3fa4122a5ee896dd'],
-  'arco unit 1': [1, '6b6828ffe3949732', 48, '4b670f76c88f502c'],
-  'beton block 0': [30, '6af6be3dba6445ba', 41, '757c859b43d7a18c'],
-  'golden mega 1': [211, 'ea16d5004078c524', 162, '34b1cf7f3f1f62da'],
+  'barbican mega 2': [203, 'a86ff90a88736667', 197, '398fd3bc83dc4b15'],
+  'habitat block 1': [31, 'b79dff1c375043fc', 32, 'ddbb4f42292825df'],
+  'arco unit 1': [1, '6b6828ffe3949732', 50, '65413d18e0ff9ce3'],
+  'beton block 0': [30, 'ff52a9a5cf7e987e', 41, '925712f2bd6819a9'],
+  'golden mega 1': [210, '8441bb5815b4bdab', 161, '2d5076a2d1bf04f6'],
 };
 const OPENING_BEFORE = [17, '17ed3cdabbe96458'];
 

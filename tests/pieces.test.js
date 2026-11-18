@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WATER_SOURCES, POWER_SUPPLY, POWER_RELAYS, WHEEL_UP_CAP } from '../js/config.js';
-import { FAMILIES, JUNCTION_FAMILIES, normalizeVariant } from '../js/core/catalog.js';
+import { CELL_MM, WATER_SOURCES, POWER_SUPPLY, POWER_RELAYS, WHEEL_UP_CAP } from '../js/config.js';
+import { FAMILIES, JUNCTION_FAMILIES, DISABLED_FAMILIES, normalizeVariant } from '../js/core/catalog.js';
 import { toBody, variantKey, worldFromModules, instanceCells } from '../js/core/grid.js';
 import { checkPlacement, validateStructure } from '../js/core/placement.js';
 import { checkStability } from '../js/core/stability.js';
@@ -13,7 +13,7 @@ import { variantOf } from '../js/core/collection.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { variantMounts, MOUNT_PORTS, structureMounts } from '../js/core/mounts.js';
 import { stringContext, pathBlocked } from '../js/core/strings.js';
-import { pourPaths, pourQuads, POURING } from '../js/core/falls.js';
+import { pourPaths, pourQuads, POURING, FLOW_LENGTH_MM, FLOW_FADE_SHARE } from '../js/core/falls.js';
 import { planWater, solveWater } from '../js/core/water.js';
 import { planPower, powerRole } from '../js/core/power.js';
 import { planServices } from '../js/core/services.js';
@@ -56,7 +56,7 @@ function generated() {
       found.results.push(result);
       for (const instance of result.modules) found.seen.set(instance.family, (found.seen.get(instance.family) || 0) + 1);
     }
-    if (Object.keys(PIECES).every((id) => found.seen.get(id) > 0) && found.results.length >= 12) break;
+    if (Object.keys(PIECES).every((id) => DISABLED_FAMILIES.includes(id) || found.seen.get(id) > 0) && found.results.length >= 12) break;
   }
   return found;
 }
@@ -144,7 +144,11 @@ test('new families are reachable from Generate in legal, standing structures', (
       }
     }
   }
-  for (const id of Object.keys(PIECES)) assert.ok(seen.get(id) > 0, `${id} generated`);
+  for (const id of Object.keys(PIECES)) {
+    // Switched off families are never generated
+    if (DISABLED_FAMILIES.includes(id)) assert.ok(!seen.has(id), `${id} not generated`);
+    else assert.ok(seen.get(id) > 0, `${id} generated`);
+  }
   // An arch carries something above it somewhere
   const carried = results.some((result) => result.modules.some((arch) => arch.family === 'arch' && result.modules.some((other) => other.z === 1 && instanceCells(other).some(([x, y]) => x === arch.x && y === arch.y))));
   assert.ok(carried, 'a megastructure continues over the stream');
@@ -186,7 +190,6 @@ test('new families are reachable from Build and save as parts, junction boxes in
     { family: 'well', fp: '1x1', h: 1, seed: 2, mask: 15, x: -2, y: -3, z: 0 },
     { family: 'raincatcher', fp: '1x1', h: 1, seed: 3, mask: 15, x: 0, y: 0, z: 2 },
     { family: 'core', fp: '1x1', h: 1, seed: 1, mask: 0, x: 3, y: 2, z: 0 },
-    { family: 'wheelup', fp: '1x1', h: 1, seed: 3, mask: 15, x: 3, y: 2, z: 1 },
     { family: 'housing', fp: '1x1', h: 2, seed: 4, mask: 15, x: -3, y: 3, z: 0, jb: 1 },
     { family: 'runoff', fp: '1x1', h: 1, seed: 4, mask: 15, x: -3, y: 3, z: 2 },
     { family: 'disposal', fp: '1x1', h: 1, seed: 4, mask: 15, x: 4, y: -1, z: 0 },
@@ -199,10 +202,15 @@ test('new families are reachable from Build and save as parts, junction boxes in
     assert.ok(saved, `${spec.family} saves`);
     assert.equal(variantKey(saved), variantKey(normalizeVariant(spec)));
   }
+  // Switched off families are refused, as a ghost and when placed
+  const raised = { family: 'wheelup', fp: '1x1', h: 1, seed: 3, mask: 15, x: 3, y: 2, z: 1, roof: false, rot: 0 };
+  const refused = build.place(raised);
+  assert.equal(refused.ok, false, 'wheelup placed');
+  assert.equal(refused.reason, build.ghost(normalizeVariant(raised), 3.5 * CELL_MM, 2.5 * CELL_MM, 0).reason);
   // The junction box lives in the record, only where it may go
   assert.equal(variantOf({ family: 'housing', fp: '1x1', h: 2, seed: 4, mask: 15, jb: 1 }).jb, 1);
   assert.equal(normalizeVariant({ family: 'turbine', fp: '1x1', h: 2, seed: 4, mask: 15, jb: 1 }).jb, undefined);
-  assert.notEqual(variantKey({ ...specs[7] }), variantKey({ ...specs[7], jb: 0 }));
+  assert.notEqual(variantKey({ ...specs[6] }), variantKey({ ...specs[6], jb: 0 }));
   for (const family of JUNCTION_FAMILIES) {
     const relays = (jb) => variantMounts(normalizeVariant({ family, fp: FAMILIES[family].footprints[0], h: FAMILIES[family].minStories, seed: 5, mask: 15, jb })).filter((port) => port.relay);
     assert.equal(relays(0).length, 0, family);
@@ -269,7 +277,7 @@ test('a junction box is a small relay of its own on its module', () => {
   assert.ok(power.nodes.some((node) => node.id === '2' && node.kind === 'consumer'));
 });
 
-test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring, and pours that arc out, fall and fade, clear of modules', async () => {
+test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring, and pours that fall straight from past the cell edge and fade, clear of modules', async () => {
   const solids = await getSolids();
   const counts = new Set();
   for (const family of POURING) {
@@ -296,15 +304,25 @@ test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring
     for (const pour of pourPaths(modules, context)) {
       pours++;
       const name = `${seed} ${pour.family} ${pour.module}`;
-      const [first, second] = pour.points;
-      // Leaves the stub outward, never climbs
-      assert.ok((second[0] - first[0]) * pour.dir[0] + (second[1] - first[1]) * pour.dir[1] > 0, `${name} leaves outward`);
-      for (let step = 1; step < pour.points.length; step++) assert.ok(pour.points[step][2] <= pour.points[step - 1][2] + 1e-9, `${name} falls`);
-      // Fades out or stops where it lands, never through a module
+      const [top, foot] = pour.points;
+      // Starts past its own cell edge, outward along the stub
+      const module = byId.get(pour.module);
+      const past = Math.min(...instanceCells(module).map(([cellX, cellY]) => Math.max(cellX * CELL_MM - top[0], top[0] - (cellX + 1) * CELL_MM, cellY * CELL_MM - top[1], top[1] - (cellY + 1) * CELL_MM)));
+      assert.ok(past > 1, `${name} starts past the cell edge (${past.toFixed(2)} mm)`);
+      // Straight down, within its seeded length
+      assert.equal(pour.points.length, 2, `${name} two points`);
+      assert.ok(foot[0] === top[0] && foot[1] === top[1] && foot[2] <= top[2], `${name} falls straight`);
+      assert.ok(pour.length >= FLOW_LENGTH_MM[0] - 1e-9 && pour.length <= FLOW_LENGTH_MM[1] + 1e-9, `${name} length`);
+      assert.ok(pour.fadeStart >= pour.length * FLOW_FADE_SHARE[0] - 1e-9 && pour.fadeStart <= pour.length * FLOW_FADE_SHARE[1] + 1e-9, `${name} fade start`);
+      assert.ok(Math.abs(top[2] - foot[2] - pour.drop) < 1e-9 && pour.drop <= pour.length + 1e-9, `${name} drop`);
+      // Full at the top; one that never lands fades to exactly zero
       const quads = pourQuads(pour);
-      assert.ok(quads[0][0].fade === 1 && quads.at(-1)[2].fade < quads[0][0].fade, `${name} fades`);
-      const above = pour.points.filter((point) => point[2] >= 0);
-      assert.equal(pathBlocked(context, above.slice(0, -1), [pour.module]), null, `${name} through a module`);
+      if (pour.drop > 0) {
+        assert.equal(quads[0][0].fade, 1, `${name} full at the top`);
+        if (pour.drop >= pour.length - 1e-9) assert.equal(quads.at(-1)[2].fade, 0, `${name} fades out`);
+        assert.ok(quads.every((quad) => quad.every((corner) => corner.point[0] === top[0] || corner.point[1] === top[1])), `${name} crossed sheets`);
+      }
+      if (top[2] > 0) assert.equal(pathBlocked(context, [top, [foot[0], foot[1], Math.max(foot[2], 0)]], [pour.module]), null, `${name} through a module`);
       assert.ok(POURING.includes(byId.get(pour.module).family));
     }
   }

@@ -1059,9 +1059,14 @@ function faceOut(world, instance) {
     const rot = (instance.rot + turn) & 3;
     const [stepX, stepY] = SIDES[rot];
     const drop = instance.z - columnTop(world, instance.x + stepX, instance.y + stepY, top);
-    if (drop > 0 && (!best || drop > best.drop)) best = { rot, drop };
+    if (drop >= 0 && (!best || drop > best.drop)) best = { rot, drop };
   }
-  if (best) instance.rot = best.rot;
+  // Every side walled: the stubs would pour into a wall
+  if (!best) {
+    removeModule(world, instance.id);
+    return null;
+  }
+  instance.rot = best.rot;
   return instance;
 }
 
