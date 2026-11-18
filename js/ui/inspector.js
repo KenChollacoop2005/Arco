@@ -55,6 +55,17 @@ export function powerText(flows, id) {
   return lines.length > 0 ? lines.join('. ') : null;
 }
 
+// One walking line: the nearest amenity and how the plinth reaches this module
+export function walkingText(walking, id, label = (type) => type) {
+  const entry = walking && walking.modules && walking.modules[id];
+  if (!entry) return null;
+  const reach = !entry.reached ? COPY.walkUnreached : entry.stepFree ? COPY.walkFromPlinthFree : COPY.walkFromPlinthSteps;
+  const nearest = Object.entries(entry.nearest).filter(([, value]) => value.steps > 0).sort((first, second) => first[1].steps - second[1].steps || (first[0] < second[0] ? -1 : 1))[0];
+  if (!nearest) return reach;
+  const [type, { steps, stepFree }] = nearest;
+  return `${COPY.walkNearest} ${label(type).toLowerCase()}: ${steps} ${COPY.walkSteps}, ${stepFree ? COPY.walkStepFree : COPY.walkWithSteps}. ${reach}`;
+}
+
 function node(tag, className, text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -118,7 +129,7 @@ export function createInspector(body) {
     body.append(list);
   }
 
-  function moduleView({ checks, flows, printOf, socketsOf, fit, onExport, onSave }, instance) {
+  function moduleView({ checks, flows, walking, printOf, socketsOf, fit, onExport, onSave }, instance) {
     const family = FAMILIES[instance.family];
     const [sizeX, sizeY] = footprintSize(instance.fp, instance.rot);
     body.append(node('p', 'inspector-name', family.label), node('p', 'inspector-sub', family.group));
@@ -148,7 +159,7 @@ export function createInspector(body) {
     else if (!fit) list.append(checkLine(COPY.connectorFit, '', COPY.checking));
     else list.append(checkLine(COPY.connectorFit, fitStatus(fit.gap, fit.clearance), `${fit.gap.toFixed(2)} mm`, `${COPY.fitMeasured} ${fit.clearance.toFixed(2)} mm`));
     body.append(list);
-    for (const text of [waterText(flows, instance.id), powerText(flows, instance.id)]) {
+    for (const text of [waterText(flows, instance.id), powerText(flows, instance.id), walkingText(walking, instance.id, (type) => (FAMILIES[type] ? FAMILIES[type].label : type))]) {
       if (text) body.append(node('p', 'inspector-service', text));
     }
     const save = node('button', 'primary', COPY.save);

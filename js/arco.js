@@ -107,7 +107,7 @@ const saveModule = (instance) => collectionPanel.save(instance, modules.partOf(v
 function showInspector() {
   const lastId = app.selection[app.selection.length - 1];
   const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
-  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
+  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
 }
 
 // Click selects, shift click adds or removes
@@ -181,7 +181,8 @@ app.modeListeners.push((mode) => {
 for (const input of document.querySelectorAll('input[name="drawingView"]')) {
   input.addEventListener('change', () => rig.setView(input.value));
 }
-for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'], ['#showConnectors', 'connectors'], ['#showServices', 'services']]) {
+app.analysisListeners.push(() => drawing.setWalking(app.analysis && app.analysis.walking ? app.analysis.walking.lines : null));
+for (const [id, layer] of [['#showLoads', 'loads'], ['#showCenters', 'centers'], ['#showConnectors', 'connectors'], ['#showServices', 'services'], ['#showWalking', 'walking']]) {
   query(id).addEventListener('change', (event) => drawing.setLayer(layer, event.target.checked));
 }
 

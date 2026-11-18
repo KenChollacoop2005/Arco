@@ -6,9 +6,10 @@ import { generate } from '../js/core/generator.js';
 import { planServices } from '../js/core/services.js';
 import { serviceLines } from '../js/core/drafting.js';
 import { waterText, powerText } from '../js/ui/inspector.js';
+import { walkingNetwork, walkingLines } from '../js/core/walking.js';
 import { COPY } from '../js/ui/copy.js';
 
-const LAYERS = ['edges', 'connectors', 'centers', 'loads', 'services'];
+const LAYERS = ['edges', 'connectors', 'centers', 'loads', 'services', 'walking'];
 const STATUS_HEX = { '--blue': '#2244aa', '--pass': '#22aa44', '--warn': '#ee7700', '--fail': '#cc2222', '--water': '#1188dd', '--power': '#ddaa00' };
 
 // Smallest page stand-in the drawing layer needs
@@ -32,6 +33,9 @@ test('drawing mode builds every line layer, load paths included', async () => {
   const checks = runChecks(structure.modules);
   drawing.update(structure, checks);
   drawing.setServices(planServices(structure.modules, 'habitat'));
+  // The walking layer starts hidden; show it to check it too
+  drawing.setWalking(walkingLines(walkingNetwork(structure.modules), structure.modules));
+  drawing.setLayer('walking', true);
   assert.doesNotThrow(() => drawing.setActive(true));
   const group = scene.children[scene.children.length - 1];
   assert.equal(group.visible, true);
@@ -56,8 +60,8 @@ const pointsIn = (lines, from, to) => lines.positions.slice(from * 6, to * 6);
 test('services overlay draws strings, dashed blocked attempts and dry or partial consumers', () => {
   assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
   // A structure with a partly fed consumer under wall routed pipes
-  const structure = generate({ seed: 'golden', scale: 'mega' });
-  const services = planServices(structure.modules, 'golden');
+  const structure = generate({ seed: 'brunswick', scale: 'mega' });
+  const services = planServices(structure.modules, 'brunswick');
   const lines = serviceLines(services, structure.modules);
   assert.equal(lines.positions.length, lines.statuses.length * 6);
   assert.ok(lines.statuses.every((status) => STATUSES.includes(status)));

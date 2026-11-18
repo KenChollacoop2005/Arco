@@ -9,7 +9,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const LABEL_RING_PX = 7; // critical joint ring radius
 const LABEL_LEAD_PX = [26, -22]; // leader line offset
 const LABEL_GAP_PX = 4; // text gap after the leader
-const STATUS_VARS = { line: '--blue', pass: '--pass', warn: '--warn', fail: '--fail', water: '--water', power: '--power' };
+const STATUS_VARS = { line: '--blue', pass: '--pass', warn: '--warn', fail: '--fail', water: '--water', power: '--power', walk: '--walk' };
 
 function cssColor(name) {
   return new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
@@ -22,12 +22,13 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
   group.visible = false;
   view.scene.add(group);
   const layers = {};
-  const shown = { edges: true, centers: true, loads: true, connectors: true, services: true };
+  const shown = { edges: true, centers: true, loads: true, connectors: true, services: true, walking: false };
   const point = new THREE.Vector3();
   let active = false;
   let stale = true;
   let current = { structure: null, checks: null };
   let services = null;
+  let walking = null;
   let unusedPorts = [];
 
   function setLayerLines(name, positions, statuses, onTop) {
@@ -116,6 +117,7 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     setLayerLines('loads', loads.positions, loads.statuses, true);
     const lines = serviceLines(services, structure.modules, unusedPorts);
     setLayerLines('services', lines.positions, lines.statuses, false);
+    setLayerLines('walking', walking ? walking.positions : [], walking ? walking.statuses : [], true);
     fillTitle();
     placeLabel();
     view.requestRender();
@@ -134,6 +136,12 @@ export function createDrawing(view, rig, moduleView, overlay, titleBlock) {
     setServices(plan, unused = []) {
       services = plan;
       unusedPorts = unused;
+      stale = true;
+      if (active) rebuild();
+    },
+    // Walking lines from the analysis, null while it runs
+    setWalking(lines) {
+      walking = lines;
       stale = true;
       if (active) rebuild();
     },
