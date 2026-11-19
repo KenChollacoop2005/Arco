@@ -10,15 +10,15 @@ import { runChecks } from '../js/core/checks.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { makeBudget, budgetCap, withinBudget, growRoll, generateLimits, growLimits, placeCap, budgetParams, budgetFromParams } from '../js/core/budget.js';
 
-// Generate and Grow results, re-recorded after the light pieces (lamp posts, floodlights, beacons)
+// Generate and Grow results, re-recorded after the power coverage fix (Low power share, live power on blocks)
 const BEFORE = {
-  'barbican mega 2': [208, '5ea30e7e1cbd5764', 198, 'd3eba92f2808ab23'],
+  'barbican mega 2': [213, '24f9236a12e1269a', 202, '2375d7008eaaec68'],
   'habitat block 1': [32, 'a6080569911070d8', 36, '7e10369b1ad1312a'],
-  'arco unit 1': [1, '6b6828ffe3949732', 43, 'edb29a958f8102d8'],
-  'beton block 0': [26, '6e6573f4f2378c36', 32, 'aa9dc6ece6d85773'],
-  'golden mega 1': [199, 'e54c5c3da7b460fe', 125, 'a7081b0cd1029b9a'],
+  'arco unit 1': [1, '6b6828ffe3949732', 46, 'f71c9b81a0acd0df'],
+  'beton block 0': [25, '258814b1b2490d58', 34, '060fcc391ebb2f96'],
+  'golden mega 1': [200, 'f47ef1bbbebaaccb', 122, '9191cdf7218b97e6'],
 };
-const OPENING_BEFORE = [20, 'de34b478fb4b4f6c'];
+const OPENING_BEFORE = [20, '41762875aa1b2d5b'];
 
 const choicesOf = (name) => {
   const [seed, scale, level] = name.split(' ');

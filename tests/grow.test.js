@@ -98,7 +98,7 @@ test('grow extends a hand built start where it stands', () => {
 
 test('grow opens the sides of kept platforms beside new modules, as Build edits do', () => {
   // Seeds where Grow builds against a kept terrace or balcony
-  const cases = [['nakagin', 'mega'], ['trellick', 'mega'], ['arco', 'mega'], ['golden', 'block']];
+  const cases = [['nakagin', 'mega'], ['trellick', 'mega'], ['arco', 'mega'], ['golden', 'block'], ['habitat', 'mega'], ['beton', 'mega']];
   let opened = 0;
   for (const [seed, scale] of cases) {
     const base = generate({ seed, scale, ...CHOICES });

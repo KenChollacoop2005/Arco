@@ -22,7 +22,7 @@ const LISTED = {
   utilities: ['smallpump', 'pumptank', 'pumproom', 'watermain', 'powerroom', 'turbine', 'solar', 'spring', 'well', 'raincatcher', 'wheel', 'wheelup', 'runoff'],
 };
 const ALWAYS = ['core', 'pilotis', 'transfer', 'housing', 'walkway', 'bridge', 'stair', 'ramp', 'deck', 'support'];
-const SEEDS = ['arco', 'habitat', 'barbican', 'nakagin', 'x9', 'golden', 'lumen', 'quarry'];
+const SEEDS = ['arco', 'habitat', 'barbican', 'nakagin', 'x9', 'golden', 'lumen', 'quarry', 'robin'];
 
 test('every family carries a category; the listed ones toggle, the rest are always on', () => {
   for (const id of FAMILY_IDS) assert.ok(['base', ...CATEGORIES].includes(FAMILIES[id].category), id);

@@ -24,6 +24,9 @@ import { checkPlacement, validateStructure, reopenSides } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
+import { planPower, powerRole } from './power.js';
+import { structureMounts } from './mounts.js';
+import { stringContext } from './strings.js';
 import { PROFILE_FOOTPRINTS, FLUSH, INSET, INSET_BALCONY, INSET_BALCONY_OUT, BULGE, BULGE_BALCONY, WRAP, JETTY, cleanProfiles, packProfiles, profileAt, profileKinds } from './profiles.js';
 
 export const SCALES = ['unit', 'block', 'mega'];
@@ -122,6 +125,10 @@ const JUNCTION_CHANCE = 0.12; // share of wall-bearing modules with a junction b
 const PLANNER_SEED = 0x91a11e; // keeps planner rolls apart from other rolls
 export const SERVICE_LEVELS = ['off', 'low', 'high']; // services planner choices
 const PLANNER_SHARE = { off: 0, low: 0.35, high: 0.9 }; // share of unserved consumers the planner serves
+const PLANNER_POWER_SHARE = { off: 0, low: 0.6, high: 0.9 }; // share of unpowered consumers the planner serves
+const CONNECT_SEED = 0xc0ec7; // keeps the power check rolls apart
+const CONNECT_TRIES = 4; // sources tried when a block has no live power
+const CONNECT_SOURCES = [['solar', 1], ['turbine', 1]]; // roof sources the power check adds
 const PLANNER_WATER_REACH = 3; // cells a rain catcher or pump is put within
 const PLANNER_POWER_REACH = 4; // cells a new power source is put within
 const PLANNER_SOURCES = [['solar', 3], ['turbine', 2]]; // power sources the planner adds, weighted
@@ -1308,7 +1315,7 @@ function fillServices(ctx) {
   // A source reaches straight or through a relay within both reaches
   const powerReach = (source, consumer) => Math.max(roleOf(source).reach, ...all().filter((relay) => relayReach(relay) > 0 && runBetween(source, relay) <= roleOf(source).reach && runBetween(relay, consumer) <= relayReach(relay)).map(() => Infinity));
   for (const consumer of cover(pumpsFirst, all().filter((instance) => roleOf(instance).power === 'source'), (instance) => roleOf(instance).demand, powerReach, powerLeft)) {
-    if (!rng.chance(share)) continue;
+    if (!rng.chance(PLANNER_POWER_SHARE[opts.services])) continue;
     // A junction box when a source with power to spare is near, else a source of its own
     const spare = all().find((source) => powerLeft.get(source.id) >= roleOf(consumer).demand && runBetween(source, consumer) <= roleOf(source).reach + POWER_RELAYS.junction[0]);
     if (spare && JUNCTION_FAMILIES.includes(consumer.family) && !consumer.jb && !ctx.locked.has(consumer.id)) {
@@ -1332,6 +1339,25 @@ function fillServices(ctx) {
     const failing = added.filter((instance) => result.modules.get(instance.id).status !== 'pass');
     for (const instance of failing.length > 0 ? failing : added.splice(0)) removeModule(world, instance.id);
     for (const instance of failing) added.splice(added.indexOf(instance), 1);
+  }
+}
+
+// Block check on the real power plan: at least one consumer gets power
+function connectPower(ctx) {
+  const { world, opts } = ctx;
+  if (opts.scale !== 'block' || !PLANNER_POWER_SHARE[opts.services] || !opts.categories.includes(UTILITIES) || ctx.locked.size > 0) return;
+  const rng = makeRng(mixSeed(hashString(opts.seed), CONNECT_SEED));
+  for (let round = 0; round < CONNECT_TRIES; round++) {
+    const modules = reopenSides([...world.modules.values()]);
+    const consumers = modules.filter((instance) => (powerRole(instance) || {}).kind === 'consumer');
+    if (consumers.length === 0) return;
+    const plan = planPower(modules, opts.seed, { ports: structureMounts(modules), context: stringContext(modules) });
+    if (Object.values(plan.consumers).some((report) => report.received > 0)) return;
+    // Highest consumers first: their roofs are nearest open sky
+    const target = consumers.sort((first, second) => second.z + second.h - first.z - first.h || first.id - second.id)[round % consumers.length];
+    const family = rng.weighted(allowedIn(ctx, CONNECT_SOURCES));
+    const piece = roofNear(ctx, rng, family, target, 1) || groundNear(ctx, rng, family, target, 1.5);
+    if (piece && !opts.unstable && checkStability(bodiesOf(world)).status !== 'pass') removeModule(world, piece.id);
   }
 }
 
@@ -1463,6 +1489,7 @@ export function generate(options) {
   setJetties(ctx);
   if (opts.scale !== 'unit') services(ctx);
   setBridgeEnds(world, ctx.locked);
+  connectPower(ctx);
   // Platforms open toward walls, railed where they face out, locked ones too
   const modules = reopenSides([...world.modules.values()].sort(
     (first, second) => first.z - second.z || first.y - second.y || first.x - second.x || first.id - second.id

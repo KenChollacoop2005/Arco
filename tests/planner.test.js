@@ -68,3 +68,16 @@ test('the planner varies by seed, so services do not look the same everywhere', 
   // Off leaves the structure to the other passes alone
   assert.notEqual(structureHash(generate({ seed: 'barbican', ...HIGH, services: 'off' }).modules), structureHash(generate({ seed: 'barbican', ...HIGH, services: 'low' }).modules));
 });
+
+test('every block with Utilities on has live power at Low and High', () => {
+  for (const seed of ['quarry', 'golden', 'lumen', 'hulme', 'habitat', 'x9']) {
+    for (const services of ['low', 'high']) {
+      const { modules } = generate({ seed, scale: 'block', services });
+      const reports = Object.values(planServices(modules, seed).power.consumers);
+      assert.ok(reports.some((report) => report.received > 0), `${seed} ${services} has no powered consumer`);
+    }
+  }
+  // Utilities off adds no power pieces
+  const { modules } = generate({ seed: 'quarry', scale: 'block', categories: ['social', 'nature', 'industrial', 'walled'] });
+  assert.ok(!modules.some((instance) => ['solar', 'turbine', 'generator'].includes(instance.family)));
+});

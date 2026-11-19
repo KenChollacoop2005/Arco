@@ -21,7 +21,7 @@ import { getRapier, getSolids } from './helpers.js';
 
 const NEW_FAMILIES = ['penthouse', 'shacks', 'flared', 'strut'];
 const SPANS = ['walkway', 'gantry'];
-const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg', 'lumen'];
+const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg', 'lumen', 'robin'];
 const ANGLE_TOL_DEG = 0.5; // slack the print check allows
 const EDGE_MM = 0.5; // slice near the base and the top
 const FLARE_MM = [3.5, 5]; // base inset range of a flared side
