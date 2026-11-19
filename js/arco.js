@@ -34,6 +34,7 @@ import { createZone } from './render/zone.js';
 import { createShowroom } from './render/showroom.js';
 import { setupArchive } from './ui/archive.js';
 import { readSetting, writeSetting } from './ui/legend.js';
+import { setupSlideovers } from './ui/slideover.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -257,6 +258,7 @@ const builder = setupBuild(app, canvas, modules, collectionPanel, {
   grow: growStructure,
   targetAt: (event) => picker.targetAt(event),
 });
+setupSlideovers(app);
 const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.pointAt(event, back), zone: createZone(view), builder });
 
 export function setMode(next) {

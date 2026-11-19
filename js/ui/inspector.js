@@ -195,7 +195,7 @@ export function createInspector(body, prefix = 'arco.inspector') {
     }
     walk.append(node('p', 'hint', !entry.reached ? COPY.walkUnreached : entry.stepFree ? COPY.walkFromPlinthFree : COPY.walkFromPlinthSteps));
     const nearest = Object.entries(entry.nearest).filter(([, value]) => value.steps > 0).sort((first, second) => first[1].steps - second[1].steps || (first[0] < second[0] ? -1 : 1));
-    if (nearest.length > 0) walk.append(rows(nearest.map(([type, value]) => [FAMILIES[type] ? FAMILIES[type].label : type, `${value.steps} ${COPY.walkSteps}, ${value.stepFree ? COPY.walkStepFree : COPY.walkWithSteps}`])));
+    if (nearest.length > 0) walk.append(rows(nearest.map(([type, value]) => [FAMILIES[type] ? FAMILIES[type].label : type, `${value.steps} ${value.steps === 1 ? COPY.walkStep : COPY.walkSteps}, ${value.stepFree ? COPY.walkStepFree : COPY.walkWithSteps}`])));
   }
 
   function advancedDrawer({ checks, printOf, socketsOf, fit }, variant, placed) {
