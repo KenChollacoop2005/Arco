@@ -54,6 +54,17 @@ export function instanceCells(instance) {
   ]);
 }
 
+// True when every story cell centre lies in the zone sphere (mm)
+export function instanceInZone(instance, zone) {
+  for (const [cellX, cellY] of instanceCells(instance)) {
+    for (let story = instance.z; story < instance.z + instance.h; story++) {
+      const offset = [(cellX + 0.5) * CELL_MM - zone.center[0], (cellY + 0.5) * CELL_MM - zone.center[1], (story + 0.5) * STORY_MM - zone.center[2]];
+      if (Math.hypot(...offset) > zone.radius) return false;
+    }
+  }
+  return true;
+}
+
 export function cellInPlinth(cellX, cellY) {
   const radius = PLINTH_DIAMETER_CELLS / 2;
   const farX = Math.max(Math.abs(cellX), Math.abs(cellX + 1));

@@ -19,11 +19,10 @@ export function writeSetting(key, value) {
   }
 }
 
-export function setupLegend(legend, leftPanel) {
+export function setupLegend(legend) {
   const narrow = window.innerWidth <= NARROW_PX;
   legend.open = readSetting(STORAGE_KEY, narrow ? 'closed' : 'open') === 'open';
   legend.querySelector('summary').addEventListener('click', () => {
     writeSetting(STORAGE_KEY, legend.open ? 'closed' : 'open');
   });
-  if (narrow) leftPanel.open = false;
 }

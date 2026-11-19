@@ -28,12 +28,22 @@ import { drawnPorts } from './core/services.js';
 import { streamFrom } from './core/stream.js';
 import { createWaterworks } from './render/waterworks.js';
 import { growLimits, placeCap } from './core/budget.js';
+import { setupDrawers } from './ui/drawers.js';
+import { setupGrowTool } from './ui/growtool.js';
+import { createZone } from './render/zone.js';
 
 const query = (selector) => document.querySelector(selector);
 
 for (const element of document.querySelectorAll('[data-copy]')) {
   element.textContent = COPY[element.dataset.copy];
 }
+for (const element of document.querySelectorAll('[data-copy-title]')) {
+  element.title = COPY[element.dataset.copyTitle];
+}
+for (const element of document.querySelectorAll('[data-copy-placeholder]')) {
+  element.placeholder = COPY[element.dataset.copyPlaceholder];
+}
+setupDrawers();
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const canvas = query('#scene');
@@ -44,14 +54,9 @@ view.onResize((width, height) => rig.resize(width, height));
 view.onFrame((delta) => rig.update(delta));
 rig.onChange(() => view.requestRender());
 
-setupLegend(query('#legend'), query('#leftPanel'));
+setupLegend(query('#legend'));
 
-const PANE_TITLES = {
-  generate: COPY.generateTitle,
-  collection: COPY.collectionTitle,
-  build: COPY.buildTitle,
-  drawing: COPY.drawingTitle,
-};
+const MODES = ['generate', 'collection', 'drawing']; // top bar tabs
 
 const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
 const solids = createWorkerClient(new URL('./workers/solids.worker.js', import.meta.url));
@@ -125,7 +130,8 @@ function select(id, extend) {
 
 const picker = createPicker(canvas, rig, modules, {
   onPick(id, extend, event) {
-    if (!builder.click(event)) select(id, extend);
+    if (growTool.click(event) || builder.click(event)) return;
+    select(id, extend);
   },
   onDouble(id) {
     const box = id ? modules.boxOf(id) : null;
@@ -221,11 +227,11 @@ function showBuild(list, options = {}) {
   showStructure(result, { only: options.only || new Set() });
 }
 
-// Generator run that keeps every current module
-async function growStructure(base) {
+// Generator run that keeps every current module; a zone limits new ones
+async function growStructure(base, zone = null) {
   const token = ++generateToken;
   const choices = generatePanel.readOptions();
-  const result = await generator.call({ options: { ...growOptions(choices, base), ...growLimits(generatePanel.readBudget(), choices.seed, base.length) } });
+  const result = await generator.call({ options: { ...growOptions(choices, base, zone), ...growLimits(generatePanel.readBudget(), choices.seed, base.length) } });
   if (token !== generateToken) return null;
   const known = new Set(base.map((instance) => instance.id));
   const only = new Set(result.modules.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
@@ -240,11 +246,12 @@ const builder = setupBuild(app, canvas, modules, collectionPanel, {
   grow: growStructure,
   targetAt: (event) => picker.targetAt(event),
 });
+const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.pointAt(event, back), zone: createZone(view), builder });
 
-export function setMode(mode) {
+export function setMode(next) {
+  const mode = MODES.includes(next) ? next : 'generate';
   app.mode = mode;
   document.body.dataset.mode = mode;
-  query('#leftTitle').textContent = PANE_TITLES[mode];
   for (const tab of document.querySelectorAll('.tabs button')) {
     tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
   }
@@ -339,8 +346,6 @@ const exporter = setupExport(app, exportWorker, (fit) => {
 });
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
-// Grow from the Generate panel keeps the current build
-query('#generateGrow').addEventListener('click', () => builder.grow(query('#generateStatus')));
 // Budget: Build's cap and the module count follow the control
 const syncBudget = (budget) => {
   builder.setCap(placeCap(budget));

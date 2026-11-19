@@ -1,35 +1,53 @@
 import { createBuild, nextRot } from '../core/build.js';
 import { COPY } from './copy.js';
-import { renderCards } from './collection.js';
+import { renderBuildCards, CATEGORY_COPY } from './cards.js';
 import { FAMILIES } from '../core/catalog.js';
 
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
+const ALL = 'all'; // category filter value for every category
+const SANDBOX_COUNT = Infinity; // pieces of each saved module in the sandbox
 
-// Hooks: show(modules, {only}), grow(modules), targetAt(event)
+// Hooks: show(modules, {only}), grow(modules, zone), targetAt(event)
 export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   const query = (selector) => document.querySelector(selector);
   const status = query('#buildStatus');
   const palette = query('#buildPalette');
+  const search = query('#buildSearch');
+  const category = query('#buildCategory');
   const build = createBuild();
   let picked = null;
   let turn = 0;
   let pointerEvent = null;
   let entries = [];
   let growing = false;
+  const growListeners = [];
 
-  const active = () => app.mode === 'build';
+  const active = () => app.mode === 'generate';
+
+  for (const value of [ALL, ...Object.keys(CATEGORY_COPY)]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value === ALL ? COPY.catAll : COPY[CATEGORY_COPY[value]];
+    category.append(option);
+  }
 
   function refreshButtons() {
-    query('#buildUndo').disabled = !build.canUndo();
-    query('#buildRedo').disabled = !build.canRedo();
-    query('#buildClear').disabled = build.modules.length === 0;
-    query('#buildGrow').disabled = growing;
-    query('#generateGrow').disabled = growing;
+    for (const listener of growListeners) listener(growing);
+  }
+
+  // Saved modules that pass the search and the category filter
+  function shown() {
+    const text = search.value.trim().toLowerCase();
+    return entries.filter((entry) => {
+      const family = FAMILIES[entry.variant.family];
+      if (category.value !== ALL && family.category !== category.value) return false;
+      return !text || family.label.toLowerCase().includes(text) || family.id.includes(text) || family.group.toLowerCase().includes(text);
+    });
   }
 
   function refreshPalette() {
     query('#buildEmpty').hidden = entries.length > 0;
-    renderCards(palette, entries, { onPick: pick, pressedKey: picked ? picked.key : '' });
+    renderBuildCards(palette, shown(), { onPick: pick, onDrag: (entry) => pick(entry, true), pressedKey: picked ? picked.key : '' });
   }
 
   function ghostAt(event) {
@@ -43,9 +61,9 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     if (picked && active()) status.textContent = ghost && !ghost.ok ? ghost.reason : COPY.buildPicked;
   }
 
-  // Picking the pressed card again puts it down
-  function pick(entry) {
-    picked = entry && (!picked || picked.key !== entry.key) ? entry : null;
+  // Picking the pressed card again puts it down, unless keep is set
+  function pick(entry, keep = false) {
+    picked = entry && (keep || !picked || picked.key !== entry.key) ? entry : null;
     turn = 0;
     status.textContent = picked ? COPY.buildPicked : '';
     refreshPalette();
@@ -92,15 +110,15 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     apply();
   }
 
-  // Grow from Build or the Generate panel; the message goes to that panel's line
-  async function grow(line = status) {
+  // Grow everything, or only inside a zone; the message goes to the given line
+  async function grow(line, zone = null) {
     if (growing) return;
     growing = true;
     refreshButtons();
     line.textContent = COPY.growWorking;
     try {
-      const result = await hooks.grow(build.modules);
-      if (result) line.textContent = result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${COPY.growNone} ${result.seed}`;
+      const result = await hooks.grow(build.modules, zone);
+      if (result) line.textContent = result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${zone ? COPY.growNoneHere : COPY.growNone} ${result.seed}`;
     } catch {
       line.textContent = COPY.loadFailed;
     } finally {
@@ -111,10 +129,8 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
 
   query('#buildRotate').addEventListener('click', rotate);
   query('#buildDelete').addEventListener('click', remove);
-  query('#buildUndo').addEventListener('click', () => step(build.undo()));
-  query('#buildRedo').addEventListener('click', () => step(build.redo()));
-  query('#buildClear').addEventListener('click', () => step(build.clear()));
-  query('#buildGrow').addEventListener('click', () => grow());
+  search.addEventListener('input', refreshPalette);
+  category.addEventListener('change', refreshPalette);
 
   canvas.addEventListener('pointermove', (event) => {
     pointerEvent = event;
@@ -124,6 +140,21 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   canvas.addEventListener('pointerleave', () => {
     pointerEvent = null;
     if (active() && picked) moduleView.setGhost(null, false);
+  });
+  // A card dragged onto the plinth places where it is dropped
+  canvas.addEventListener('dragover', (event) => {
+    if (!active() || !picked) return;
+    event.preventDefault();
+    pointerEvent = event;
+    refreshGhost();
+  });
+  canvas.addEventListener('dragleave', () => {
+    pointerEvent = null;
+    moduleView.setGhost(null, false);
+  });
+  canvas.addEventListener('drop', (event) => {
+    event.preventDefault();
+    place(event);
   });
 
   window.addEventListener('keydown', (event) => {
@@ -140,10 +171,22 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     event.preventDefault();
   });
 
+  // Places the picked module at the pointer; true when it tried
+  function place(event) {
+    if (!active() || !picked) return false;
+    pointerEvent = event;
+    const ghost = ghostAt(event);
+    if (!ghost) return true;
+    const result = ghost.ok ? build.place(ghost.instance) : ghost;
+    if (result.ok) apply(new Set([result.id]));
+    else status.textContent = result.reason;
+    return true;
+  }
+
   app.modeListeners.push(refreshGhost);
   collectionPanel.onChange((list) => {
     // Switched off families stay out of the palette
-    entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled);
+    entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled).map((entry) => ({ ...entry, count: SANDBOX_COUNT }));
     if (picked && !entries.some((entry) => entry.key === picked.key)) picked = null;
     refreshPalette();
     refreshGhost();
@@ -152,6 +195,17 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
 
   return {
     grow,
+    // Listener gets true while a grow runs
+    onGrowing(listener) {
+      growListeners.push(listener);
+      listener(growing);
+    },
+    // Picks up a saved module by key, ready to place
+    pickKey(key) {
+      const entry = entries.find((candidate) => candidate.key === key);
+      if (entry) pick(entry, true);
+      return !!entry;
+    },
     // Most modules Build may place, from the budget
     setCap(cap) {
       build.setCap(cap);
@@ -162,16 +216,6 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       build.replace(modules);
       refreshButtons();
     },
-    // True when the click placed or tried to place
-    click(event) {
-      if (!active() || !picked) return false;
-      pointerEvent = event;
-      const ghost = ghostAt(event);
-      if (!ghost) return true;
-      const result = ghost.ok ? build.place(ghost.instance) : ghost;
-      if (result.ok) apply(new Set([result.id]));
-      else status.textContent = result.reason;
-      return true;
-    },
+    click: place,
   };
 }

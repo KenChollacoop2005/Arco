@@ -32,6 +32,17 @@ export function createPicker(canvas, rig, moduleView, handlers) {
     return { x: origin.x + direction.x * reach, y: origin.y + direction.y * reach };
   }
 
+  // Point in mm just outside the surface under the pointer, plinth top included
+  function pointAt(event, back = 0) {
+    aim(event);
+    const { origin, direction } = raycaster.ray;
+    const hit = moduleView.pickPoint(raycaster);
+    if (hit) return [hit.point.x - direction.x * back, hit.point.y - direction.y * back, hit.point.z - direction.z * back];
+    if (direction.z >= 0) return null;
+    const reach = -origin.z / direction.z;
+    return [origin.x + direction.x * reach, origin.y + direction.y * reach, 0];
+  }
+
   canvas.addEventListener('pointerdown', (event) => {
     pressed = event.button === 0 ? [event.clientX, event.clientY] : null;
   });
@@ -42,5 +53,5 @@ export function createPicker(canvas, rig, moduleView, handlers) {
     if (travel <= CLICK_SLOP_PX) handlers.onPick(pickAt(event), event.shiftKey, event);
   });
   canvas.addEventListener('dblclick', (event) => handlers.onDouble(pickAt(event)));
-  return { targetAt };
+  return { targetAt, pointAt };
 }

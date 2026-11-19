@@ -22,113 +22,165 @@
   </div>
 
   <header class="topbar">
-    <h1 class="wordmark" data-copy="wordmark">Arco</h1>
-    <nav class="tabs" role="tablist" aria-label="Modes">
-      <button role="tab" data-mode="generate" aria-selected="true" data-copy="tabGenerate"></button>
-      <button role="tab" data-mode="collection" aria-selected="false" data-copy="tabCollection"></button>
-      <button role="tab" data-mode="build" aria-selected="false" data-copy="tabBuild"></button>
-      <button role="tab" data-mode="drawing" aria-selected="false" data-copy="tabDrawing"></button>
-    </nav>
-    <details class="menu" id="viewMenu">
-      <summary data-copy="viewMenu"></summary>
-      <div class="menu-body">
-        <label class="check"><input type="radio" name="projection" value="ortho" checked><span data-copy="viewOrtho"></span></label>
-        <label class="check"><input type="radio" name="projection" value="persp"><span data-copy="viewPersp"></span></label>
-        <hr>
-        <button class="plain" id="resetView" data-copy="viewReset"></button>
-      </div>
-    </details>
+    <div class="topbar-left">
+      <h1 class="wordmark" data-copy="wordmark">Arco</h1>
+      <nav class="tabs" role="tablist" aria-label="Modes">
+        <button role="tab" data-mode="generate" aria-selected="true" data-copy="tabGenerate"></button>
+        <button role="tab" data-mode="collection" aria-selected="false" data-copy="tabCollection"></button>
+        <button role="tab" data-mode="drawing" aria-selected="false" data-copy="tabDrawing"></button>
+      </nav>
+    </div>
+    <!-- Logo slot: swap this one element for a drawn logo -->
+    <div class="logo-slot" id="logoSlot" aria-hidden="true">&#x1F9F1;</div>
+    <div class="topbar-right">
+      <details class="menu" id="viewMenu">
+        <summary data-copy="viewMenu"></summary>
+        <div class="menu-body">
+          <label class="check"><input type="radio" name="projection" value="ortho" checked><span data-copy="viewOrtho"></span></label>
+          <label class="check"><input type="radio" name="projection" value="persp"><span data-copy="viewPersp"></span></label>
+          <hr>
+          <button class="plain" id="resetView" data-copy="viewReset"></button>
+        </div>
+      </details>
+      <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
+      <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>
+      <button class="plain" id="exportButton" data-copy="exportButton"></button>
+      <button class="plain profile-button" id="profileButton" disabled data-copy="profile" data-copy-title="comingSoon"></button>
+    </div>
+    <div class="section-controls" id="sectionControls">
+      <fieldset class="seg tight">
+        <label><input type="radio" name="sectionAxis" value="h" checked><span data-copy="sectionHorizontal"></span></label>
+        <label><input type="radio" name="sectionAxis" value="v"><span data-copy="sectionVertical"></span></label>
+      </fieldset>
+      <input type="range" id="sectionPosition" min="0" max="1000" value="500" aria-label="Section position">
+    </div>
   </header>
 
-  <details class="panel panel-left" id="leftPanel" open>
-    <summary class="panel-title"><span id="leftTitle" data-copy="generateTitle"></span></summary>
-
-    <form class="mode-pane" data-pane="generate" id="generateForm">
-      <fieldset class="seg wide">
-        <legend data-copy="scale"></legend>
-        <label><input type="radio" name="scale" value="unit"><span data-copy="scaleUnit"></span></label>
-        <label><input type="radio" name="scale" value="block" checked><span data-copy="scaleBlock"></span></label>
-        <label><input type="radio" name="scale" value="mega"><span data-copy="scaleMega"></span></label>
-      </fieldset>
-      <details class="sub" id="advancedSection">
-        <summary data-copy="advanced"></summary>
-        <div class="sub-body">
-          <fieldset class="seg">
-            <legend data-copy="density"></legend>
-            <label><input type="radio" name="density" value="0"><span data-copy="low"></span></label>
-            <label><input type="radio" name="density" value="1" checked><span data-copy="mid"></span></label>
-            <label><input type="radio" name="density" value="2"><span data-copy="high"></span></label>
+  <aside class="column column-left" id="leftColumn" aria-label="Tools">
+    <div class="mode-pane" data-pane="generate">
+      <details class="drawer" id="generateDrawer" data-drawer-key="arco.drawer.generate" data-drawer-default="open">
+        <summary data-copy="generateTitle"></summary>
+        <form class="drawer-body" id="generateForm">
+          <fieldset class="seg wide">
+            <legend data-copy="scale"></legend>
+            <label><input type="radio" name="scale" value="unit"><span data-copy="scaleUnit"></span></label>
+            <label><input type="radio" name="scale" value="block" checked><span data-copy="scaleBlock"></span></label>
+            <label><input type="radio" name="scale" value="mega"><span data-copy="scaleMega"></span></label>
           </fieldset>
-          <fieldset class="seg">
-            <legend data-copy="height"></legend>
-            <label><input type="radio" name="height" value="0"><span data-copy="low"></span></label>
-            <label><input type="radio" name="height" value="1" checked><span data-copy="mid"></span></label>
-            <label><input type="radio" name="height" value="2"><span data-copy="high"></span></label>
-          </fieldset>
-          <fieldset class="seg">
-            <legend data-copy="daring"></legend>
-            <label><input type="radio" name="daring" value="0"><span data-copy="low"></span></label>
-            <label><input type="radio" name="daring" value="1" checked><span data-copy="mid"></span></label>
-            <label><input type="radio" name="daring" value="2"><span data-copy="high"></span></label>
-          </fieldset>
-          <fieldset class="seg">
-            <legend data-copy="services"></legend>
-            <label><input type="radio" name="services" value="off"><span data-copy="off"></span></label>
-            <label><input type="radio" name="services" value="low" checked><span data-copy="low"></span></label>
-            <label><input type="radio" name="services" value="high"><span data-copy="high"></span></label>
-          </fieldset>
-          <fieldset class="seg">
-            <legend data-copy="budget"></legend>
-            <label><input type="radio" name="budgetMode" value="fixed" checked><span data-copy="budgetFixed"></span></label>
-            <label><input type="radio" name="budgetMode" value="custom"><span data-copy="budgetCustom"></span></label>
-            <label><input type="radio" name="budgetMode" value="fantasy"><span data-copy="budgetFantasy"></span></label>
-          </fieldset>
-          <div class="field budget-cap">
-            <label for="budgetCap" data-copy="budgetCap"></label>
-            <input id="budgetCap" name="budgetCap" type="number" step="1" inputmode="numeric">
+          <details class="sub" id="advancedSection" data-drawer-key="arco.advanced">
+            <summary data-copy="advanced"></summary>
+            <div class="sub-body">
+              <fieldset class="seg">
+                <legend data-copy="density"></legend>
+                <label><input type="radio" name="density" value="0"><span data-copy="low"></span></label>
+                <label><input type="radio" name="density" value="1" checked><span data-copy="mid"></span></label>
+                <label><input type="radio" name="density" value="2"><span data-copy="high"></span></label>
+              </fieldset>
+              <fieldset class="seg">
+                <legend data-copy="height"></legend>
+                <label><input type="radio" name="height" value="0"><span data-copy="low"></span></label>
+                <label><input type="radio" name="height" value="1" checked><span data-copy="mid"></span></label>
+                <label><input type="radio" name="height" value="2"><span data-copy="high"></span></label>
+              </fieldset>
+              <fieldset class="seg">
+                <legend data-copy="daring"></legend>
+                <label><input type="radio" name="daring" value="0"><span data-copy="low"></span></label>
+                <label><input type="radio" name="daring" value="1" checked><span data-copy="mid"></span></label>
+                <label><input type="radio" name="daring" value="2"><span data-copy="high"></span></label>
+              </fieldset>
+              <fieldset class="seg">
+                <legend data-copy="services"></legend>
+                <label><input type="radio" name="services" value="off"><span data-copy="off"></span></label>
+                <label><input type="radio" name="services" value="low" checked><span data-copy="low"></span></label>
+                <label><input type="radio" name="services" value="high"><span data-copy="high"></span></label>
+              </fieldset>
+              <fieldset class="seg">
+                <legend data-copy="budget"></legend>
+                <label><input type="radio" name="budgetMode" value="fixed" checked><span data-copy="budgetFixed"></span></label>
+                <label><input type="radio" name="budgetMode" value="custom"><span data-copy="budgetCustom"></span></label>
+                <label><input type="radio" name="budgetMode" value="fantasy"><span data-copy="budgetFantasy"></span></label>
+              </fieldset>
+              <div class="field budget-cap">
+                <label for="budgetCap" data-copy="budgetCap"></label>
+                <input id="budgetCap" name="budgetCap" type="number" step="1" inputmode="numeric">
+              </div>
+              <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
+            </div>
+          </details>
+          <details class="sub" id="buildWithSection" data-drawer-key="arco.buildWith">
+            <summary data-copy="buildWith"></summary>
+            <div class="sub-body">
+              <fieldset class="seg">
+                <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
+                <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
+                <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
+                <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
+                <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
+              </fieldset>
+            </div>
+          </details>
+          <details class="sub" id="showSection" data-drawer-key="arco.show">
+            <summary data-copy="show"></summary>
+            <div class="sub-body">
+              <fieldset class="show-list">
+                <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
+                <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
+                <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
+                <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
+              </fieldset>
+            </div>
+          </details>
+          <input type="hidden" name="theme" value="1">
+          <!-- Seed, Generate and the module count always stay last in this drawer -->
+          <div class="field">
+            <label for="seedInput" data-copy="seed"></label>
+            <div class="field-row">
+              <input id="seedInput" name="seed" type="text" maxlength="24" autocomplete="off" spellcheck="false">
+              <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
+            </div>
           </div>
+          <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
           <p class="status" id="budgetCount" role="status"></p>
-          <label class="check"><input type="checkbox" id="allowUnstable" name="unstable"><span data-copy="allowUnstable"></span></label>
+          <p class="status" id="generateStatus" role="status"></p>
+        </form>
+      </details>
+
+      <details class="drawer" id="growDrawer" data-drawer-key="arco.drawer.grow">
+        <summary data-copy="growTitle"></summary>
+        <div class="drawer-body">
+          <div class="field">
+            <label for="growSize" data-copy="growSize"></label>
+            <div class="stops">
+              <input type="range" id="growSize" min="0" max="2" step="1" value="1">
+              <div class="stop-labels" aria-hidden="true"><span>S</span><span>M</span><span>L</span></div>
+            </div>
+          </div>
+          <div class="button-grid">
+            <button type="button" class="plain" id="growHere" aria-pressed="false" data-copy="growHere"></button>
+            <button type="button" class="primary" id="growAll" data-copy="growAll"></button>
+          </div>
+          <p class="hint" id="growHint" data-copy="growHereHint" hidden></p>
+          <p class="status" id="growStatus" role="status"></p>
         </div>
       </details>
-      <details class="sub" id="buildWithSection">
-        <summary data-copy="buildWith"></summary>
-        <div class="sub-body">
-          <fieldset class="seg">
-            <label><input type="checkbox" name="cat" value="social" checked><span data-copy="catSocial"></span></label>
-            <label><input type="checkbox" name="cat" value="nature" checked><span data-copy="catNature"></span></label>
-            <label><input type="checkbox" name="cat" value="industrial" checked><span data-copy="catIndustrial"></span></label>
-            <label><input type="checkbox" name="cat" value="walled" checked><span data-copy="catWalled"></span></label>
-            <label><input type="checkbox" name="cat" value="utilities" checked><span data-copy="catUtilities"></span></label>
-          </fieldset>
+
+      <details class="drawer" id="buildDrawer" data-drawer-key="arco.drawer.build">
+        <summary data-copy="buildTitle"></summary>
+        <div class="drawer-body">
+          <div class="button-grid">
+            <button type="button" class="plain" id="buildRotate" data-copy="rotate"></button>
+            <button type="button" class="plain" id="buildDelete" data-copy="remove"></button>
+          </div>
+          <div class="field-row">
+            <input type="search" id="buildSearch" class="search" data-copy-placeholder="searchModules" aria-label="Search saved modules" autocomplete="off" spellcheck="false">
+            <select id="buildCategory" class="select" aria-label="Category"></select>
+          </div>
+          <p class="empty" id="buildEmpty" data-copy="buildEmpty"></p>
+          <ul class="cards" id="buildPalette"></ul>
+          <p class="status" id="buildStatus" role="status"></p>
         </div>
       </details>
-      <details class="sub" id="showSection">
-        <summary data-copy="show"></summary>
-        <div class="sub-body">
-          <fieldset class="show-list">
-            <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
-            <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
-            <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
-            <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
-          </fieldset>
-        </div>
-      </details>
-      <input type="hidden" name="theme" value="1">
-      <!-- Seed, Generate and Grow always stay last in this pane -->
-      <div class="field">
-        <label for="seedInput" data-copy="seed"></label>
-        <div class="field-row">
-          <input id="seedInput" name="seed" type="text" maxlength="24" autocomplete="off" spellcheck="false">
-          <button type="button" class="plain" id="newSeed" data-copy="newSeed"></button>
-        </div>
-      </div>
-      <div class="button-grid">
-        <button type="submit" class="primary" id="generateButton" data-copy="generate"></button>
-        <button type="button" class="plain" id="generateGrow" data-copy="grow"></button>
-      </div>
-      <p class="status" id="generateStatus" role="status"></p>
-    </form>
+    </div>
 
     <div class="mode-pane" data-pane="collection">
       <p class="empty" id="collectionEmpty" data-copy="collectionEmpty"></p>
@@ -140,46 +192,37 @@
       </div>
     </div>
 
-    <div class="mode-pane" data-pane="build">
-      <p class="hint" data-copy="buildHint"></p>
-      <p class="empty" id="buildEmpty" data-copy="buildEmpty"></p>
-      <ul class="cards" id="buildPalette"></ul>
-      <div class="button-grid">
-        <button class="plain" id="buildRotate" data-copy="rotate"></button>
-        <button class="plain" id="buildDelete" data-copy="remove"></button>
-        <button class="plain" id="buildUndo" data-copy="undo"></button>
-        <button class="plain" id="buildRedo" data-copy="redo"></button>
-        <button class="plain" id="buildGrow" data-copy="grow"></button>
-        <button class="plain" id="buildClear" data-copy="clear"></button>
-      </div>
-      <button class="primary" id="buildPlace" data-copy="place" hidden></button>
-      <p class="status" id="buildStatus" role="status"></p>
-    </div>
-
     <div class="mode-pane" data-pane="drawing">
-      <fieldset class="seg wide">
-        <legend data-copy="viewMenu"></legend>
-        <label><input type="radio" name="drawingView" value="axon" checked><span data-copy="viewAxon"></span></label>
-        <label><input type="radio" name="drawingView" value="plan"><span data-copy="viewPlan"></span></label>
-        <label><input type="radio" name="drawingView" value="elevation"><span data-copy="viewElevation"></span></label>
-      </fieldset>
-      <label class="check"><input type="checkbox" id="showLoads" checked><span data-copy="showLoads"></span></label>
-      <label class="check"><input type="checkbox" id="showCenters" checked><span data-copy="showCenters"></span></label>
-      <label class="check"><input type="checkbox" id="showConnectors" checked><span data-copy="showConnectors"></span></label>
-      <label class="check"><input type="checkbox" id="showServices" checked><span data-copy="showServices"></span></label>
-      <label class="check"><input type="checkbox" id="showWalking"><span data-copy="showWalking"></span></label>
-      <ul class="key">
-        <li class="key-pass" data-copy="keyPass"></li>
-        <li class="key-warn" data-copy="keyWarn"></li>
-        <li class="key-fail" data-copy="keyFail"></li>
-      </ul>
+      <details class="drawer" id="drawingDrawer" data-drawer-key="arco.drawer.drawing" data-drawer-default="open">
+        <summary data-copy="drawingTitle"></summary>
+        <div class="drawer-body">
+          <fieldset class="seg wide">
+            <legend data-copy="viewMenu"></legend>
+            <label><input type="radio" name="drawingView" value="axon" checked><span data-copy="viewAxon"></span></label>
+            <label><input type="radio" name="drawingView" value="plan"><span data-copy="viewPlan"></span></label>
+            <label><input type="radio" name="drawingView" value="elevation"><span data-copy="viewElevation"></span></label>
+          </fieldset>
+          <label class="check"><input type="checkbox" id="showLoads" checked><span data-copy="showLoads"></span></label>
+          <label class="check"><input type="checkbox" id="showCenters" checked><span data-copy="showCenters"></span></label>
+          <label class="check"><input type="checkbox" id="showConnectors" checked><span data-copy="showConnectors"></span></label>
+          <label class="check"><input type="checkbox" id="showServices" checked><span data-copy="showServices"></span></label>
+          <label class="check"><input type="checkbox" id="showWalking"><span data-copy="showWalking"></span></label>
+          <ul class="key">
+            <li class="key-pass" data-copy="keyPass"></li>
+            <li class="key-warn" data-copy="keyWarn"></li>
+            <li class="key-fail" data-copy="keyFail"></li>
+          </ul>
+        </div>
+      </details>
     </div>
-  </details>
+  </aside>
 
-  <details class="panel panel-right" id="inspector" open>
-    <summary class="panel-title"><span data-copy="inspectorTitle"></span></summary>
-    <div id="inspectorBody"></div>
-  </details>
+  <aside class="column column-right" id="rightColumn" aria-label="Inspector">
+    <details class="drawer" id="inspectorDrawer" data-drawer-key="arco.drawer.inspector" data-drawer-default="open">
+      <summary data-copy="inspectorTitle"></summary>
+      <div class="drawer-body" id="inspectorBody"></div>
+    </details>
+  </aside>
 
   <div class="assembly" id="assemblyBar" hidden>
     <button class="plain" id="assemblyPrev" data-copy="assemblyPrev"></button>
@@ -189,19 +232,6 @@
   </div>
 
   <div class="title-block" id="titleBlock" aria-hidden="true"></div>
-
-  <footer class="bottombar">
-    <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
-    <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>
-    <div class="section-controls" id="sectionControls">
-      <fieldset class="seg tight">
-        <label><input type="radio" name="sectionAxis" value="h" checked><span data-copy="sectionHorizontal"></span></label>
-        <label><input type="radio" name="sectionAxis" value="v"><span data-copy="sectionVertical"></span></label>
-      </fieldset>
-      <input type="range" id="sectionPosition" min="0" max="1000" value="500" aria-label="Section position">
-    </div>
-    <button class="primary" id="exportButton" data-copy="exportButton"></button>
-  </footer>
 
   <section class="panel export-panel" id="exportPanel" hidden>
     <h2 class="panel-title" data-copy="exportTitle"></h2>

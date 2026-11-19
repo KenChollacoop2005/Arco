@@ -17,6 +17,7 @@ import {
   toBody,
   claimedCells,
   structureHash,
+  instanceInZone,
 } from './grid.js';
 import { CATEGORIES, UTILITIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
 import { checkPlacement, validateStructure, reopenSides } from './placement.js';
@@ -200,6 +201,8 @@ function place(ctx, spec) {
       if (lockedFacade(ctx, instance, side)) instance.mask |= 1 << ((side - instance.rot + 4) & 3);
     }
   }
+  // Grow here: new modules only inside the zone sphere
+  if (ctx.opts.zone && !instanceInZone(instance, ctx.opts.zone)) return null;
   if (!checkPlacement(ctx.world, instance, { cap: Math.max(MAX_MODULES, ctx.limit), stream: ctx.stream }).ok) return null;
   return addModule(ctx.world, instance);
 }
@@ -1357,6 +1360,8 @@ export function normalizeOptions(options = {}) {
     // Categories on, as a sorted list; all on by default
     categories: categoryList(options.categories),
     locked: options.locked || [],
+    // Grow here: {center, radius} in mm, new modules stay inside
+    zone: options.zone && options.zone.center && options.zone.radius > 0 ? { center: options.zone.center.map(Number), radius: Number(options.zone.radius) } : null,
   };
 }
 

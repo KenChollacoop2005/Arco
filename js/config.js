@@ -11,6 +11,12 @@ export const BUDGET_CUSTOM_MIN = 10; // smallest custom module cap
 export const BUDGET_CUSTOM_DEFAULT = 120; // custom cap when none is typed
 export const FANTASY_GROW = [8, 30]; // fewest and most modules one fantasy Grow adds
 
+// Grow here tool
+export const GROW_ZONE_CELLS = { S: 2, M: 3, L: 4 }; // zone radius in cells per size stop
+export const GROW_ZONE_DEFAULT = 'M'; // size stop the slider starts on
+export const GROW_ZONE_COLOR = 0xa8e6b8; // pastel green zone sphere
+export const GROW_ZONE_OPACITY = 0.28; // zone sphere see-through share
+
 // Opening structure
 export const OPENING_UNIT_MIN = 12; // fewest opening modules
 export const OPENING_UNIT_MAX = 30; // most opening modules

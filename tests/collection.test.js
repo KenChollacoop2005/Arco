@@ -136,3 +136,18 @@ test('a thumbnail of a box has covered and empty pixels', () => {
   assert.equal(pixels[3], 0);
   assert.equal(pixels[(size * (size / 2) + size / 2) * 4 + 3], 255);
 });
+
+test('saved modules carry a rarity, common by default, and a save time; both survive the file', () => {
+  const store = createCollection(memoryStore());
+  const result = store.add({ ...housing, id: 3, x: 0, y: 0, z: 0, rot: 0 }, THUMB, 1700000000000);
+  assert.equal(result.added, true);
+  const [entry] = store.list();
+  assert.equal(entry.rarity, 'common');
+  assert.equal(entry.saved, 1700000000000);
+  const parsed = parseCollection(store.toJson());
+  assert.deepEqual(parsed.entries, store.list());
+  // Unknown rarity reads as common; a known one is kept
+  const text = JSON.stringify({ kind: 'arco-collection', version: 1, modules: [{ ...housing, rarity: 'mythic' }, { ...tank, rarity: 'rare' }] });
+  assert.deepEqual(parseCollection(text).entries.map((item) => item.rarity), ['common', 'rare']);
+  assert.equal(makeEntry(housing, THUMB).saved, 0);
+});

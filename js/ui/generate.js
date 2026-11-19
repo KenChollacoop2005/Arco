@@ -7,7 +7,6 @@ import { BUDGET_HARD_CAP, BUDGET_CUSTOM_MIN, BUDGET_CUSTOM_DEFAULT, FANTASY_GROW
 import { makeBudget, budgetCap, generateLimits, budgetParams, budgetFromParams } from '../core/budget.js';
 
 const SKIP_KEY = 'arco.skipAnimation'; // remembered animation setting
-const DRAWER_KEYS = { advancedSection: 'arco.advanced', buildWithSection: 'arco.buildWith', showSection: 'arco.show' }; // remembered drawer states
 const URL_KEYS = { scale: 'scale', density: 'density', height: 'height', daring: 'cantilevers', theme: 'theme', services: 'services' };
 
 function readUrl() {
@@ -108,7 +107,8 @@ export function setupGenerate(form, skipInput, generate) {
       const result = await generate({ ...options, ...generateLimits(budget) });
       if (!result) return;
       if (keepUrl) writeUrl(result.options, budget);
-      const notes = [`${result.modules.length} ${COPY.modules.toLowerCase()}`];
+      // The count line shows the module count; this line only adds notes
+      const notes = [];
       if (result.capped && !options.budget) notes.push(budget.mode === 'fixed' ? COPY.limitReached : COPY.budgetReached);
       if (options.unstable) notes.push(COPY.unstableNote);
       status.textContent = notes.join('. ');
@@ -131,12 +131,6 @@ export function setupGenerate(form, skipInput, generate) {
   });
 
   skipInput.checked = readSetting(SKIP_KEY, 'off') === 'on';
-  // Drawers start closed; each one's state is remembered
-  for (const [id, key] of Object.entries(DRAWER_KEYS)) {
-    const drawer = form.querySelector('#' + id);
-    drawer.open = readSetting(key, 'closed') === 'open';
-    drawer.addEventListener('toggle', () => writeSetting(key, drawer.open ? 'open' : 'closed'));
-  }
   skipInput.addEventListener('change', () => writeSetting(SKIP_KEY, skipInput.checked ? 'on' : 'off'));
 
   const shared = readUrl();

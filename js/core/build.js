@@ -1,4 +1,4 @@
-import { CELL_MM, MAX_MODULES } from '../config.js';
+import { CELL_MM, STORY_MM, MAX_MODULES } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
 import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure, reopenSides } from './placement.js';
@@ -30,9 +30,20 @@ export function dockLevel(world, instance, cap = MAX_MODULES) {
 export const nextRot = (rot) => (rot + 1) & 3;
 
 // Grow keeps every current module and never makes one unit
-export function growOptions(choices, modules) {
-  return { ...choices, scale: choices.scale === 'unit' ? 'block' : choices.scale, budget: 0, budgetMin: 0, locked: modules.map((instance) => ({ ...instance })) };
+export function growOptions(choices, modules, zone = null) {
+  const options = { ...choices, scale: choices.scale === 'unit' ? 'block' : choices.scale, budget: 0, budgetMin: 0, locked: modules.map((instance) => ({ ...instance })) };
+  if (zone) Object.assign(options, { zone, seed: zoneSeed(choices.seed, zone) });
+  return options;
 }
+
+// Grow here zone: a sphere of whole cells around a point in mm
+export const growZone = (point, cells) => ({ center: point.slice(0, 3), radius: cells * CELL_MM });
+
+// Seed of a Grow here press: the seed text plus the zone's cell and story
+export const zoneSeed = (seed, zone) => `${seed}@${Math.floor(zone.center[0] / CELL_MM)},${Math.floor(zone.center[1] / CELL_MM)},${Math.floor(zone.center[2] / STORY_MM)}`;
+
+// Centre of the cell and story holding a point in mm
+export const zoneCenter = (point) => [(Math.floor(point[0] / CELL_MM) + 0.5) * CELL_MM, (Math.floor(point[1] / CELL_MM) + 0.5) * CELL_MM, (Math.floor(Math.max(0, point[2]) / STORY_MM) + 0.5) * STORY_MM];
 
 export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } = {}) {
   let modules = initial.slice();

@@ -6,6 +6,8 @@ const FILE_KIND = 'arco-collection'; // marks a collection file
 const FILE_VERSION = 1; // file format version
 const THUMB_PREFIX = 'data:image/png;base64,'; // only PNG data URLs are kept
 const THUMB_MAX_CHARS = 60000; // longest thumbnail kept
+export const RARITIES = ['common', 'uncommon', 'rare', 'legendary']; // card edge tiers, no logic yet
+export const DEFAULT_RARITY = 'common'; // rarity of every saved module for now
 
 // Checked variant record, or null
 export function variantOf(record) {
@@ -22,16 +24,19 @@ function cleanThumb(thumb) {
   return typeof thumb === 'string' && thumb.startsWith(THUMB_PREFIX) && thumb.length <= THUMB_MAX_CHARS ? thumb : '';
 }
 
-export function makeEntry(record, thumb) {
+// Entry: variant, thumbnail, rarity and the time it was saved (ms, or 0 when unknown)
+export function makeEntry(record, thumb, saved = record && record.saved) {
   const variant = variantOf(record);
-  return variant ? { key: variantKey(variant), variant, thumb: cleanThumb(thumb) } : null;
+  if (!variant) return null;
+  const rarity = RARITIES.includes(record.rarity) ? record.rarity : DEFAULT_RARITY;
+  return { key: variantKey(variant), variant, thumb: cleanThumb(thumb), rarity, saved: Number.isFinite(saved) ? saved : 0 };
 }
 
 export function serializeCollection(entries) {
   return JSON.stringify({
     kind: FILE_KIND,
     version: FILE_VERSION,
-    modules: entries.map((entry) => ({ ...entry.variant, thumb: entry.thumb })),
+    modules: entries.map((entry) => ({ ...entry.variant, thumb: entry.thumb, rarity: entry.rarity, saved: entry.saved })),
   });
 }
 
@@ -86,8 +91,8 @@ export function createCollection(storage) {
       }
       return entries;
     },
-    add(record, thumb) {
-      const entry = makeEntry(record, thumb);
+    add(record, thumb, saved = 0) {
+      const entry = makeEntry({ ...record, rarity: DEFAULT_RARITY }, thumb, saved);
       if (!entry) return { ok: false, added: false, stored: true };
       const added = addAll([entry]) === 1;
       return { ok: true, added, stored: added ? persist() : true, key: entry.key };
