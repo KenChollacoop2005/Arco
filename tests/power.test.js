@@ -9,6 +9,8 @@ import { solvePower, powerStatus, planPower } from '../js/core/power.js';
 import { solveWater } from '../js/core/water.js';
 import { catenaryPoints, conduitClear, solidPoint } from '../js/core/wires.js';
 import { boxIndex } from '../js/core/pipes.js';
+import { powerNeed, nearestRelayText } from '../js/ui/inspector.js';
+import { COPY } from '../js/ui/copy.js';
 
 const EPS = 1e-9; // rounding slack on unit sums
 const part = (id, family, fp, h, x, y, z, mask = 15, seed = 3) => ({ ...normalizeVariant({ family, fp, h, seed, mask, roof: false }), id, x, y, z, rot: 0 });
@@ -258,4 +260,24 @@ test('the same seed gives the same network, and one module more changes little',
     const kept = [...before].filter((key) => after.has(key)).length;
     assert.ok(kept >= 0.7 * before.size, `${name} kept ${kept} of ${before.size}`);
   }
+});
+
+test('an unpowered house records the nearest relay in reach and why it does not help', () => {
+  // Turbine 8 cells out of reach; a power room 7 cells past the house, itself out of the turbine's reach
+  const modules = [part(1, 'turbine', '1x1', 2, -5, 0, 0), part(2, 'housing', '1x1', 1, 3, 0, 0, 0b0100), part(3, 'powerroom', '1x1', 1, 10, 0, 0)];
+  const plan = powerOf(modules);
+  const house = plan.consumers[2];
+  assert.equal(house.status, 'dry');
+  assert.equal(house.nearestRelay.module, 3);
+  assert.equal(house.nearestRelay.fed, false, 'the room has no power');
+  assert.ok(house.nearestRelay.cells <= POWER_RELAYS.powerroom[0], 'within the room reach');
+  assert.equal(house.nearestRelay.linked, false);
+  const reason = powerNeed({ services: { power: plan, water: { pumps: {} } } }, 2).reason;
+  assert.ok(reason.endsWith(`${COPY.whyRelayNoPower}`), reason);
+  // Without the room there is no relay to name
+  assert.equal(powerOf(modules.slice(0, 2)).consumers[2].nearestRelay, undefined);
+  // A fed relay at full load, and one with power that no cable left
+  assert.ok(nearestRelayText({ cells: 3, fed: true, capped: true, linked: true }).endsWith(COPY.whyRelayAtLoad));
+  assert.ok(nearestRelayText({ cells: 3, fed: true, capped: false, linked: false }).endsWith(COPY.whyRelayNoCable));
+  assert.equal(nearestRelayText({ cells: 3, fed: true, capped: false, linked: true }), '');
 });

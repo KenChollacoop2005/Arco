@@ -372,6 +372,20 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     if (node.kind === 'consumer') report[node.module] = powerStatus(node, solved, links, fail);
     else report[node.id] = { relay: true, fed: solved.nodes[node.id].received > 0, received: solved.nodes[node.id].received, capped: solved.nodes[node.id].capped, reason: node.in.length === 0 ? fail && fail.reason : null };
   }
+  // Short consumers: the nearest other relay whose reach covers them, and its state
+  for (const node of nodes) {
+    const entry = node.kind === 'consumer' ? report[node.module] : null;
+    if (!entry || entry.status === 'full') continue;
+    let nearest = null;
+    for (const relay of nodes) {
+      if (relay.kind !== 'relay' || relay.module === node.module || relay.ports.length === 0) continue;
+      const cells = lowerBound(relay, node);
+      if (cells <= relay.reach && (!nearest || cells < nearest.cells)) nearest = { relay, cells };
+    }
+    if (!nearest) continue;
+    const state = solved.nodes[nearest.relay.id];
+    entry.nearestRelay = { id: nearest.relay.id, module: nearest.relay.module, cells: Math.ceil(nearest.cells * REACH_ROUND) / REACH_ROUND, fed: state.received > 0, capped: !!state.capped, linked: links.some((link) => link.from === nearest.relay.id && link.to === node.id) };
+  }
   // Cables per link, own slack, under the pair cap
   const cables = [];
   const perPair = new Map();

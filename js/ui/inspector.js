@@ -74,6 +74,15 @@ export function waterNeed(flows, id) {
   return { status: report.status, chip: COPY[WATER_CHIP[report.status]], amount: fraction(report), reason, notes: [] };
 }
 
+// What is wrong with the nearest relay, when it is not already feeding the module
+export function nearestRelayText(relay) {
+  if (!relay || (relay.linked && relay.fed && !relay.capped)) return '';
+  const where = `${COPY.whyNearestRelay}, ${amount(relay.cells)} ${COPY.whyCellsAway},`;
+  if (!relay.fed) return `${where} ${COPY.whyRelayNoPower}`;
+  if (relay.capped) return `${where} ${COPY.whyRelayAtLoad}`;
+  return `${where} ${COPY.whyRelayNoCable}`;
+}
+
 // Power need as status, amount, reason and notes on making, relays and pumps
 export function powerNeed(flows, id) {
   const power = flows && flows.services && flows.services.power;
@@ -92,6 +101,8 @@ export function powerNeed(flows, id) {
   let reason = '';
   if (report.status !== 'full' && report.reason === 'out of reach') reason = report.short ? `${COPY.whyPowerShortBy} ${amount(report.short)} ${COPY.whyCells}` : COPY.whyPowerOutOfReach;
   else if (report.status !== 'full' && report.reason) reason = COPY[POWER_WHY[report.reason]] || report.reason;
+  const relayText = nearestRelayText(report.nearestRelay);
+  if (relayText) reason = [reason, relayText].filter(Boolean).join(' ');
   return { status: report.status, chip: COPY[POWER_CHIP[report.status]], amount: fraction(report), reason, notes };
 }
 
