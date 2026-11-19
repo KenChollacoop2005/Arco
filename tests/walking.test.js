@@ -36,8 +36,8 @@ test('a walkway between two towers is a shortcut over going down and across the 
 });
 
 test('a module with no way up is unreachable, and the layer marks it', () => {
-  // A house on a house, no core or stair to reach the top one
-  const modules = [part(1, 'housing', '1x1', 1, 0, 0, 0), part(2, 'housing', '1x1', 1, 0, 0, 1), part(3, 'market', '1x1', 1, 2, 0, 0)];
+  // A house on pilotis, with nothing walkable leading up to it
+  const modules = [part(1, 'housing', '1x1', 1, 0, 0, 0), part(2, 'housing', '1x1', 1, 0, -2, 1), part(3, 'market', '1x1', 1, 2, 0, 0), part(4, 'pilotis', '1x1', 1, 0, -2, 0)];
   const network = walkingNetwork(modules);
   assert.equal(network.modules[1].reached, true);
   assert.equal(network.modules[2].reached, false);
@@ -48,6 +48,19 @@ test('a module with no way up is unreachable, and the layer marks it', () => {
   assert.ok(lines.statuses.includes('fail'), 'the unreachable house is crossed out');
   assert.equal(walkingText({ modules: network.modules }, 2), COPY.walkUnreached);
   assert.equal(walkingText({ modules: network.modules }, 1, () => 'Market'), `${COPY.walkNearest} market: 2 ${COPY.walkSteps}, ${COPY.walkStepFree}. ${COPY.walkFromPlinthFree}`);
+});
+
+test('a plain stack of buildings is climbed by its inside stairs; a core beside it makes it step-free', () => {
+  // Three houses stacked in one column, a two story studio on top
+  const stack = [part(1, 'housing', '1x1', 1, 0, 0, 0), part(2, 'housing', '1x1', 1, 0, 0, 1), part(3, 'housing', '1x1', 1, 0, 0, 2), part(4, 'studio', '1x1', 2, 0, 0, 3)];
+  const stairs = walkingNetwork(stack);
+  for (const id of [1, 2, 3, 4]) assert.equal(stairs.modules[id].reached, true, `module ${id} reached`);
+  for (const id of [2, 3, 4]) assert.equal(stairs.modules[id].stepFree, false, `module ${id} only by stairs`);
+  assert.equal(stairs.between(1, 3), 2, 'two flights up the column');
+  assert.equal(stairs.between(1, 4), 3);
+  // A core beside the stack meets every story side by side
+  const lift = walkingNetwork([...stack, part(5, 'core', '1x1', 4, 1, 0, 0)]);
+  for (const id of [1, 2, 3, 4]) assert.equal(lift.modules[id].stepFree, true, `module ${id} step-free`);
 });
 
 test('generated structures: most modules are reached, and the network repeats', () => {

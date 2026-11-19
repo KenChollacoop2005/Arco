@@ -4,6 +4,7 @@ import { FAMILIES, END_FAMILIES, END_OPEN, END_STEP, BUTT_SIDES, endCode, isDock
 
 export const LIFTS = ['core']; // step-free between levels
 export const CLIMBS = ['stair', 'ramp']; // join levels with steps
+const BUILDING_GROUPS = ['Living']; // enclosed families with stairs inside
 const WALK_GROUPS = ['Living', 'Circulation', 'Outdoor']; // groups people walk through
 const WALK_EXTRA = ['core', 'podium', 'market', 'farm', 'greenhouse']; // other families people walk through
 const WALK_LIFT_MM = 1.5; // walking lines sit this far over each floor
@@ -11,6 +12,7 @@ const MARK_MM = 2; // half width of an unreachable mark
 
 const voxel = (x, y, level) => x + ',' + y + ',' + level;
 const PLINTH = { family: 'plinth' }; // owner of the free plinth cells
+export const building = (instance) => BUILDING_GROUPS.includes(FAMILIES[instance.family].group);
 export const walkable = (instance) => WALK_GROUPS.includes(FAMILIES[instance.family].group) || WALK_EXTRA.includes(instance.family) || !!FAMILIES[instance.family].amenity;
 
 // Walking graph on story voxels: links of one step, each marked step-free or not
@@ -39,9 +41,11 @@ export function walkingGraph(modules) {
       if (other === instance) link(key, next, true);
       else if (!bridge(instance) && !bridge(other)) link(key, next, true);
     }
-    // Levels join only inside lifts, stairs and ramps
+    // Levels join inside lifts, stairs, ramps and buildings
     const above = owner.get(voxel(x, y, level + 1));
     if (above === instance && (LIFTS.includes(instance.family) || CLIMBS.includes(instance.family))) link(key, voxel(x, y, level + 1), LIFTS.includes(instance.family));
+    // Buildings have stairs inside, up their own stories and into the building above
+    else if (above && building(instance) && building(above)) link(key, voxel(x, y, level + 1), false);
     // A ramp climbs one story to what its high end meets
     if (instance.family === 'ramp') {
       const [stepX, stepY] = SIDES[(BUTT_SIDES.ramp + instance.rot) & 3];
