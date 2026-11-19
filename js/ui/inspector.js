@@ -58,6 +58,43 @@ export function powerText(flows, id) {
   return lines.length > 0 ? lines.join('. ') : null;
 }
 
+const WATER_CHIP = { full: 'chipFull', partial: 'chipPartial', dry: 'chipDry' }; // water status to chip copy
+const POWER_CHIP = { full: 'chipPowered', partial: 'chipPartlyPowered', dry: 'chipNotPowered' }; // power status to chip copy
+const WATER_WHY = { 'no route': 'whyWaterNoRoute', 'no wall route': 'whyWaterNoWall', 'source empty': 'whyWaterEmpty', 'no free port': 'whyWaterNoPort' }; // water reason to sentence
+const POWER_WHY = { 'no route': 'whyPowerNoRoute', 'source empty': 'whyPowerEmpty', 'relay at throughput': 'whyPowerRelayFull', 'no free port': 'whyPowerNoPort', 'blocked by module': 'whyPowerBlocked' }; // power reason to sentence
+const fraction = (report) => `${amount(report.received)} / ${amount(report.demand)}`;
+
+// Water need as status, amount and a plain reason
+export function waterNeed(flows, id) {
+  const report = flows && flows.services && flows.services.water.consumers[id];
+  if (!report) return null;
+  let reason = '';
+  if (report.status !== 'full' && report.reason === 'out of head') reason = report.short === null ? COPY.whyWaterNoHead : `${COPY.whyWaterShortBy} ${amount(report.short)}.`;
+  else if (report.status !== 'full' && report.reason) reason = COPY[WATER_WHY[report.reason]] || report.reason;
+  return { status: report.status, chip: COPY[WATER_CHIP[report.status]], amount: fraction(report), reason, notes: [] };
+}
+
+// Power need as status, amount, reason and notes on making, relays and pumps
+export function powerNeed(flows, id) {
+  const power = flows && flows.services && flows.services.power;
+  if (!power || !power.consumers) return null;
+  const notes = [];
+  const source = (power.nodes || []).find((node) => node.module === id && node.kind === 'source');
+  if (source) notes.push(`${COPY.powerMakes} ${amount(source.supply)} ${COPY.powerUnits}.`);
+  const report = power.consumers[id];
+  const pump = flows.services.water && flows.services.water.pumps && flows.services.water.pumps[id];
+  if (pump) notes.push(pump.runs ? COPY.whyPumpRuns : COPY.whyPumpOff);
+  for (const key of [String(id), `${id}:box`]) {
+    const relay = power.consumers[key];
+    if (relay && relay.relay && !relay.fed) notes.push(COPY.whyRelayIdle);
+  }
+  if (!report || report.relay) return notes.length > 0 ? { status: null, notes } : null;
+  let reason = '';
+  if (report.status !== 'full' && report.reason === 'out of reach') reason = report.short ? `${COPY.whyPowerShortBy} ${amount(report.short)} ${COPY.whyCells}` : COPY.whyPowerOutOfReach;
+  else if (report.status !== 'full' && report.reason) reason = COPY[POWER_WHY[report.reason]] || report.reason;
+  return { status: report.status, chip: COPY[POWER_CHIP[report.status]], amount: fraction(report), reason, notes };
+}
+
 // One walking line: the nearest amenity and how the plinth reaches this module
 export function walkingText(walking, id, label = (type) => type) {
   const entry = walking && walking.modules && walking.modules[id];
@@ -86,6 +123,17 @@ function rows(pairs) {
   const list = node('dl', 'rows');
   for (const [label, value] of pairs) list.append(node('dt', '', label), node('dd', '', value));
   return list;
+}
+
+// One need: label, status chip and amount, then the reason and notes below
+function needLine(label, need, flows) {
+  const line = node('div', 'need');
+  const value = node('span', 'need-value');
+  if (need && need.status) value.append(node('span', `chip chip-${need.status}`, need.chip), node('span', 'need-amount', need.amount));
+  else if (!need || need.notes.length === 0) value.append(node('span', 'need-none', flows ? COPY.noNeed : COPY.checking));
+  line.append(node('span', 'need-label', label), value);
+  for (const text of need ? [need.reason, ...need.notes].filter(Boolean) : []) line.append(node('p', 'need-reason', text));
+  return line;
 }
 
 function checkLine(label, status, value, detail) {
@@ -165,15 +213,11 @@ export function createInspector(body, prefix = 'arco.inspector') {
   function needsDrawer({ flows }, variant, placed) {
     const needs = drawer('needs', COPY.needs, 'open');
     const capacity = residentCapacity(variant);
-    const lines = [];
     if (placed) {
-      // The row label already says Water or Power
-      const bare = (text, label) => (text ? text.replace(`${label}: `, '') : flows ? COPY.noNeed : COPY.checking);
-      lines.push([COPY.water, bare(waterText(flows, variant.id), COPY.water)]);
-      lines.push([COPY.power, bare(powerText(flows, variant.id), COPY.power)]);
+      needs.append(needLine(COPY.water, waterNeed(flows, variant.id), flows));
+      needs.append(needLine(COPY.power, powerNeed(flows, variant.id), flows));
     }
-    lines.push([COPY.residents, capacity > 0 ? String(capacity) : COPY.none]);
-    needs.append(rows(lines));
+    needs.append(rows([[COPY.residents, capacity > 0 ? String(capacity) : COPY.none]]));
     if (!placed) needs.append(node('p', 'hint', COPY.needsPlaced));
   }
 
