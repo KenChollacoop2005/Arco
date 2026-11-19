@@ -135,6 +135,7 @@ export const COPY = {
   roof: 'Roof',
   printTitle: 'Print',
   duplicate: 'Duplicate',
+  unselect: 'Unselect',
   save: 'Save',
   duplicatePicked: 'Click or drop on the plinth to place a copy. R rotates, Esc stops.',
   exportModule: 'Export this module',

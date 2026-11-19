@@ -119,11 +119,19 @@ const selectedModule = () => {
   return app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) || null : null;
 };
 
+// Duplicate reads Unselect while a copy is held
+function refreshDuplicate() {
+  const button = query('#duplicateModule');
+  const holding = builder.duplicating();
+  button.textContent = holding ? COPY.unselect : COPY.duplicate;
+  button.disabled = !holding && !selectedModule();
+}
+
 function showInspector() {
   const selected = selectedModule();
   inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit }, selected);
   query('#saveModule').disabled = !selected;
-  query('#duplicateModule').disabled = !selected;
+  refreshDuplicate();
   query('#exportModule').disabled = !selected;
   query('#exportSelected').disabled = app.selection.length === 0;
   query('#exportAll').disabled = !app.structure || app.structure.modules.length === 0;
@@ -370,11 +378,17 @@ query('#saveModule').addEventListener('click', () => {
   if (selected) saveModule(selected);
 });
 query('#duplicateModule').addEventListener('click', () => {
+  // Unselect drops the copy and the selection
+  if (builder.duplicating()) {
+    select(null, false);
+    return;
+  }
   const selected = selectedModule();
   if (!selected) return;
   if (app.mode !== 'generate') setMode('generate');
   builder.duplicate(selected);
 });
+builder.onDuplicate(refreshDuplicate);
 
 // Collection page; Place in Build picks the module up on the main screen
 setupArchive(app, {

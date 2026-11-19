@@ -24,6 +24,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   let entries = [];
   let growing = false;
   const growListeners = [];
+  const copyListeners = [];
 
   const active = () => app.mode === 'generate';
 
@@ -72,6 +73,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     picked = entry && (keep || !picked || picked.key !== entry.key) ? entry : null;
     turn = 0;
     status.textContent = picked ? pickedText() : '';
+    for (const listener of copyListeners) listener(isCopy());
     refreshPalette();
     refreshGhost();
     if (picked) moduleView.prepare([picked.variant]).then(refreshGhost, () => {});
@@ -237,6 +239,12 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       pick({ key: COPY_PREFIX + variantKey(variant), variant, count: SANDBOX_COUNT }, true);
       turn = rot & 3;
       refreshGhost();
+    },
+    // True while a copy is held as the placement tool
+    duplicating: () => isCopy(),
+    // Listener gets true while a copy is held
+    onDuplicate(listener) {
+      copyListeners.push(listener);
     },
     // Ends a duplicate, kept for cards picked from the palette
     endDuplicate() {
