@@ -1,6 +1,7 @@
 import {
   LINE_MAX_MM, LINE_SAG, LINE_RISE_MM, CLOTHESLINES_MAX, LAUNDRY_GAP_MM, LAUNDRY_CHANCE, LAUNDRY_SIZE_MM, LAUNDRY_COLORS,
   TARP_REACH_MM, TARP_RISE_MM, TARP_MIN_AREA_MM2, TARPS_MAX, TARP_COLORS, MAX_LINES_PER_PAIR,
+  STRING_LIGHTS_MAX, STRING_LIGHTS_CHANCE, STRING_LIGHTS_SAG,
 } from '../config.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
 import { hangString, pathBlocked, standoff } from './strings.js';
@@ -10,6 +11,7 @@ const TARP_SEED = 0x7a59; // keeps tarp rolls apart from line rolls
 const PEG_DROP_MM = 0.2; // laundry hangs this far under the line
 const TARP_OFF_MM = 1; // tarp corners sit this far off the hook
 const TARP_CORNERS = [3, 4]; // fewest and most hooks per tarp
+const LIGHTS_SEED = 0x1167; // keeps string light rolls apart from line rolls
 
 const distance = (first, second) => Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
 
@@ -90,9 +92,33 @@ function hangLaundry(line, context, rng) {
   return pieces;
 }
 
-// Tarps, then clotheslines with laundry, on the line hooks; seeded, render only
-export function planLines(modules, seedText, { ports, context }) {
+// String lights between line hooks; the owner end takes power for the run
+function stringLights(hooks, context, rng, owners) {
+  const runs = [];
+  for (const first of rng.shuffle(hooks.slice())) {
+    if (runs.length >= STRING_LIGHTS_MAX) break;
+    if (first.left <= 0 || !rng.chance(STRING_LIGHTS_CHANCE)) continue;
+    const options = hooks
+      .filter((hook) => hook.module !== first.module && hook.left > 0 && (owners.has(first.module) || owners.has(hook.module)) && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM)
+      .map((hook) => ({ hook, length: distance(hook.position, first.position) }))
+      .filter((option) => option.length <= LINE_MAX_MM)
+      .sort((optionA, optionB) => optionA.length - optionB.length || optionA.hook.module - optionB.hook.module || optionA.hook.index - optionB.hook.index);
+    for (const { hook, length } of options) {
+      const run = hangString(context, 'lights', first, hook, length * rng.range(STRING_LIGHTS_SAG[0], STRING_LIGHTS_SAG[1]), LINE_MAX_MM);
+      if (run.blocked) continue;
+      first.left--;
+      hook.left--;
+      runs.push({ ...run, owner: owners.has(first.module) ? first.module : hook.module });
+      break;
+    }
+  }
+  return runs;
+}
+
+// String lights, tarps, then clotheslines with laundry, on the line hooks; seeded, render only
+export function planLines(modules, seedText, { ports, context, owners = new Set() }) {
   const hooks = ports.filter((port) => port.active && port.type === 'line').map((port) => ({ ...port, left: port.capacity }));
+  const lights = owners.size > 0 ? stringLights(hooks, context, makeRng(mixSeed(hashString(String(seedText)), LIGHTS_SEED)), owners) : [];
   const tarps = stringTarps(hooks, context, makeRng(mixSeed(hashString(String(seedText)), TARP_SEED)));
   const rng = makeRng(mixSeed(hashString(String(seedText)), LINE_SEED));
   const lines = [];
@@ -120,5 +146,5 @@ export function planLines(modules, seedText, { ports, context }) {
       break;
     }
   }
-  return { lines, laundry, tarps };
+  return { lines, laundry, tarps, lights };
 }

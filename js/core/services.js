@@ -1,9 +1,9 @@
 import { structureMounts } from './mounts.js';
 import { stringContext, makeString, solidEntries } from './strings.js';
 import { planWater } from './water.js';
-import { planPower } from './power.js';
+import { planPower, powerRole } from './power.js';
 import { planLines } from './lines.js';
-import { PUMP_KINDS } from '../config.js';
+import { PUMP_KINDS, LIGHT_DEMAND } from '../config.js';
 import { hasPump } from './catalog.js';
 
 const WHEEL_FAMILIES = ['wheelup']; // wheels driven by water passing through them
@@ -14,7 +14,7 @@ const portKey = (module, index) => module + ':' + index;
 export function usedPorts(services) {
   const used = new Set();
   if (!services) return used;
-  for (const string of [...services.pipes, ...services.wires, ...services.lines]) {
+  for (const string of [...services.pipes, ...services.wires, ...services.lines, ...(services.lights || [])]) {
     used.add(portKey(string.from.module, string.from.index));
     used.add(portKey(string.to.module, string.to.index));
   }
@@ -27,7 +27,7 @@ export function portUse(ports, services, moduleId) {
   const ends = new Map();
   const count = (end) => ends.set(portKey(end.module, end.index), (ends.get(portKey(end.module, end.index)) || 0) + 1);
   if (services) {
-    for (const string of [...services.pipes, ...services.wires, ...services.lines]) {
+    for (const string of [...services.pipes, ...services.wires, ...services.lines, ...(services.lights || [])]) {
       count(string.from);
       count(string.to);
     }
@@ -50,6 +50,13 @@ export function drawnPorts(ports, services) {
   return ports.filter((port) => port.active !== false && used.has(portKey(port.module, port.index)));
 }
 
+// Extra power per module for the string lights it feeds
+export function stringLightDemand(runs = []) {
+  const extra = {};
+  for (const run of runs) extra[run.owner] = (extra[run.owner] || 0) + LIGHT_DEMAND.stringlights;
+  return extra;
+}
+
 // Water, power and plain lines of a structure as strings, seeded and render only
 export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules) } = {}) {
   const byKey = new Map(mounts.map((port) => [portKey(port.module, port.index), port]));
@@ -59,7 +66,13 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
   const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared });
   const wheels = {};
   for (const instance of modules) if (WHEEL_FAMILIES.includes(instance.family)) wheels[instance.id] = (gravity.solved.nodes[String(instance.id)] || { received: 0 }).received;
-  const power = planPower(modules, seedText, { ports: mounts, context, wheels });
+  // Lines first: string lights add demand to the module that feeds them
+  const owners = new Set(modules.filter((instance) => {
+    const role = powerRole(instance);
+    return (!role || role.kind === 'consumer') && mounts.some((port) => port.module === instance.id && port.active && port.type === 'power' && !port.relay);
+  }).map((instance) => instance.id));
+  const plain = planLines(modules, seedText, { ports: mounts, context, owners });
+  const power = planPower(modules, seedText, { ports: mounts, context, wheels, extra: stringLightDemand(plain.lights) });
   const pumpsOn = new Set(modules.filter((instance) => PUMP_KINDS[instance.family] && hasPump(instance) && power.consumers[instance.id] && power.consumers[instance.id].status === 'full').map((instance) => instance.id));
   const water = planWater(modules, seedText, { ports: mounts, context, powered: pumpsOn, shared });
   const pipes = water.links.map((link) => ({
@@ -70,6 +83,5 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
   const blockedPipes = water.blocked.map((attempt) => ({ ...makeString('pipe', attempt.from, attempt.to, attempt.points), blocked: attempt.blocked }));
   // Overflow sheets, basin to basin or down to the roof or plinth
   const sheets = water.solved.sheets.filter((sheet) => sheet.points).map((sheet) => ({ from: sheet.from, to: sheet.to, units: sheet.units, points: sheet.points }));
-  const plain = planLines(modules, seedText, { ports: mounts, context });
-  return { water: { ...water, pumps: water.pumps }, power: { links: power.links, powered: power.powered, consumers: power.consumers, nodes: power.nodes, totals: power.solved.totals }, pipes, sheets, wires: power.cables, lines: plain.lines, laundry: plain.laundry, tarps: plain.tarps, blocked: [...blockedPipes, ...power.blocked] };
+  return { water: { ...water, pumps: water.pumps }, power: { links: power.links, powered: power.powered, consumers: power.consumers, nodes: power.nodes, totals: power.solved.totals }, pipes, sheets, wires: power.cables, lines: plain.lines, laundry: plain.laundry, tarps: plain.tarps, lights: plain.lights, blocked: [...blockedPipes, ...power.blocked] };
 }

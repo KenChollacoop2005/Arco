@@ -3,6 +3,7 @@ import {
   POWER_FANOUT, POWER_CHILD_FANOUT, MAX_CHAIN_LINKS, REJOIN_CHANCE, POWER_SHORT_REACH, POWER_JITTER, POWER_OVERBOOK, WIRE_SLACK, WIRE_CABLES, MAX_WIRES_PER_PAIR,
 } from '../config.js';
 import { instanceCells } from './grid.js';
+import { lightDemand } from './lights.js';
 import { FAMILIES, hasPump } from './catalog.js';
 import { hashString, mixSeed, makeRng } from './rng.js';
 import { splitWater, topoOrder } from './water.js';
@@ -24,7 +25,7 @@ const toUnits = (quarters) => quarters / WATER_QUARTERS;
 const roundReach = (cells) => Math.round(cells * 1e6) / 1e6;
 
 // Source, relay or consumer role of one module, or null
-export function powerRole(instance, wheels = {}) {
+export function powerRole(instance, wheels = {}, extra = {}) {
   const family = instance.family;
   if (family === 'turbine') return { kind: 'source', supply: POWER_SUPPLY.turbine[0] + TURBINE_EXTRA_PER_STORY * (instance.h - FAMILIES.turbine.minStories), reach: POWER_SUPPLY.turbine[1] };
   if (family === 'solar') return { kind: 'source', supply: Math.max(POWER_SUPPLY.solar[0], SOLAR_PER_CELL * instanceCells(instance).length), reach: POWER_SUPPLY.solar[1] };
@@ -32,7 +33,9 @@ export function powerRole(instance, wheels = {}) {
   if (family === 'wheel') return { kind: 'source', supply: POWER_SUPPLY.wheel[0], reach: POWER_SUPPLY.wheel[1] };
   if (family === 'wheelup') return { kind: 'source', supply: Math.min(WHEEL_UP_CAP, Math.floor((wheels[instance.id] || 0) * WHEEL_PER_UNIT * 2) / 2), reach: POWER_SUPPLY.wheelup[1] };
   if (POWER_RELAYS[family]) return { kind: 'relay', reach: POWER_RELAYS[family][0], throughput: POWER_RELAYS[family][1] };
-  const demand = family === 'plant' ? (hasPump(instance) ? POWER_DEMAND.plantpump : 0) : POWER_DEMAND[family] || 0;
+  const base = family === 'plant' ? (hasPump(instance) ? POWER_DEMAND.plantpump : 0) : POWER_DEMAND[family] || 0;
+  // Lights draw power all day, the module's own and strung from it
+  const demand = base + lightDemand(instance) + (extra[instance.id] || 0);
   return demand > 0 ? { kind: 'consumer', demand } : null;
 }
 
@@ -138,7 +141,7 @@ export function powerStatus(node, solved, links, fail) {
 const placeKey = (instance) => `${instance.family}:${instance.x},${instance.y},${instance.z}:${instance.rot}`;
 
 // Power network of a structure: a seeded branching tree of wires, flows and diagnostics
-export function planPower(modules, seedText, { ports, context, wheels = {}, pairCap = MAX_WIRES_PER_PAIR, shared = {} }) {
+export function planPower(modules, seedText, { ports, context, wheels = {}, pairCap = MAX_WIRES_PER_PAIR, shared = {}, extra = {} }) {
   const seed = mixSeed(hashString(String(seedText)), POWER_SEED);
   const localRng = (key) => makeRng(mixSeed(seed, hashString(key)));
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
@@ -152,7 +155,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
   const nodes = [];
   for (const instance of modules) {
     const own = live.filter((port) => port.module === instance.id);
-    const role = powerRole(instance, wheels);
+    const role = powerRole(instance, wheels, extra);
     const box = own.filter((port) => port.relay);
     if (box.length > 0) nodes.push({ id: `${instance.id}:box`, module: instance.id, kind: 'relay', reach: POWER_RELAYS.junction[0], throughput: POWER_RELAYS.junction[1], ports: box, key: placeKey(instance) + ':box' });
     if (role) nodes.push({ id: String(instance.id), module: instance.id, ...role, ports: own.filter((port) => !port.relay), key: placeKey(instance) });

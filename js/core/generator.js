@@ -1,5 +1,5 @@
 import {
-  MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX, BUDGET_HARD_CAP, POWER_SUPPLY, POWER_RELAYS, POWER_DEMAND, DEMAND_PER_CELL, DEMAND_PER_MODULE, SOURCE_FAMILIES, PUMP_KINDS, WATER_SOURCES,
+  MAX_MODULES, OPENING_UNIT_MIN, OPENING_UNIT_MAX, BUDGET_HARD_CAP, POWER_SUPPLY, POWER_RELAYS, POWER_DEMAND, LIGHT_DEMAND, DEMAND_PER_CELL, DEMAND_PER_MODULE, SOURCE_FAMILIES, PUMP_KINDS, WATER_SOURCES,
 } from '../config.js';
 import {
   SIDES,
@@ -113,6 +113,11 @@ const RAISED_WHEELS = [[0, 1], [0, 1], [0, 1]]; // raised water wheels by densit
 const RUNOFFS = [[0, 1], [0, 1], [0, 1]]; // runoff outlets by density: block, mega
 const DISPOSALS = [[0, 1], [0, 1], [0, 1]]; // disposal outlets by density: block, mega
 const STREAM_WHEELS = [1, 2, 2]; // most stream wheels by density
+const LAMPPOSTS = [[0, 1], [0, 1], [0, 2]]; // lamp posts by density: block, mega
+const LAMP_GROUND_SHARE = 0.5; // share of lamp posts on the plinth, not a roof
+const LAMP_NEAR = ['housing', 'shop', 'market', 'hall', 'deck', 'terrace']; // families a lamp post goes near
+const FLOODLIGHTS = [[0, 0], [0, 1], [0, 1]]; // floodlights by density: block, mega
+const BEACONS_MAX = 2; // beacons, on the tallest antennas only
 const JUNCTION_CHANCE = 0.12; // share of wall-bearing modules with a junction box
 const PLANNER_SEED = 0x91a11e; // keeps planner rolls apart from other rolls
 export const SERVICE_LEVELS = ['off', 'low', 'high']; // services planner choices
@@ -1145,6 +1150,14 @@ function services(ctx) {
   for (let count = categoryOn('wheelup', opts.categories) ? roll(RAISED_WHEELS) : 0; count > 0; count--) keep(roofSpot(ctx, rng, 'wheelup', ['tank', 'raincatcher']));
   for (let count = roll(RUNOFFS); count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'runoff', THIRSTY)));
   for (let count = categoryOn('disposal', opts.categories) ? roll(DISPOSALS) : 0; count > 0; count--) keep(faceOut(world, roofSpot(ctx, rng, 'disposal', INDUSTRY)));
+  // Lights, a few per structure; beacons crown the tallest antennas
+  for (let count = categoryOn('lamppost', opts.categories) ? roll(LAMPPOSTS) : 0; count > 0; count--) {
+    keep(rng.chance(LAMP_GROUND_SHARE) ? groundSpot(ctx, rng, 'lamppost', '1x1', 1) : roofSpot(ctx, rng, 'lamppost', LAMP_NEAR));
+  }
+  for (let count = categoryOn('floodlight', opts.categories) ? roll(FLOODLIGHTS) : 0; count > 0; count--) keep(roofSpot(ctx, rng, 'floodlight', INDUSTRY));
+  const antennas = [...world.modules.values()].filter((instance) => instance.family === 'antenna' && !ctx.locked.has(instance.id));
+  antennas.sort((first, second) => second.z + second.h - (first.z + first.h) || first.id - second.id);
+  for (const instance of antennas.slice(0, BEACONS_MAX)) instance.bc = 1;
   // Water wheels stand on open stream cells, turned with the flow
   if (ctx.stream) {
     let wheels = rng.int(0, STREAM_WHEELS[opts.density]);
@@ -1193,7 +1206,8 @@ function roleOf(instance) {
   const family = instance.family;
   if (POWER_SUPPLY[family] || family === 'wheelup') return { power: 'source', supply: (POWER_SUPPLY[family] || POWER_SUPPLY.wheelup)[0] || PLANNER_WHEEL_GUESS, reach: (POWER_SUPPLY[family] || POWER_SUPPLY.wheelup)[1] };
   if (POWER_RELAYS[family]) return { power: 'relay', reach: POWER_RELAYS[family][0] };
-  const demand = family === 'plant' ? (hasPump(instance) ? POWER_DEMAND.plantpump : 0) : POWER_DEMAND[family] || 0;
+  const base = family === 'plant' ? (hasPump(instance) ? POWER_DEMAND.plantpump : 0) : POWER_DEMAND[family] || 0;
+  const demand = base + (LIGHT_DEMAND[family] || 0) + (instance.bc ? LIGHT_DEMAND.beacon : 0);
   return { power: demand > 0 ? 'consumer' : null, demand };
 }
 const thirst = (instance) => (DEMAND_PER_CELL[instance.family] || 0) * instanceCells(instance).length + (DEMAND_PER_MODULE[instance.family] || 0);

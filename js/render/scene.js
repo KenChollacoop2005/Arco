@@ -1,5 +1,5 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { CELL_MM, PLINTH_DIAMETER_CELLS } from '../config.js';
+import { CELL_MM, PLINTH_DIAMETER_CELLS, DUSK_LIGHT, NIGHT_LIGHT } from '../config.js';
 import { createPlinthMaterial, sharedUniforms } from './materials.js';
 
 const PLINTH_LIP_MM = 7; // plinth edge beyond the grid
@@ -12,6 +12,9 @@ const SHADOW_DROP_MM = 26; // contact shadow below plinth
 const KEY_INTENSITY = 2.6; // key light strength
 const FILL_INTENSITY = 1.35; // sky fill strength
 const KEY_DIRECTION = [-0.45, -0.62, 0.92]; // key light direction
+const KEY_COLOR = 0xfffaf2; // key light colour by day
+const SKY_COLOR = 0xffffff; // sky fill colour by day
+const GROUND_COLOR = 0xcdccc8; // ground fill colour by day
 const SHADOW_MAP_SIZE = 2048; // shadow resolution
 const MAX_PIXEL_RATIO = 2; // render scale cap
 const SHADOW_TEXTURE_PX = 256; // contact shadow texture size
@@ -78,11 +81,19 @@ export function createScene(canvas) {
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
-  const fill = new THREE.HemisphereLight(0xffffff, 0xcdccc8, FILL_INTENSITY);
+  const fill = new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, FILL_INTENSITY);
   fill.position.set(0, 0, 1);
   scene.add(fill);
 
-  const key = new THREE.DirectionalLight(0xfffaf2, KEY_INTENSITY);
+  const key = new THREE.DirectionalLight(KEY_COLOR, KEY_INTENSITY);
+  // Per time: key colour, strength, direction, sky, ground, fill strength
+  const TIME_LIGHTS = {
+    day: [KEY_COLOR, KEY_INTENSITY, KEY_DIRECTION, SKY_COLOR, GROUND_COLOR, FILL_INTENSITY],
+    dusk: DUSK_LIGHT,
+    night: NIGHT_LIGHT,
+  };
+  let keyDirection = KEY_DIRECTION;
+  let lastHeight = START_HEIGHT_MM;
   key.castShadow = true;
   key.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
   key.shadow.bias = SHADOW_BIAS;
@@ -108,7 +119,8 @@ export function createScene(canvas) {
 
   // Shadow box follows the model height
   function fitLight(heightMm) {
-    const direction = new THREE.Vector3(...KEY_DIRECTION).normalize();
+    lastHeight = heightMm;
+    const direction = new THREE.Vector3(...keyDirection).normalize();
     const reach = PLINTH_RADIUS_MM + heightMm * LIGHT_REACH_PER_HEIGHT + LIGHT_REACH_PAD_MM;
     key.target.position.set(0, 0, heightMm * LIGHT_TARGET_SHARE);
     key.position.copy(key.target.position).addScaledVector(direction, reach * LIGHT_STANDOFF);
@@ -121,6 +133,19 @@ export function createScene(canvas) {
     key.shadow.needsUpdate = true;
   }
   fitLight(START_HEIGHT_MM);
+
+  // Light only: key and fill follow the time of day
+  function setTime(time) {
+    const [keyColor, keyStrength, direction, sky, ground, fillStrength] = TIME_LIGHTS[time] || TIME_LIGHTS.day;
+    key.color.setHex(keyColor);
+    key.intensity = keyStrength;
+    fill.color.setHex(sky);
+    fill.groundColor.setHex(ground);
+    fill.intensity = fillStrength;
+    keyDirection = direction;
+    fitLight(lastHeight);
+    dirty = true;
+  }
 
   const frameCallbacks = [];
   let dirty = true;
@@ -159,6 +184,7 @@ export function createScene(canvas) {
     scene,
     plinth,
     fitLight,
+    setTime,
     now: () => sharedUniforms.uTime.value,
     setCamera(camera) {
       activeCamera = camera;

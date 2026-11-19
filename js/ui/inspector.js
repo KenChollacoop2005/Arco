@@ -1,4 +1,4 @@
-import { STORY_MM, MAX_OVERHANG_DEG, MAX_BRIDGE_MM, MIN_WALL_MM, BED_MM } from '../config.js';
+import { STORY_MM, MAX_OVERHANG_DEG, MAX_BRIDGE_MM, MIN_WALL_MM, BED_MM, LIGHT_RADIUS_CELLS } from '../config.js';
 import { fitStatus } from '../core/checks.js';
 import { FAMILIES, defaultPlacement, residentCapacity, canSupport } from '../core/catalog.js';
 import { placementOf } from '../core/placement.js';
@@ -221,7 +221,7 @@ export function createInspector(body, prefix = 'arco.inspector') {
     body.append(top);
   }
 
-  function needsDrawer({ flows }, variant, placed) {
+  function needsDrawer({ flows, lights }, variant, placed) {
     const needs = drawer('needs', COPY.needs, 'open');
     const capacity = residentCapacity(variant);
     if (placed) {
@@ -229,6 +229,9 @@ export function createInspector(body, prefix = 'arco.inspector') {
       needs.append(needLine(COPY.power, powerNeed(flows, variant.id), flows));
     }
     needs.append(rows([[COPY.residents, capacity > 0 ? String(capacity) : COPY.none]]));
+    const own = placed && lights && lights.modules[variant.id];
+    const radius = own ? own.radius : LIGHT_RADIUS_CELLS[variant.family] || 0;
+    if (radius > 0) needs.append(rows([[COPY.providesLight, `${radius} ${COPY.cellsUnit}`]]));
     if (!placed) needs.append(node('p', 'hint', COPY.needsPlaced));
   }
 

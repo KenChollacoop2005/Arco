@@ -110,6 +110,9 @@ export const MOUNT_PORTS = {
 };
 // A pumped tank gets a power bracket after its water ports
 MOUNT_PORTS.pumptank = [...TANK, ...MACHINE(4, 9)];
+// Lights take one feed on their post
+MOUNT_PORTS.lamppost = [{ type: 'power', sides: 'any', each: 'module', zMm: [6, 12], along: [0.46, 0.54], capacity: 1 }];
+MOUNT_PORTS.floodlight = [{ type: 'power', sides: 'any', each: 'module', zMm: [6, 14], along: [0.44, 0.56], capacity: 1 }];
 // A junction box sits on an outward wall of wall-bearing families that carry one
 for (const family of JUNCTION_FAMILIES) MOUNT_PORTS[family] = [...(MOUNT_PORTS[family] || []), JUNCTION];
 

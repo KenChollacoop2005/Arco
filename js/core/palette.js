@@ -38,6 +38,8 @@ export const GROUPS = {
   tinBlue: [0x6f8296, KIND_DETAIL, true],
   blade: [0xe4e1da, KIND_SPIN_X, false],
   wheel: [0x7a5a3c, KIND_SPIN_Y, true],
+  lamp: [0xf1dcae, KIND_DETAIL, false],
+  beacon: [0xc23a2c, KIND_DETAIL, false],
 };
 
 export const GROUP_IDS = Object.keys(GROUPS);

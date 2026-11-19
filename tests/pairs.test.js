@@ -5,7 +5,7 @@ import { generate } from '../js/core/generator.js';
 import { structureMounts } from '../js/core/mounts.js';
 import { stringContext } from '../js/core/strings.js';
 import { planPower } from '../js/core/power.js';
-import { planServices, usedPorts, drawnPorts } from '../js/core/services.js';
+import { planServices, usedPorts, drawnPorts, stringLightDemand } from '../js/core/services.js';
 import { serviceLines } from '../js/core/drafting.js';
 
 const HIGH = { density: 2, height: 2, daring: 2, theme: 2 };
@@ -38,7 +38,8 @@ test('no port pair carries more strings than its cap, counted both ways', () => 
 test('the wire cap keeps every port the uncapped wires reached, and it does bite', () => {
   let trimmed = 0;
   for (const { name, seed, modules, mounts, context, plan } of plans()) {
-    const loose = planPower(modules, seed, { ports: mounts, context, pairCap: Infinity });
+    // Same inputs as the planner, string light demand included
+    const loose = planPower(modules, seed, { ports: mounts, context, pairCap: Infinity, extra: stringLightDemand(plan.lights) });
     const reached = (cables) => new Set(cables.flatMap((cable) => [key(cable.from), key(cable.to)]));
     const before = reached(loose.cables);
     const after = reached(plan.wires);

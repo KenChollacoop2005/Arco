@@ -87,6 +87,13 @@ button { cursor: pointer; }
   right: var(--col-right);
   background: radial-gradient(ellipse 80% 70% at 50% 46%, #f8f7f3 0%, var(--paper) 55%, var(--paper-deep) 100%);
 }
+/* Time of day backdrops, light only; Drawing stays on paper */
+body[data-time='dusk']:not([data-mode='drawing']) .stage {
+  background: linear-gradient(to top, #e9b58d 0%, #c99a8f 22%, #8e8aa6 55%, #4f5d82 100%);
+}
+body[data-time='night']:not([data-mode='drawing']) .stage {
+  background: radial-gradient(ellipse 80% 70% at 50% 52%, #26304a 0%, #171d2e 60%, #0d111b 100%);
+}
 #scene { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
 .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .overlay text { font: 10px var(--font-mono); fill: var(--blue); }

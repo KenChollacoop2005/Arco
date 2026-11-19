@@ -4,6 +4,7 @@ import { instanceCells, instancePose, variantKey } from '../core/grid.js';
 import { hashString } from '../core/rng.js';
 import { planeDistance } from '../core/section.js';
 import { POSE_SIZE } from '../core/physics.js';
+import { GROUPS, KIND_GLASS } from '../core/palette.js';
 import { createModuleMaterials, sectionPlanes, STATE_NORMAL, STATE_GHOST, STATE_INVALID } from './materials.js';
 import { createSketch } from './sketch.js';
 
@@ -14,6 +15,34 @@ const ANIM_SIZE = 4; // floats per instance: start, state, height, tone
 const GHOST_TONE = 0.5; // concrete tone of the placement ghost
 const CUT_ORDER = 1; // stencil pass draws before the fill
 const MM_PER_CELL = CELL_MM; // physics poses arrive in cells
+const LIGHT_SIZE = 2; // floats per instance: lit share, flicker
+const GOLDEN = 0.618034; // spreads window ids over 0 to 1
+// Glow marks per vertex: sign, lamp, beacon; windows get 0 to 1
+const GLOW_MARKS = new Map([[GROUPS.signSocial[0], -1], [GROUPS.lamp[0], -2], [GROUPS.beacon[0], -3]]);
+
+// One id per glass pane, signs, lamps and beacons marked below zero
+function glowMarks(render) {
+  const count = render.positions.length / 3;
+  const marks = new Float32Array(count);
+  const parent = Int32Array.from({ length: count }, (unused, vertex) => vertex);
+  const root = (vertex) => {
+    while (parent[vertex] !== vertex) vertex = parent[vertex] = parent[parent[vertex]];
+    return vertex;
+  };
+  const glass = (vertex) => render.meta[vertex * 3] === KIND_GLASS;
+  for (let corner = 0; corner < render.index.length; corner += 3) {
+    const [first, second, third] = [render.index[corner], render.index[corner + 1], render.index[corner + 2]];
+    if (!glass(first)) continue;
+    parent[root(second)] = root(first);
+    parent[root(third)] = root(first);
+  }
+  for (let vertex = 0; vertex < count; vertex++) {
+    const color = (render.colors[vertex * 3] << 16) | (render.colors[vertex * 3 + 1] << 8) | render.colors[vertex * 3 + 2];
+    if (glass(vertex)) marks[vertex] = ((root(vertex) + 1) * GOLDEN) % 1;
+    else if (GLOW_MARKS.has(color)) marks[vertex] = GLOW_MARKS.get(color);
+  }
+  return marks;
+}
 
 const srgbToLinear = (value) => {
   const share = value / 255;
@@ -28,6 +57,7 @@ function toGeometry(render) {
   geometry.setAttribute('position', new THREE.BufferAttribute(render.positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute('aMeta', new THREE.BufferAttribute(render.meta, 3));
+  geometry.setAttribute('aWin', new THREE.BufferAttribute(glowMarks(render), 1));
   geometry.setIndex(new THREE.BufferAttribute(render.index, 1));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
@@ -53,6 +83,7 @@ export function createModuleView(view, requestGeometry) {
   let records = new Map();
   let generation = 0;
   let ghost = null;
+  let lights = new Map();
 
   function clear() {
     for (const batch of batches.values()) {
@@ -127,13 +158,16 @@ export function createModuleView(view, requestGeometry) {
       record.index = index;
     });
     geometry.setAttribute('aAnim', anim);
+    const light = new THREE.InstancedBufferAttribute(new Float32Array(entries.length * LIGHT_SIZE), LIGHT_SIZE);
+    entries.forEach((record, index) => light.setXY(index, ...(lights.get(record.instance.id) || [0, 0])));
+    geometry.setAttribute('aLight', light);
     mesh.customDepthMaterial = materials.depth;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     mesh.userData.ids = entries.map((record) => record.instance.id);
     group.add(mesh);
-    const batch = { mesh, anim, cutters: [] };
+    const batch = { mesh, anim, light, cutters: [] };
     batches.set(key, batch);
     if (clip) addCutters(batch);
     const last = Math.max(...entries.map((record) => record.start));
@@ -235,6 +269,18 @@ export function createModuleView(view, requestGeometry) {
     view.requestRender();
   }
 
+  // Lit window share and flicker per module id
+  function setLights(map) {
+    lights = map;
+    for (const record of records.values()) {
+      const batch = batches.get(record.key);
+      if (!batch) continue;
+      batch.light.setXY(record.index, ...(lights.get(record.instance.id) || [0, 0]));
+      batch.light.needsUpdate = true;
+    }
+    view.requestRender();
+  }
+
   function pick(raycaster) {
     const hit = visibleHit(raycaster);
     return hit ? hit.object.userData.ids[hit.instanceId] : null;
@@ -293,6 +339,7 @@ export function createModuleView(view, requestGeometry) {
   return {
     setStructure,
     setState,
+    setLights,
     setGhost,
     setClip,
     setPoses,

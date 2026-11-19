@@ -84,9 +84,63 @@ export const CAMERA_ZOOM_MAX = 9; // closest zoom factor
 
 // Effects
 export const SMOKE_PARTICLES_MAX = 160; // smoke particle cap
+export const SMOKE_PER_EMITTER = 5; // smoke puffs alive per stack
+export const STEAM_PER_EMITTER = 4; // steam wisps alive per vent
+export const SMOKE_LIFE_S = [5, 8]; // smoke puff life range
+export const STEAM_LIFE_S = [2, 3.4]; // steam wisp life range
+export const SMOKE_RISE_MM = [22, 34]; // smoke rise over its life
+export const STEAM_RISE_MM = [10, 16]; // steam rise over its life
+export const SMOKE_DRIFT_MM = 9; // smoke sideways drift over its life
+export const SMOKE_SIZE_MM = [2.5, 9]; // smoke puff size, born to faded
+export const STEAM_SIZE_MM = [1.6, 5]; // steam wisp size, born to faded
+export const SMOKE_ALPHA = 0.16; // smoke puff peak opacity
+export const STEAM_ALPHA = 0.12; // steam wisp peak opacity
+export const DRIPS_PER_FALL = 2; // droplets per falling sheet
+export const DRIPS_MAX = 24; // droplet cap
+export const DRIP_CYCLE_S = [2.5, 6]; // seconds between droplets, per droplet
+export const DRIP_LIFE_S = 0.5; // droplet flight time
+export const DRIP_SPEED_MM = 9; // droplet sideways speed, mm per second
+export const DRIP_GRAVITY_MM = 60; // droplet fall, mm per second squared
+export const DRIP_SIZE_MM = 0.7; // droplet size
+export const DRIP_ALPHA = 0.5; // droplet opacity
+export const PARTICLE_LIGHT_SHARE = 0.4; // share of particles kept on the light preset
 export const RUNOFF_STREAMS_MAX = 4; // runoff stream cap
 export const TURBINE_RPM = 22; // rotor speed
 export const TARP_SWAY_MM = 0.5; // tarp sway size
+
+// Time of day, visual only
+export const TIMES = ['day', 'dusk', 'night']; // slider stops, left to right
+export const TIME_KEY = 'arco.time'; // remembered time of day
+// Per time: key colour, key strength, key direction, sky colour, ground colour, fill strength
+export const DUSK_LIGHT = [0xffa25e, 2.3, [-0.9, -0.32, 0.26], 0x7f93c4, 0x6b5448, 0.95];
+export const NIGHT_LIGHT = [0x8ea6dc, 0.42, [0.35, -0.55, 0.75], 0x26314f, 0x15171d, 0.42];
+export const WINDOW_GLOW = { day: 0, dusk: 0.55, night: 1 }; // window and lamp glow strength by time
+export const WINDOW_LIT_SHARE = 0.82; // share of windows lit at full power
+export const WINDOW_WARM = [[1, 0.72, 0.4], [1, 0.84, 0.58]]; // window glow colour range, linear
+export const WINDOW_GLOW_STRENGTH = 1.6; // window emissive strength at night
+export const SIGN_GLOW_STRENGTH = 0.55; // amenity sign glow, share of its colour
+export const LAMP_GLOW_STRENGTH = 2.4; // lamp bulb emissive strength at night
+export const LAMP_DAY_GLOW = 0.15; // lamp bulb glow share in daylight
+export const FLICKER_SHARE = 0.5; // power share under which lit windows flicker
+export const FLICKER_PERIOD_S = [1.6, 4.5]; // seconds between flicker dips, per window
+export const FLICKER_OFF_SHARE = 0.14; // share of each period a window is out
+export const BEACON_PERIOD_S = 1.8; // beacon blink cycle
+export const BEACON_ON_SHARE = 0.35; // share of the cycle a beacon is lit
+export const POOL_RADIUS_MM = 26; // lamp light pool radius on the ground
+export const POOL_STRENGTH = { day: 0, dusk: 0.35, night: 0.8 }; // light pool opacity by time
+export const NIGHT_POINT_LIGHTS = 4; // real point lights at the brightest lamp clusters
+export const POINT_LIGHT_STRENGTH = 900; // point light intensity at night
+export const POINT_LIGHT_REACH_MM = 110; // point light distance
+export const POINT_CLUSTER_MM = 60; // lamps within this join one cluster
+
+// Lights from power and light pieces
+export const LIGHT_DEMAND = { lamppost: 0.25, floodlight: 0.25, beacon: 0.25, stringlights: 0.25 }; // power per light
+export const LIGHT_RADIUS_CELLS = { lamppost: 2, floodlight: 3.5, stringlights: 1.5 }; // outdoor light reach in cells
+export const STRING_LIGHTS_MAX = 4; // most string light runs per structure
+export const STRING_LIGHTS_CHANCE = 0.4; // chance a free line hook starts a run
+export const STRING_LIGHTS_SAG = [0.06, 0.12]; // string light sag, share of the span
+export const STRING_BULB_GAP_MM = 3; // spacing of bulbs along a run
+export const STRING_BULB_MM = 0.55; // bulb radius
 
 // Toggles
 export const LIGHT_CORES_MAX = 4; // cores at or under this: light preset

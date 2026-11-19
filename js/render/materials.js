@@ -1,5 +1,8 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { BUILD_MS_PER_MODULE, TURBINE_RPM, TARP_SWAY_MM } from '../config.js';
+import {
+  BUILD_MS_PER_MODULE, TURBINE_RPM, TARP_SWAY_MM, WINDOW_WARM, WINDOW_GLOW_STRENGTH, SIGN_GLOW_STRENGTH, LAMP_GLOW_STRENGTH,
+  LAMP_DAY_GLOW, FLICKER_PERIOD_S, FLICKER_OFF_SHARE, BEACON_PERIOD_S, BEACON_ON_SHARE,
+} from '../config.js';
 
 const BOARD_MM = 3.2; // board mark spacing
 const BOARD_LINE_DARKEN = 0.12; // board joint strength
@@ -54,13 +57,19 @@ export const sharedUniforms = {
   uGrid: { value: 0 },
   uSpin: { value: (TURBINE_RPM * Math.PI * 2) / 60 },
   uSway: { value: TARP_SWAY_MM },
+  uGlow: { value: 0 },
 };
+const vec3 = (rgb) => `vec3(${rgb.map(glsl).join(', ')})`;
 
 const VERTEX_HEAD = `
 attribute vec3 aMeta;
+attribute float aWin;
 #ifdef ARCO_INSTANCED
 attribute vec4 aAnim;
+attribute vec2 aLight;
 #endif
+varying float vWin;
+varying vec2 vLight;
 uniform float uTime;
 uniform float uDuration;
 uniform float uEffects;
@@ -77,12 +86,15 @@ varying float vTone;
 const VERTEX_BODY = `
 vLocal = position;
 vKind = aMeta.x;
+vWin = aWin;
 #ifdef ARCO_INSTANCED
+vLight = aLight;
 vPhase = (uTime - aAnim.x) / uDuration;
 vState = aAnim.y;
 vTall = aAnim.z;
 vTone = aAnim.w;
 #else
+vLight = vec2(0.0);
 vPhase = 2.0;
 vState = 0.0;
 vTall = 1.0;
@@ -106,6 +118,11 @@ if (uEffects > 0.5 && aMeta.x > 5.5) {
 `;
 
 const FRAGMENT_HEAD = `
+uniform float uTime;
+uniform float uEffects;
+uniform float uGlow;
+varying float vWin;
+varying vec2 vLight;
 uniform float uDrawing;
 uniform float uGrid;
 varying vec3 vLocal;
@@ -163,6 +180,28 @@ diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, gridLine * ${glsl(GRID_STRENGT
 #endif
 `;
 
+// Lit windows, signs, lamps and beacons, from the module's power
+const FRAGMENT_GLOW = `
+#ifdef ARCO_INSTANCED
+if (vLight.x > 0.0 && uDrawing < 0.5) {
+  if (vKind > 1.5 && vKind < 2.5 && uGlow > 0.0 && arcoHash(vec3(vWin * 17.0, vTone * 53.0, 3.1)) < vLight.x) {
+    float arcoOn = 1.0;
+    if (uEffects > 0.5 && vLight.y > 0.5) {
+      float period = mix(${glsl(FLICKER_PERIOD_S[0])}, ${glsl(FLICKER_PERIOD_S[1])}, arcoHash(vec3(vWin, vTone, 7.7)));
+      arcoOn = step(${glsl(FLICKER_OFF_SHARE)}, fract(uTime / period + arcoHash(vec3(vWin, vTone, 9.1))));
+    }
+    vec3 warm = mix(${vec3(WINDOW_WARM[0])}, ${vec3(WINDOW_WARM[1])}, arcoHash(vec3(vWin, vTone, 5.3)));
+    totalEmissiveRadiance += warm * arcoOn * uGlow * ${glsl(WINDOW_GLOW_STRENGTH)};
+  }
+  if (vWin < -0.5 && vWin > -1.5) totalEmissiveRadiance += diffuseColor.rgb * uGlow * ${glsl(SIGN_GLOW_STRENGTH)};
+  if (vWin < -1.5) {
+    float blink = vWin < -2.5 && uEffects > 0.5 ? step(fract(uTime / ${glsl(BEACON_PERIOD_S)}), ${glsl(BEACON_ON_SHARE)}) : 1.0;
+    totalEmissiveRadiance += diffuseColor.rgb * blink * max(uGlow, ${glsl(LAMP_DAY_GLOW)}) * ${glsl(LAMP_GLOW_STRENGTH)};
+  }
+}
+#endif
+`;
+
 function patch(material, defines) {
   material.defines = { ...(material.defines || {}), ...defines };
   material.onBeforeCompile = (shader) => {
@@ -173,6 +212,9 @@ function patch(material, defines) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + FRAGMENT_HEAD)
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAGMENT_DISCARD);
+    if (shader.fragmentShader.includes('#include <emissivemap_fragment>')) {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + FRAGMENT_GLOW);
+    }
     if (shader.fragmentShader.includes('#include <color_fragment>')) {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',

@@ -102,6 +102,8 @@ const TABLE = [
   ['courier', 'Living', 'Courier depot', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
   ['canteen', 'Living', 'Canteen', 'neutral', ['1x2', '2x2'], [1, 2], 1, 0, 0, 1, 0],
   ['lookout', 'Outdoor', 'Lookout', 'neutral', ['1x1'], [1, 2], 0, 0, 0, 0, 0],
+  ['lamppost', 'Roof and services', 'Lamp post', 'neutral', ['1x1'], [1, 1], 0, 0, 0, 0, 0],
+  ['floodlight', 'Roof and services', 'Floodlight', 'neutral', ['1x1'], [1, 2], 0, 0, 0, 0, 0],
 ];
 
 // Categories the Generate panel can switch off; everything else is always on
@@ -113,7 +115,7 @@ const CATEGORY_LISTS = {
   nature: ['farm', 'garden', 'greenhouse', 'planted'],
   industrial: ['smokestack', 'chimney', 'tankfarm', 'gantry', 'cooling', 'generator', 'disposal'],
   walled: ['shacks', 'flared'],
-  utilities: ['pumproom', 'smallpump', 'pumptank', 'watermain', 'powerroom', 'turbine', 'solar', 'generator', 'well', 'spring', 'raincatcher', 'wheel', 'wheelup', 'runoff', 'disposal'],
+  utilities: ['pumproom', 'smallpump', 'pumptank', 'watermain', 'powerroom', 'turbine', 'solar', 'generator', 'well', 'spring', 'raincatcher', 'wheel', 'wheelup', 'runoff', 'disposal', 'lamppost', 'floodlight'],
 };
 // What a resident might walk to: one type per amenity, for the walking network
 const AMENITY_TYPES = { market: 'market', shop: 'shop', hall: 'hall', ...Object.fromEntries(AMENITY_IDS.map((id) => [id, id])) };
@@ -138,6 +140,9 @@ export const OPEN_SIDE_FAMILIES = ['lookout', 'terrace', 'patio', 'balcony'];
 export const openSides = (variant) => (OPEN_SIDE_FAMILIES.includes(variant.family) ? ~variant.mask & 15 : 0);
 // Families that stand on support below, never hang in a group
 export const STANDING_FAMILIES = ['lookout'];
+
+// Families that may carry a blinking beacon
+export const BEACON_FAMILIES = ['antenna'];
 
 // Families kept in code but never generated or placed
 export const DISABLED_FAMILIES = ['wheelup'];
@@ -240,6 +245,8 @@ export function normalizeVariant(variant) {
   if (dock) record.dock = dock;
   // A junction box is a render only option, kept only where it may go
   if (variant.jb && JUNCTION_FAMILIES.includes(variant.family)) record.jb = 1;
+  // A beacon is a render only fitting on an antenna
+  if (variant.bc && BEACON_FAMILIES.includes(variant.family)) record.bc = 1;
   // Bridge ends; docked ends plug into their docks and stay open
   if (Number.isInteger(variant.ends) && variant.ends > 0 && END_FAMILIES.includes(variant.family) && !record.dock) record.ends = variant.ends & 15;
   return record;

@@ -6,6 +6,7 @@ import { addBalconies } from './balcony.js';
 import { addJetties } from './jetty.js';
 import { PIECE_RECIPES, turbineForm, solarForm } from './pieces.js';
 import { AMENITY_RECIPES } from './amenities.js';
+import { LAMP_RECIPES, addBeacon } from './lamps.js';
 
 const SINK_MM = 0.25; // parts sunk into what holds them
 const CUT_OVER_MM = 1; // cut overshoot past a face
@@ -786,6 +787,7 @@ const RECIPES = {
           ['steel', neck, neck + flareHeight, radius, radius + flare],
           ['soot', neck + flareHeight, neck + flareHeight + capHeight, radius + flare, 0.8],
         ]);
+        kit.anchors.steam.push([centerX + shift, centerY - shift * 0.4, neck + flareHeight + capHeight]);
       }
     }
   },
@@ -819,6 +821,7 @@ const RECIPES = {
       kit.add('concrete', prismX(octagon(centerY, height, drum), centerX, centerX + side * drumLength));
     }
     kit.add('hazard', cyl(centerX, centerY, mastTop, kit.H, LAMP_MM[0], LAMP_MM[0], 8));
+    addBeacon(kit, centerX, centerY);
   },
 
   brise(kit) {
@@ -1034,7 +1037,7 @@ const RECIPES = {
     const bowlBase = kit.H - COOL_BOWL_MM;
     const bowlLow = lerp(throat, rim, 1 - COOL_BOWL_MM / (kit.H * (1 - COOL_SHAPE[2][0]))) - THIN_MM - 0.4;
     kit.cut(cyl(centerX, centerY, bowlBase, kit.H + 1, bowlLow, rim - THIN_MM + (rim - THIN_MM - bowlLow) / COOL_BOWL_MM, TANK_SIDES));
-    kit.anchors.smoke.push([centerX, centerY, kit.H]);
+    kit.anchors.steam.push([centerX, centerY, kit.H]);
   },
 
   solar(kit) {
@@ -1204,7 +1207,7 @@ const RECIPES = {
   },
 };
 
-Object.assign(RECIPES, PIECE_RECIPES, AMENITY_RECIPES);
+Object.assign(RECIPES, PIECE_RECIPES, AMENITY_RECIPES, LAMP_RECIPES);
 
 export const RECIPE_IDS = Object.keys(RECIPES);
 

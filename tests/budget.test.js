@@ -10,15 +10,15 @@ import { runChecks } from '../js/core/checks.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { makeBudget, budgetCap, withinBudget, growRoll, generateLimits, growLimits, placeCap, budgetParams, budgetFromParams } from '../js/core/budget.js';
 
-// Generate and Grow results, re-recorded after the roof fill, pilotis and plinth caps tuning
+// Generate and Grow results, re-recorded after the light pieces (lamp posts, floodlights, beacons)
 const BEFORE = {
-  'barbican mega 2': [208, '9492f6adccb48715', 190, '0092419200959926'],
+  'barbican mega 2': [208, '5ea30e7e1cbd5764', 198, 'd3eba92f2808ab23'],
   'habitat block 1': [32, 'a6080569911070d8', 36, '7e10369b1ad1312a'],
-  'arco unit 1': [1, '6b6828ffe3949732', 42, '790f8473940d355d'],
-  'beton block 0': [26, 'ec4ed5087adccbf6', 32, 'c75645fc12dee9bf'],
-  'golden mega 1': [198, '178ca571822cb7b1', 124, 'd92075600b157fcd'],
+  'arco unit 1': [1, '6b6828ffe3949732', 43, 'edb29a958f8102d8'],
+  'beton block 0': [26, '6e6573f4f2378c36', 32, 'aa9dc6ece6d85773'],
+  'golden mega 1': [199, 'e54c5c3da7b460fe', 125, 'a7081b0cd1029b9a'],
 };
-const OPENING_BEFORE = [20, '40d036087cca72c8'];
+const OPENING_BEFORE = [20, 'de34b478fb4b4f6c'];
 
 const choicesOf = (name) => {
   const [seed, scale, level] = name.split(' ');

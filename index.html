@@ -122,6 +122,13 @@
                 <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>
                 <label class="check"><input type="checkbox" id="skipAnimation"><span data-copy="viewSkip"></span></label>
               </fieldset>
+              <div class="field">
+                <label for="timeOfDay" data-copy="timeOfDay"></label>
+                <div class="stops">
+                  <input type="range" id="timeOfDay" min="0" max="2" step="1" value="0">
+                  <div class="stop-labels" aria-hidden="true"><span data-copy="timeDay"></span><span data-copy="timeDusk"></span><span data-copy="timeNight"></span></div>
+                </div>
+              </div>
             </div>
           </details>
           <input type="hidden" name="theme" value="1">

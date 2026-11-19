@@ -238,7 +238,7 @@ export function createKit(variant, clearance = CONNECTOR_CLEARANCE_MM) {
     stories: variant.h,
     roof: !!variant.roof,
     ops,
-    anchors: { smoke: [], outlet: [], spin: null },
+    anchors: { smoke: [], steam: [], lamps: [], outlet: [], spin: null },
     rng: makeRng(mixSeed(variant.seed >>> 0, hashString(variant.family))),
     // Style choices shared across sizes of one seed
     styleRng: makeRng(mixSeed(variant.seed >>> 0, 0x51f15e)),

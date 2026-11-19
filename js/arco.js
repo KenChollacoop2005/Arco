@@ -1,4 +1,4 @@
-import { CONNECTOR_CLEARANCE_MM, STORY_MM } from './config.js';
+import { CONNECTOR_CLEARANCE_MM, STORY_MM, TIMES, WINDOW_GLOW } from './config.js';
 import { COPY } from './ui/copy.js';
 import { setupLegend } from './ui/legend.js';
 import { setupGenerate } from './ui/generate.js';
@@ -27,6 +27,7 @@ import { createWorkerClient } from './workers/client.js';
 import { drawnPorts } from './core/services.js';
 import { streamFrom } from './core/stream.js';
 import { createWaterworks } from './render/waterworks.js';
+import { createNightLights } from './render/nightlights.js';
 import { growLimits, placeCap } from './core/budget.js';
 import { setupDrawers } from './ui/drawers.js';
 import { setupGrowTool } from './ui/growtool.js';
@@ -129,7 +130,7 @@ function refreshDuplicate() {
 
 function showInspector() {
   const selected = selectedModule();
-  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit }, selected);
+  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, lights: app.analysis && app.analysis.lights, printOf, socketsOf, fit: app.fit }, selected);
   query('#saveModule').disabled = !selected;
   refreshDuplicate();
   query('#exportModule').disabled = !selected;
@@ -360,6 +361,35 @@ app.analysisListeners.push(refreshFlows);
 app.modeListeners.push(refreshFlows);
 app.structureListeners.push(() => refreshFlows());
 query('#physicsToggle').addEventListener('change', refreshFlows);
+
+// Time of day: light only, never power, water or checks
+const nightLights = createNightLights(view, toggles.light);
+let timeOfDay = TIMES[0];
+let lightMotion = false;
+function applyTime() {
+  timeOfDay = TIMES[Number(query('#timeOfDay').value)] || TIMES[0];
+  document.body.dataset.time = timeOfDay;
+  view.setTime(timeOfDay);
+  sharedUniforms.uGlow.value = WINDOW_GLOW[timeOfDay];
+  nightLights.setTime(timeOfDay);
+}
+query('#timeOfDay').addEventListener('input', applyTime);
+applyTime();
+
+// Windows, lamps and beacons follow each module's power
+function refreshLights() {
+  const plan = app.analysis && app.analysis.lights;
+  const still = plan && app.structure && builtResult === app.structure;
+  modules.setLights(new Map(plan ? Object.entries(plan.modules).map(([id, entry]) => [Number(id), entry.window]) : []));
+  nightLights.set(still ? plan : null);
+  nightLights.setShown(app.mode !== 'drawing' && !query('#physicsToggle').checked);
+  lightMotion = !!plan && (Object.values(plan.modules).some((entry) => entry.window[1] > 0) || plan.beacons.some((beacon) => beacon.lit));
+}
+app.analysisListeners.push(refreshLights);
+app.modeListeners.push(refreshLights);
+app.structureListeners.push(() => refreshLights());
+query('#physicsToggle').addEventListener('change', refreshLights);
+view.onFrame(() => lightMotion && sharedUniforms.uEffects.value > 0 && (sharedUniforms.uGlow.value > 0 || (!!app.analysis && app.analysis.lights.beacons.some((beacon) => beacon.lit))));
 
 // Home resets the view, like a double click on empty space
 window.addEventListener('keydown', (event) => {

@@ -4,6 +4,8 @@ import { stringContext } from '../core/strings.js';
 import { planServices } from '../core/services.js';
 import { pourPaths } from '../core/falls.js';
 import { walkingNetwork, walkingLines } from '../core/walking.js';
+import { lightPlan } from '../core/lights.js';
+import { particleEmitters } from '../core/emitters.js';
 
 // Active string ports, only what the renderer and inspector need
 const portView = (port) => ({ module: port.module, index: port.index, type: port.type, capacity: port.capacity, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
@@ -22,7 +24,9 @@ self.onmessage = (event) => {
     // Walking: per module reach and nearest amenities, and the drawing lines
     const network = walkingNetwork(modules);
     const walking = { modules: network.modules, lines: walkingLines(network, modules) };
-    self.postMessage({ id, done: true, result: { ...analyze(modules), flows, walking } });
+    // Lit windows, outdoor lights and the cells they light
+    const lights = lightPlan(modules, services);
+    self.postMessage({ id, done: true, result: { ...analyze(modules), flows, walking, lights, emitters: particleEmitters(modules) } });
   } catch (error) {
     self.postMessage({ id, error: String(error && error.message ? error.message : error) });
   }
