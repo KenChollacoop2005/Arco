@@ -127,9 +127,10 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     try {
       const { base, removed } = growBase(build.modules, zone, replace);
       // One adopt of the result, so clearing and growing undo together
-      const result = await hooks.grow(base, zone);
+      const result = await hooks.grow(base, zone, removed);
       const cleared = removed.length > 0 ? `. ${removed.length} ${COPY.growCleared}` : '';
-      if (result) line.textContent = (result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${zone ? COPY.growNoneHere : COPY.growNone} ${result.seed}`) + cleared;
+      if (result && result.skipped) line.textContent = COPY.growNothingHere;
+      else if (result) line.textContent = (result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${zone ? COPY.growNoneHere : COPY.growNone} ${result.seed}`) + cleared;
     } catch {
       line.textContent = COPY.loadFailed;
     } finally {

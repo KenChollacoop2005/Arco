@@ -62,6 +62,13 @@ export function growBase(modules, zone, replace) {
   return { base: modules.filter((instance) => !removed.has(instance.id)), removed: [...removed] };
 }
 
+// Ids a grow added; null when it only cleared clutter, so nothing should land
+export function grownIds(base, grown, removed = []) {
+  const known = new Set(base.map((instance) => instance.id));
+  const added = new Set(grown.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
+  return added.size === 0 && removed.length > 0 ? null : added;
+}
+
 // Grow here zone: a sphere of whole cells around a point in mm
 export const growZone = (point, cells) => ({ center: point.slice(0, 3), radius: cells * CELL_MM });
 

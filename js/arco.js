@@ -18,7 +18,7 @@ import { setupBuild } from './ui/build.js';
 import { setupPhysics } from './ui/physics.js';
 import { setupToggles, bindToggle } from './ui/toggles.js';
 import { createCollection } from './core/collection.js';
-import { growOptions } from './core/build.js';
+import { growOptions, grownIds } from './core/build.js';
 import { structureHash, variantKey } from './core/grid.js';
 import { SECTION_STEPS, sectionShare } from './core/section.js';
 import { freezeDeep } from './core/analysis.js';
@@ -251,13 +251,14 @@ function showBuild(list, options = {}) {
 }
 
 // Generator run that keeps every current module; a zone limits new ones
-async function growStructure(base, zone = null) {
+// A zone that only cleared clutter changes nothing and leaves no undo step
+async function growStructure(base, zone = null, removed = []) {
   const token = ++generateToken;
   const choices = generatePanel.readOptions();
   const result = await generator.call({ options: { ...growOptions(choices, base, zone), ...growLimits(generatePanel.readBudget(), choices.seed, base.length) } });
   if (token !== generateToken) return null;
-  const known = new Set(base.map((instance) => instance.id));
-  const only = new Set(result.modules.filter((instance) => !known.has(instance.id)).map((instance) => instance.id));
+  const only = grownIds(base, result.modules, removed);
+  if (!only) return { added: 0, seed: result.seed, skipped: true };
   app.stream = result.stream;
   builder.adopt(result.modules, streamFrom(result.stream));
   showStructure(result, { only });

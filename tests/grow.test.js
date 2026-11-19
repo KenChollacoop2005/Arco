@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBuild, growOptions, growBase, growZone, zoneCenter, CLUTTER_FAMILIES } from '../js/core/build.js';
+import { createBuild, growOptions, growBase, grownIds, growZone, zoneCenter, CLUTTER_FAMILIES } from '../js/core/build.js';
 import { generate } from '../js/core/generator.js';
 import { worldFromModules, SIDES, instanceCells, instanceInZone } from '../js/core/grid.js';
 import { CELL_MM, STORY_MM, GROW_ZONE_CELLS } from '../js/config.js';
@@ -250,4 +250,27 @@ test('replace roof clutter clears only free roof pieces inside the zone, and not
     cleared += on.removed.length;
   }
   assert.ok(cleared > 0, 'some zones clear roof pieces');
+});
+
+test('a zone that would only clear roof clutter lands nothing; one that grows lands only its new modules', () => {
+  const base = generate({ seed: 'arco', scale: 'block', ...CHOICES, services: 'high' });
+  const clutter = base.modules.filter((instance) => CLUTTER_FAMILIES.includes(instance.family)).map((instance) => instance.id);
+  const cleared = base.modules.filter((instance) => !clutter.includes(instance.id));
+  assert.equal(grownIds(cleared, cleared, clutter), null, 'cleared but nothing grew: nothing lands');
+  assert.deepEqual([...grownIds(base.modules, base.modules, [])], [], 'nothing cleared and nothing grew lands as before');
+  // A real Grow here run with replace on, on the first zone that clears and grows
+  for (const piece of base.modules.filter((instance) => clutter.includes(instance.id))) {
+    const [x, y] = instanceCells(piece)[0];
+    const zone = growZone(zoneCenter([(x + 0.5) * CELL_MM, (y + 0.5) * CELL_MM, (piece.z + 0.5) * STORY_MM]), GROW_ZONE_CELLS.L);
+    const { base: kept, removed } = growBase(base.modules, zone, true);
+    if (removed.length === 0) continue;
+    const grown = generate(growOptions({ seed: 'arco', scale: 'block', ...CHOICES, services: 'high' }, kept, zone));
+    const ids = grownIds(kept, grown.modules, removed);
+    if (!ids || ids.size === 0) continue;
+    const keptIds = new Set(kept.map((instance) => instance.id));
+    assert.ok([...ids].every((id) => !keptIds.has(id)), 'only new modules are counted');
+    assert.equal(grown.modules.length, kept.length + ids.size);
+    return;
+  }
+  assert.fail('no zone cleared clutter and grew');
 });
