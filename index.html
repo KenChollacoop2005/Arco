@@ -208,7 +208,6 @@
     <details class="drawer print-drawer" id="printDrawer" data-drawer-key="arco.drawer.print">
       <summary data-copy="printTitle"></summary>
       <div class="drawer-body">
-        <button type="button" class="primary" id="printSave" data-copy="saveToCollection"></button>
         <button type="button" class="plain" id="exportModule" data-copy="exportModule"></button>
         <button type="button" class="plain" id="exportSelected" data-copy="exportSelection"></button>
         <button type="button" class="plain" id="exportAll" data-copy="exportEverything"></button>
@@ -222,6 +221,13 @@
         <p class="status" id="exportStatus" role="status"></p>
       </div>
     </details>
+    </section>
+    <!-- Action box: always last on the right -->
+    <section class="panel action-panel" aria-label="Module actions">
+      <div class="button-grid">
+        <button type="button" class="plain" id="duplicateModule" data-copy="duplicate" disabled></button>
+        <button type="button" class="primary" id="saveModule" data-copy="save" disabled></button>
+      </div>
     </section>
   </aside>
 

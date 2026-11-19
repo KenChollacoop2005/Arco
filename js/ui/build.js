@@ -2,10 +2,12 @@ import { createBuild, nextRot, growBase } from '../core/build.js';
 import { COPY } from './copy.js';
 import { renderBuildCards, CATEGORY_COPY } from './cards.js';
 import { FAMILIES } from '../core/catalog.js';
+import { variantKey } from '../core/grid.js';
 
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 const ALL = 'all'; // category filter value for every category
 const SANDBOX_COUNT = Infinity; // pieces of each saved module in the sandbox
+const COPY_PREFIX = 'copy:'; // key of a duplicate, never a saved card
 
 // Hooks: show(modules, {only}), grow(modules, zone), targetAt(event)
 export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
@@ -50,6 +52,9 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     renderBuildCards(palette, shown(), { onPick: pick, onDrag: (entry) => pick(entry, true), pressedKey: picked ? picked.key : '' });
   }
 
+  const isCopy = () => !!picked && picked.key.startsWith(COPY_PREFIX);
+  const pickedText = () => (isCopy() ? COPY.duplicatePicked : COPY.buildPicked);
+
   function ghostAt(event) {
     const target = event ? hooks.targetAt(event) : null;
     return target ? build.ghost(picked.variant, target.x, target.y, turn) : null;
@@ -58,14 +63,14 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   function refreshGhost() {
     const ghost = active() && picked ? ghostAt(pointerEvent) : null;
     moduleView.setGhost(ghost ? ghost.instance : null, ghost ? !ghost.ok : false);
-    if (picked && active()) status.textContent = ghost && !ghost.ok ? ghost.reason : COPY.buildPicked;
+    if (picked && active()) status.textContent = ghost && !ghost.ok ? ghost.reason : pickedText();
   }
 
   // Picking the pressed card again puts it down, unless keep is set
   function pick(entry, keep = false) {
     picked = entry && (keep || !picked || picked.key !== entry.key) ? entry : null;
     turn = 0;
-    status.textContent = picked ? COPY.buildPicked : '';
+    status.textContent = picked ? pickedText() : '';
     refreshPalette();
     refreshGhost();
     if (picked) moduleView.prepare([picked.variant]).then(refreshGhost, () => {});
@@ -190,7 +195,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   collectionPanel.onChange((list) => {
     // Switched off families stay out of the palette
     entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled).map((entry) => ({ ...entry, count: SANDBOX_COUNT }));
-    if (picked && !entries.some((entry) => entry.key === picked.key)) picked = null;
+    if (picked && !isCopy() && !entries.some((entry) => entry.key === picked.key)) picked = null;
     refreshPalette();
     refreshGhost();
   });
@@ -218,6 +223,17 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       build.setStream(stream);
       build.replace(modules);
       refreshButtons();
+    },
+    // Picks up a copy of a placed module, not saved to the Collection
+    duplicate(instance) {
+      const { id, x, y, z, rot, ...variant } = instance;
+      pick({ key: COPY_PREFIX + variantKey(variant), variant, count: SANDBOX_COUNT }, true);
+      turn = rot & 3;
+      refreshGhost();
+    },
+    // Ends a duplicate, kept for cards picked from the palette
+    endDuplicate() {
+      if (isCopy()) pick(null);
     },
     click: place,
   };

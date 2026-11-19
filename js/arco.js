@@ -122,7 +122,8 @@ const selectedModule = () => {
 function showInspector() {
   const selected = selectedModule();
   inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit }, selected);
-  query('#printSave').disabled = !selected;
+  query('#saveModule').disabled = !selected;
+  query('#duplicateModule').disabled = !selected;
   query('#exportModule').disabled = !selected;
   query('#exportSelected').disabled = app.selection.length === 0;
   query('#exportAll').disabled = !app.structure || app.structure.modules.length === 0;
@@ -138,6 +139,7 @@ function select(id, extend) {
   }
   for (const selectedId of next) modules.setState(selectedId, STATE_SELECTED);
   app.selection = next;
+  if (next.length === 0) builder.endDuplicate();
   showInspector();
 }
 
@@ -362,9 +364,16 @@ const exporter = setupExport(app, exportWorker, (fit) => {
   app.fit = fit;
   showInspector();
 });
-query('#printSave').addEventListener('click', () => {
+// Action box: Save to the Collection, or Duplicate as the placement tool
+query('#saveModule').addEventListener('click', () => {
   const selected = selectedModule();
   if (selected) saveModule(selected);
+});
+query('#duplicateModule').addEventListener('click', () => {
+  const selected = selectedModule();
+  if (!selected) return;
+  if (app.mode !== 'generate') setMode('generate');
+  builder.duplicate(selected);
 });
 
 // Collection page; Place in Build picks the module up on the main screen

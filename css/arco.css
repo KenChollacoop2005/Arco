@@ -175,6 +175,7 @@ body[data-mode='drawing'] [data-pane='drawing'] { display: flex; }
 .build-panel > .drawer-body { max-height: var(--build-scroll-max); overflow-y: auto; scrollbar-width: thin; }
 .inspector-panel { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .inspector-panel > .drawer:last-child { border-bottom: 0; }
+.action-panel { padding: 10px 14px; }
 
 /* Drawers: one style for every collapsible column section */
 .drawer { border-bottom: 1px solid var(--hairline); }
