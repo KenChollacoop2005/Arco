@@ -82,6 +82,8 @@ export const COPY = {
   buildEmpty: 'Save a module first. It will show up here.',
   confirmDelete: 'Delete',
   confirmDeleteModule: 'Delete this module?',
+  clear: 'Clear',
+  confirmClear: 'Remove everything on the plinth?',
   cancel: 'Cancel',
   rotate: 'Rotate',
   remove: 'Delete',

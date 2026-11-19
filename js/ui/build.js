@@ -1,6 +1,7 @@
 import { createBuild, nextRot, growBase } from '../core/build.js';
 import { COPY } from './copy.js';
 import { renderBuildCards, CATEGORY_COPY } from './cards.js';
+import { confirmAt } from './confirm.js';
 import { FAMILIES } from '../core/catalog.js';
 import { variantKey } from '../core/grid.js';
 
@@ -135,6 +136,12 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     }
   }
 
+  // Clear asks first; one undo step brings everything back
+  const clearButton = query('#buildClear');
+  clearButton.addEventListener('click', async () => {
+    if (build.modules.length === 0 || !(await confirmAt(clearButton, COPY.confirmClear, COPY.clear))) return;
+    if (build.clear()) step(true);
+  });
   query('#buildRotate').addEventListener('click', rotate);
   query('#buildDelete').addEventListener('click', remove);
   search.addEventListener('input', refreshPalette);

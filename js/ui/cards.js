@@ -15,7 +15,7 @@ export function footprintText(variant) {
 }
 
 // Count as shown on a card: infinite in the sandbox
-export const countText = (count) => `×${count === Infinity ? '∞' : count}`;
+export const countText = (count) => (count === Infinity ? '∞' : String(count));
 
 function node(tag, className, text) {
   const element = document.createElement(tag);
