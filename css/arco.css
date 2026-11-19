@@ -55,6 +55,7 @@
   --panel-gap: 8px; /* space between stacked boxes */
   --legend-room: 80px; /* kept free under the boxes for the legend */
   --build-scroll-max: 52vh; /* Build box scrolls past this height */
+  --seg-pad: 8px; /* side padding inside segment buttons */
   --card-min: 100px;
   --rarity-uncommon: #2f9e78;
   --rarity-rare: #2346c7;
@@ -210,6 +211,7 @@ body[data-mode='drawing'] [data-pane='drawing'] { display: flex; }
 .drawer-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 0 14px 14px; }
 .column { overflow-x: hidden; }
 .button-grid > *, .field-row > * { min-width: 0; }
+.field-row > button { flex: none; }
 .drawer .drawer { border-bottom: 0; border-top: 1px solid var(--hairline); margin: 0 -14px; }
 .drawer .drawer > summary { font-size: 10px; color: var(--ink-soft); padding: 9px 14px; }
 .drawer .drawer .drawer-body { padding-bottom: 10px; }
@@ -229,7 +231,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .seg span {
   display: block;
-  padding: 6px 2px;
+  padding: 6px var(--seg-pad);
   border: 1px solid var(--hairline);
   text-align: center;
   white-space: nowrap;
@@ -238,6 +240,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 }
 .seg input:checked + span { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 1px; }
+.seg.wide { grid-template-columns: repeat(3, auto); }
 .seg.tight { grid-template-columns: repeat(2, auto); }
 .seg.tight span { padding: 6px 10px; }
 
