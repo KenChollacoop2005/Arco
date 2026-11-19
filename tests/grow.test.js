@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBuild, growOptions } from '../js/core/build.js';
+import { createBuild, growOptions, growBase, growZone, zoneCenter, CLUTTER_FAMILIES } from '../js/core/build.js';
 import { generate } from '../js/core/generator.js';
-import { worldFromModules, SIDES } from '../js/core/grid.js';
+import { worldFromModules, SIDES, instanceCells, instanceInZone } from '../js/core/grid.js';
+import { CELL_MM, STORY_MM, GROW_ZONE_CELLS } from '../js/config.js';
 import { validateStructure, reopenSides, outwardMask, supportsUnder } from '../js/core/placement.js';
 import { OPEN_SIDE_FAMILIES, openSides, normalizeVariant } from '../js/core/catalog.js';
 import { buildRecipe } from '../js/core/recipes.js';
@@ -224,4 +225,29 @@ test('a grown result can be grown again and undone', () => {
   assert.deepEqual(build.modules, first.modules);
   build.undo();
   assert.deepEqual(build.modules, base.modules);
+});
+
+test('replace roof clutter clears only free roof pieces inside the zone, and nothing when off', () => {
+  const base = generate({ seed: 'arco', scale: 'block', ...CHOICES, services: 'high' });
+  const kept = (removed) => base.modules.filter((instance) => !removed.includes(instance.id));
+  const restsOn = (other, piece) => other.z === piece.z + piece.h && instanceCells(other).some(([x, y]) => instanceCells(piece).some(([cellX, cellY]) => cellX === x && cellY === y));
+  let cleared = 0;
+  for (const piece of base.modules.filter((instance) => CLUTTER_FAMILIES.includes(instance.family))) {
+    const [x, y] = instanceCells(piece)[0];
+    const zone = growZone(zoneCenter([(x + 0.5) * CELL_MM, (y + 0.5) * CELL_MM, (piece.z + 0.5) * STORY_MM]), GROW_ZONE_CELLS.L);
+    const off = growBase(base.modules, zone, false);
+    assert.equal(off.base, base.modules, 'off leaves the build as it is');
+    assert.deepEqual(off.removed, []);
+    const on = growBase(base.modules, zone, true);
+    const byIdBase = byId(base.modules);
+    for (const id of on.removed) {
+      const removed = byIdBase.get(id);
+      assert.ok(CLUTTER_FAMILIES.includes(removed.family) && removed.z > 0, `${removed.family} is roof clutter`);
+      assert.ok(instanceInZone(removed, zone), `${removed.family} ${id} inside the zone`);
+      assert.ok(!kept(on.removed).some((other) => restsOn(other, removed)), `nothing kept rests on ${removed.family} ${id}`);
+    }
+    assert.equal(on.base.length + on.removed.length, base.modules.length);
+    cleared += on.removed.length;
+  }
+  assert.ok(cleared > 0, 'some zones clear roof pieces');
 });

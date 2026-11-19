@@ -69,6 +69,8 @@ export const COPY = {
   growSize: 'Zone size',
   growHere: 'Grow here',
   growAll: 'Grow everything',
+  growReplace: 'Replace roof clutter',
+  growCleared: 'roof pieces replaced',
   growHereHint: 'Point at the structure, then click or press Enter to grow inside the green zone. Esc stops.',
   growNoneHere: 'Nothing fits in this zone with seed',
   buildSeed: 'edited by hand',

@@ -1,5 +1,5 @@
 import { CELL_MM, STORY_MM, MAX_MODULES } from '../config.js';
-import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight } from './grid.js';
+import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight, instanceCells, instanceInZone } from './grid.js';
 import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure, reopenSides } from './placement.js';
 
@@ -34,6 +34,32 @@ export function growOptions(choices, modules, zone = null) {
   const options = { ...choices, scale: choices.scale === 'unit' ? 'block' : choices.scale, budget: 0, budgetMin: 0, locked: modules.map((instance) => ({ ...instance })) };
   if (zone) Object.assign(options, { zone, seed: zoneSeed(choices.seed, zone) });
   return options;
+}
+
+// Roof and cap pieces Grow here may clear to build over
+export const CLUTTER_FAMILIES = ['smallpump', 'pumptank', 'tank', 'raincatcher', 'solar', 'turbine', 'antenna', 'vent', 'skylight'];
+
+// True when other sits directly on top of piece
+function restsOn(other, piece) {
+  if (other.z !== piece.z + piece.h) return false;
+  const under = new Set(instanceCells(piece).map(([x, y]) => x + ',' + y));
+  return instanceCells(other).some(([x, y]) => under.has(x + ',' + y));
+}
+
+// Base for a grow: with replace on, roof clutter inside the zone that carries nothing kept is left out
+export function growBase(modules, zone, replace) {
+  if (!replace || !zone) return { base: modules, removed: [] };
+  const removed = new Set(modules.filter((instance) => CLUTTER_FAMILIES.includes(instance.family) && instance.z > 0 && instanceInZone(instance, zone)).map((instance) => instance.id));
+  // A piece stays when anything that stays rests on it
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const piece of modules) {
+      if (!removed.has(piece.id) || !modules.some((other) => !removed.has(other.id) && restsOn(other, piece))) continue;
+      removed.delete(piece.id);
+      changed = true;
+    }
+  }
+  return { base: modules.filter((instance) => !removed.has(instance.id)), removed: [...removed] };
 }
 
 // Grow here zone: a sphere of whole cells around a point in mm

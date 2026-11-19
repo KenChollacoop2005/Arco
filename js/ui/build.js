@@ -1,4 +1,4 @@
-import { createBuild, nextRot } from '../core/build.js';
+import { createBuild, nextRot, growBase } from '../core/build.js';
 import { COPY } from './copy.js';
 import { renderBuildCards, CATEGORY_COPY } from './cards.js';
 import { FAMILIES } from '../core/catalog.js';
@@ -110,15 +110,18 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     apply();
   }
 
-  // Grow everything, or only inside a zone; the message goes to the given line
-  async function grow(line, zone = null) {
+  // Grow everything, or only inside a zone; replace clears roof clutter there first
+  async function grow(line, zone = null, { replace = false } = {}) {
     if (growing) return;
     growing = true;
     refreshButtons();
     line.textContent = COPY.growWorking;
     try {
-      const result = await hooks.grow(build.modules, zone);
-      if (result) line.textContent = result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${zone ? COPY.growNoneHere : COPY.growNone} ${result.seed}`;
+      const { base, removed } = growBase(build.modules, zone, replace);
+      // One adopt of the result, so clearing and growing undo together
+      const result = await hooks.grow(base, zone);
+      const cleared = removed.length > 0 ? `. ${removed.length} ${COPY.growCleared}` : '';
+      if (result) line.textContent = (result.added > 0 ? `${result.added} ${COPY.growAdded} ${result.seed}` : `${zone ? COPY.growNoneHere : COPY.growNone} ${result.seed}`) + cleared;
     } catch {
       line.textContent = COPY.loadFailed;
     } finally {

@@ -15,6 +15,7 @@ export function setupGrowTool(app, canvas, { pointAt, zone, builder }) {
   const all = query('#growAll');
   const hint = query('#growHint');
   const status = query('#growStatus');
+  const replace = query('#growReplace');
   let on = false;
   let center = null;
 
@@ -41,7 +42,7 @@ export function setupGrowTool(app, canvas, { pointAt, zone, builder }) {
 
   function growAt() {
     if (!on || !center) return;
-    builder.grow(status, growZone(center, cells()));
+    builder.grow(status, growZone(center, cells()), { replace: replace.checked });
   }
 
   here.addEventListener('click', () => setOn(!on));
