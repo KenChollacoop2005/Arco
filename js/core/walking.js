@@ -4,7 +4,8 @@ import { FAMILIES, END_FAMILIES, END_OPEN, END_STEP, BUTT_SIDES, endCode, isDock
 
 export const LIFTS = ['core']; // step-free between levels
 export const CLIMBS = ['stair', 'ramp']; // join levels with steps
-const BUILDING_GROUPS = ['Living']; // enclosed families with stairs inside
+const BUILDING_FAMILIES = ['housing', 'studio', 'hall', 'penthouse', 'shacks', 'flared', 'shop']; // enclosed families with stairs inside
+const OPEN_AMENITIES = ['market', 'shrine', 'playground', 'teahouse', 'lookout']; // open stall, caps and platform, no inside stairs
 const WALK_GROUPS = ['Living', 'Circulation', 'Outdoor']; // groups people walk through
 const WALK_EXTRA = ['core', 'podium', 'market', 'farm', 'greenhouse']; // other families people walk through
 const WALK_LIFT_MM = 1.5; // walking lines sit this far over each floor
@@ -12,7 +13,7 @@ const MARK_MM = 2; // half width of an unreachable mark
 
 const voxel = (x, y, level) => x + ',' + y + ',' + level;
 const PLINTH = { family: 'plinth' }; // owner of the free plinth cells
-export const building = (instance) => BUILDING_GROUPS.includes(FAMILIES[instance.family].group);
+export const building = (instance) => BUILDING_FAMILIES.includes(instance.family) || (!!FAMILIES[instance.family].amenity && !OPEN_AMENITIES.includes(instance.family));
 export const walkable = (instance) => WALK_GROUPS.includes(FAMILIES[instance.family].group) || WALK_EXTRA.includes(instance.family) || !!FAMILIES[instance.family].amenity;
 
 // Walking graph on story voxels: links of one step, each marked step-free or not

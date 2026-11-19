@@ -63,6 +63,14 @@ test('a plain stack of buildings is climbed by its inside stairs; a core beside 
   for (const id of [1, 2, 3, 4]) assert.equal(lift.modules[id].stepFree, true, `module ${id} step-free`);
 });
 
+test('an amenity stacked on housing is reached by the stairs inside both', () => {
+  const modules = [part(1, 'housing', '1x2', 2, 0, 0, 0), part(2, 'clinic', '1x1', 1, 0, 0, 2), part(3, 'gym', '1x2', 1, 0, 0, 3), part(4, 'shrine', '1x1', 1, 0, 0, 4)];
+  const network = walkingNetwork(modules);
+  for (const id of [1, 2, 3]) assert.equal(network.modules[id].reached, true, `module ${id} reached`);
+  assert.equal(network.modules[2].stepFree, false);
+  assert.equal(network.modules[4].reached, false, 'a shrine cap has no stairs up into it');
+});
+
 test('generated structures: most modules are reached, and the network repeats', () => {
   for (const seed of ['barbican', 'habitat']) {
     const { modules } = generate({ seed, scale: 'mega', density: 2, height: 2, daring: 2, theme: 2 });
