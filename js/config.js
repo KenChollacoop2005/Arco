@@ -17,6 +17,11 @@ export const GROW_ZONE_DEFAULT = 'M'; // size stop the slider starts on
 export const GROW_ZONE_COLOR = 0xa8e6b8; // pastel green zone sphere
 export const GROW_ZONE_OPACITY = 0.28; // zone sphere see-through share
 
+// Collection showroom
+export const SHOWROOM_IDLE_MS = 3000; // pause before the view eases home
+export const SHOWROOM_EASE_MS = 900; // time to ease back to the default angle
+export const SHOWROOM_SPIN = 1; // turn speed, one turn in about 60 s
+
 // Opening structure
 export const OPENING_UNIT_MIN = 12; // fewest opening modules
 export const OPENING_UNIT_MAX = 30; // most opening modules

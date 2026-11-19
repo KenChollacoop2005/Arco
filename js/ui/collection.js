@@ -1,5 +1,4 @@
 import { rasterThumb } from '../core/thumb.js';
-import { renderCollectionCards } from './cards.js';
 import { COPY } from './copy.js';
 import { showToast } from './toast.js';
 import { download } from './exportpanel.js';
@@ -24,24 +23,20 @@ export function makeThumb(part) {
 
 export function setupCollection(collection) {
   const query = (selector) => document.querySelector(selector);
-  const list = query('#collectionList');
-  const empty = query('#collectionEmpty');
   const fileInput = query('#collectionFile');
   const listeners = [];
 
+  // Listeners redraw the Build drawer and the Collection page
   function render() {
     const entries = collection.list();
-    empty.hidden = entries.length > 0;
     query('#collectionExport').disabled = entries.length === 0;
-    renderCollectionCards(list, entries, {
-      onSelect() {},
-      onRemove(entry) {
-        const result = collection.remove(entry.key);
-        if (!result.stored) showToast(COPY.collectionFull);
-        render();
-      },
-    });
     for (const listener of listeners) listener(entries);
+  }
+
+  function remove(key) {
+    const result = collection.remove(key);
+    if (!result.stored) showToast(COPY.collectionFull);
+    render();
   }
 
   function save(instance, part) {
@@ -74,6 +69,7 @@ export function setupCollection(collection) {
   render();
   return {
     save,
+    remove,
     render,
     onChange(listener) {
       listeners.push(listener);

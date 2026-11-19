@@ -181,16 +181,6 @@
       </details>
     </div>
 
-    <div class="mode-pane" data-pane="collection">
-      <p class="empty" id="collectionEmpty" data-copy="collectionEmpty"></p>
-      <ul class="cards" id="collectionList"></ul>
-      <div class="button-row">
-        <button class="plain" id="collectionExport" data-copy="collectionExport"></button>
-        <button class="plain" id="collectionImport" data-copy="collectionImport"></button>
-        <input type="file" id="collectionFile" accept="application/json,.json" hidden>
-      </div>
-    </div>
-
     <div class="mode-pane" data-pane="drawing">
       <details class="drawer" id="drawingDrawer" data-drawer-key="arco.drawer.drawing" data-drawer-default="open">
         <summary data-copy="drawingTitle"></summary>
@@ -236,6 +226,46 @@
       </div>
     </details>
   </aside>
+
+  <main class="archive" id="archive" aria-label="Collection">
+    <section class="archive-inventory">
+      <div class="archive-head">
+        <h2 class="archive-title" data-copy="collectionTitle"></h2>
+        <span class="archive-count" id="archiveCount"></span>
+      </div>
+      <div class="archive-tools">
+        <input type="search" id="archiveSearch" class="search" data-copy-placeholder="searchModules" aria-label="Search the collection" autocomplete="off" spellcheck="false">
+        <select id="archiveSort" class="select" aria-label="Sort">
+          <option value="category" data-copy="sortCategory"></option>
+          <option value="family" data-copy="sortFamily"></option>
+          <option value="footprint" data-copy="sortFootprint"></option>
+          <option value="saved" data-copy="sortSaved"></option>
+        </select>
+      </div>
+      <div class="archive-tools">
+        <button type="button" class="plain" id="archiveExport" data-copy="exportSelectedStl"></button>
+        <button type="button" class="plain" id="collectionExport" data-copy="collectionExport"></button>
+        <button type="button" class="plain" id="collectionImport" data-copy="collectionImport"></button>
+        <input type="file" id="collectionFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="hint archive-hint" data-copy="archiveHint"></p>
+      <div class="archive-empty" id="archiveEmpty" hidden>
+        <p class="archive-empty-title" data-copy="archiveEmptyTitle"></p>
+        <p data-copy="archiveEmptyText"></p>
+      </div>
+      <ul class="cards archive-cards" id="collectionList"></ul>
+    </section>
+    <section class="archive-showroom">
+      <div class="showroom-stage"><canvas id="showroom" aria-label="Selected module"></canvas></div>
+      <div class="archive-actions">
+        <button type="button" class="primary" id="archivePlace" data-copy="placeInBuild"></button>
+        <button type="button" class="plain" id="archiveStl" data-copy="exportStl"></button>
+        <button type="button" class="plain" id="archiveDelete" data-copy="confirmDelete"></button>
+      </div>
+      <p class="status archive-status" id="archiveStatus" role="status"></p>
+      <div class="inspector" id="archiveInspector"></div>
+    </section>
+  </main>
 
   <div class="assembly" id="assemblyBar" hidden>
     <button class="plain" id="assemblyPrev" data-copy="assemblyPrev"></button>

@@ -53,6 +53,7 @@ export function setupExport(app, worker, onFit) {
   input.value = clearance().toFixed(2);
   measureFit();
 
+  // Resolves with the status text it showed
   async function run(payload) {
     status.textContent = COPY.exportWorking;
     try {
@@ -65,19 +66,20 @@ export function setupExport(app, worker, onFit) {
     } catch {
       status.textContent = COPY.loadFailed;
     }
+    return status.textContent;
   }
 
   // ids null exports everything; modules may be given instead of ids
   function exportModules(ids, given = null) {
-    if (!app.structure && !given) return;
+    if (!app.structure && !given) return Promise.resolve('');
     const modules = given || (ids ? app.structure.modules.filter((instance) => ids.includes(instance.id)) : app.structure.modules);
     if (modules.length === 0) {
       status.textContent = COPY.exportNothing;
-      return;
+      return Promise.resolve(status.textContent);
     }
     const seed = String(given ? COPY.collectionTitle : app.structure.seed).replace(/[^a-z0-9]+/gi, '-').slice(0, SEED_NAME_MAX) || 'structure';
     const part = modules.length === 1 ? `-${modules[0].family}-${modules[0].id}` : ids ? '-selection' : '';
-    run({ kind: 'structure', modules, clearance: clearance(), name: `arco-${seed}${part}` });
+    return run({ kind: 'structure', modules, clearance: clearance(), name: `arco-${seed}${part}` });
   }
 
   query('#exportModule').addEventListener('click', () => exportModules(app.selection.slice(-1)));

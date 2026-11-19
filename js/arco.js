@@ -31,6 +31,9 @@ import { growLimits, placeCap } from './core/budget.js';
 import { setupDrawers } from './ui/drawers.js';
 import { setupGrowTool } from './ui/growtool.js';
 import { createZone } from './render/zone.js';
+import { createShowroom } from './render/showroom.js';
+import { setupArchive } from './ui/archive.js';
+import { readSetting, writeSetting } from './ui/legend.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -355,6 +358,21 @@ const exporter = setupExport(app, exportWorker, (fit) => {
 query('#printSave').addEventListener('click', () => {
   const selected = selectedModule();
   if (selected) saveModule(selected);
+});
+
+// Collection page; Place in Build picks the module up on the main screen
+setupArchive(app, {
+  collectionPanel,
+  moduleView: modules,
+  showroom: createShowroom(query('#showroom'), reducedMotion),
+  exporter,
+  readSetting,
+  writeSetting,
+  onPlace(entry) {
+    setMode('generate');
+    query('#buildDrawer').open = true;
+    return builder.pickKey(entry.key);
+  },
 });
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
