@@ -174,7 +174,7 @@ test('a new run takes over from the one before it', () => {
 });
 
 const SEEDS = ['arco', 'habitat', 'nakagin', 'k7m2qp', 'barbican', 'trellick', 'x9', 'blacksburg'];
-const UNSTABLE_MEGA_SEEDS = ['arco', 'habitat', 'x9'];
+const UNSTABLE_MEGA_SEEDS = ['arco', 'golden', 'x9'];
 const looseBlock = (seed) => ({ seed, scale: 'block', density: 0, height: 1, daring: 2, theme: 0, unstable: true });
 const looseMega = (seed) => ({ seed, scale: 'mega', density: 1, height: 1, daring: 2, theme: 2, unstable: true });
 

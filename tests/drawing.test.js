@@ -8,6 +8,18 @@ import { serviceLines } from '../js/core/drafting.js';
 import { waterText, powerText } from '../js/ui/inspector.js';
 import { walkingNetwork, walkingLines } from '../js/core/walking.js';
 import { COPY } from '../js/ui/copy.js';
+import { normalizeVariant } from '../js/core/catalog.js';
+import { validateStructure } from '../js/core/placement.js';
+import { worldFromModules } from '../js/core/grid.js';
+
+// Pump room feeding 8 units of beds from 6, a garden, houses, a turbine and a generator
+const SERVICES_FIXTURE = [
+  [1, 'pumproom', '1x1', 1, 0, 0, 0], [2, 'generator', '1x1', 1, 0, 1, 0],
+  [3, 'farm', '2x3', 1, 1, 0, 0], [4, 'farm', '2x3', 1, -3, 0, 0], [5, 'farm', '2x2', 1, 0, -2, 0],
+  [7, 'garden', '1x1', 1, 3, -4, 0], [8, 'housing', '1x1', 2, 0, 3, 0], [9, 'turbine', '1x1', 2, 0, 3, 2],
+  [10, 'housing', '1x1', 2, 1, 3, 0], [11, 'housing', '1x1', 1, -4, 3, 0], [12, 'housing', '1x1', 1, 3, 3, 0],
+  [13, 'housing', '1x1', 1, -4, -3, 0], [14, 'housing', '1x1', 3, -1, -2, 0],
+];
 
 const LAYERS = ['edges', 'connectors', 'centers', 'loads', 'services', 'walking'];
 const STATUS_HEX = { '--blue': '#2244aa', '--pass': '#22aa44', '--warn': '#ee7700', '--fail': '#cc2222', '--water': '#1188dd', '--power': '#ddaa00' };
@@ -59,9 +71,10 @@ const pointsIn = (lines, from, to) => lines.positions.slice(from * 6, to * 6);
 
 test('services overlay draws strings, dashed blocked attempts and dry or partial consumers', () => {
   assert.deepEqual(serviceLines(null), { positions: [], statuses: [] });
-  // A structure with a partly fed consumer under wall routed pipes, with no trickle
-  const structure = generate({ seed: 'quarry', scale: 'mega' });
-  const services = planServices(structure.modules, 'brunswick');
+  // Hand built: a pump room short for three crop beds, a garden, houses and a turbine
+  const structure = { modules: SERVICES_FIXTURE.map(([id, family, fp, h, x, y, z]) => ({ ...normalizeVariant({ family, fp, h, seed: 3, mask: 15, roof: false }), id, x, y, z, rot: 0 })) };
+  assert.deepEqual(validateStructure(worldFromModules(structure.modules)), []);
+  const services = planServices(structure.modules, 'drawing');
   const lines = serviceLines(services, structure.modules);
   assert.equal(lines.positions.length, lines.statuses.length * 6);
   assert.ok(lines.statuses.every((status) => STATUSES.includes(status)));
