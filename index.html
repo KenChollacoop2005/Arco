@@ -31,17 +31,8 @@
       </nav>
     </div>
     <!-- Logo slot: swap this one element for a drawn logo -->
-    <div class="logo-slot" id="logoSlot" aria-hidden="true">&#x1F9F1;</div>
+    <div class="logo-slot" id="logoSlot" aria-hidden="true">x</div>
     <div class="topbar-right">
-      <details class="menu" id="viewMenu">
-        <summary data-copy="viewMenu"></summary>
-        <div class="menu-body">
-          <label class="check"><input type="radio" name="projection" value="ortho" checked><span data-copy="viewOrtho"></span></label>
-          <label class="check"><input type="radio" name="projection" value="persp"><span data-copy="viewPersp"></span></label>
-          <hr>
-          <button class="plain" id="resetView" data-copy="viewReset"></button>
-        </div>
-      </details>
       <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
       <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>
       <button class="plain profile-button" id="profileButton" disabled data-copy="profile" data-copy-title="comingSoon"></button>
@@ -125,6 +116,7 @@
             <summary data-copy="show"></summary>
             <div class="sub-body">
               <fieldset class="show-list">
+                <label class="check"><input type="checkbox" id="perspectiveToggle"><span data-copy="viewPersp"></span></label>
                 <label class="check"><input type="checkbox" id="decorToggle"><span data-copy="viewDecor"></span></label>
                 <label class="check"><input type="checkbox" id="flowsToggle"><span data-copy="viewFlows"></span></label>
                 <label class="check"><input type="checkbox" id="effectsToggle"><span data-copy="effects"></span></label>

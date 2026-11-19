@@ -61,6 +61,7 @@ rig.onChange(() => view.requestRender());
 setupLegend(query('#legend'));
 
 const MODES = ['generate', 'collection', 'drawing']; // top bar tabs
+const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 
 const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
 const solids = createWorkerClient(new URL('./workers/solids.worker.js', import.meta.url));
@@ -276,12 +277,11 @@ for (const tab of document.querySelectorAll('.tabs button')) {
   tab.addEventListener('click', () => setMode(tab.dataset.mode));
 }
 
-for (const input of document.querySelectorAll('input[name="projection"]')) {
-  input.addEventListener('change', () => {
-    rig.setProjection(input.value);
-    view.setCamera(rig.camera);
-  });
-}
+// Perspective box in Show; orthographic when off
+query('#perspectiveToggle').addEventListener('change', (event) => {
+  rig.setProjection(event.target.checked ? 'persp' : 'ortho');
+  view.setCamera(rig.camera);
+});
 const sectionPosition = query('#sectionPosition');
 sectionPosition.max = String(SECTION_STEPS);
 const readSection = () => ({
@@ -350,7 +350,12 @@ app.modeListeners.push(refreshFlows);
 app.structureListeners.push(() => refreshFlows());
 query('#physicsToggle').addEventListener('change', refreshFlows);
 
-query('#resetView').addEventListener('click', () => rig.home(false));
+// Home resets the view, like a double click on empty space
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Home' || app.mode === 'collection' || TYPING_TAGS.includes(event.target.tagName)) return;
+  event.preventDefault();
+  rig.home(false);
+});
 
 const exportWorker = createWorkerClient(new URL('./workers/export.worker.js', import.meta.url));
 const exporter = setupExport(app, exportWorker, (fit) => {
