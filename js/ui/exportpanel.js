@@ -26,9 +26,8 @@ function readClearance(input) {
   return Math.round(safe / CLEARANCE_STEP_MM) * CLEARANCE_STEP_MM;
 }
 
-// Export panel, fit coupon and assembly steps
+// Print drawer: exports, fit coupon and assembly steps
 export function setupExport(app, worker, onFit) {
-  const panel = query('#exportPanel');
   const status = query('#exportStatus');
   const input = query('#clearanceInput');
   const bar = query('#assemblyBar');
@@ -54,10 +53,6 @@ export function setupExport(app, worker, onFit) {
   input.value = clearance().toFixed(2);
   measureFit();
 
-  query('#exportButton').addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-  });
-
   async function run(payload) {
     status.textContent = COPY.exportWorking;
     try {
@@ -72,18 +67,20 @@ export function setupExport(app, worker, onFit) {
     }
   }
 
-  function exportModules(ids) {
-    if (!app.structure) return;
-    const modules = ids ? app.structure.modules.filter((instance) => ids.includes(instance.id)) : app.structure.modules;
+  // ids null exports everything; modules may be given instead of ids
+  function exportModules(ids, given = null) {
+    if (!app.structure && !given) return;
+    const modules = given || (ids ? app.structure.modules.filter((instance) => ids.includes(instance.id)) : app.structure.modules);
     if (modules.length === 0) {
       status.textContent = COPY.exportNothing;
       return;
     }
-    const seed = String(app.structure.seed).replace(/[^a-z0-9]+/gi, '-').slice(0, SEED_NAME_MAX) || 'structure';
+    const seed = String(given ? COPY.collectionTitle : app.structure.seed).replace(/[^a-z0-9]+/gi, '-').slice(0, SEED_NAME_MAX) || 'structure';
     const part = modules.length === 1 ? `-${modules[0].family}-${modules[0].id}` : ids ? '-selection' : '';
     run({ kind: 'structure', modules, clearance: clearance(), name: `arco-${seed}${part}` });
   }
 
+  query('#exportModule').addEventListener('click', () => exportModules(app.selection.slice(-1)));
   query('#exportSelected').addEventListener('click', () => exportModules(app.selection));
   query('#exportAll').addEventListener('click', () => exportModules(null));
   query('#exportCoupon').addEventListener('click', () => run({ kind: 'coupon', clearance: clearance() }));
@@ -120,7 +117,6 @@ export function setupExport(app, worker, onFit) {
     }
     steps = result.steps;
     step = 0;
-    panel.hidden = true;
     bar.hidden = false;
     showStep();
   });
@@ -141,5 +137,5 @@ export function setupExport(app, worker, onFit) {
     }
   });
 
-  return { exportModules, closeSteps, clearance };
+  return { exportModules, closeSteps, clearance, status };
 }

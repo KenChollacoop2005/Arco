@@ -109,10 +109,18 @@ const socketsOf = (instance) => {
 
 const saveModule = (instance) => collectionPanel.save(instance, modules.partOf(variantKey(instance)));
 
-function showInspector() {
+const selectedModule = () => {
   const lastId = app.selection[app.selection.length - 1];
-  const selected = app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) : null;
-  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit, onExport: (id) => exporter.exportModules([id]), onSave: saveModule }, selected);
+  return app.structure && lastId ? app.structure.modules.find((instance) => instance.id === lastId) || null : null;
+};
+
+function showInspector() {
+  const selected = selectedModule();
+  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, printOf, socketsOf, fit: app.fit }, selected);
+  query('#printSave').disabled = !selected;
+  query('#exportModule').disabled = !selected;
+  query('#exportSelected').disabled = app.selection.length === 0;
+  query('#exportAll').disabled = !app.structure || app.structure.modules.length === 0;
 }
 
 // Click selects, shift click adds or removes
@@ -343,6 +351,10 @@ const exportWorker = createWorkerClient(new URL('./workers/export.worker.js', im
 const exporter = setupExport(app, exportWorker, (fit) => {
   app.fit = fit;
   showInspector();
+});
+query('#printSave').addEventListener('click', () => {
+  const selected = selectedModule();
+  if (selected) saveModule(selected);
 });
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);

@@ -44,7 +44,6 @@
       </details>
       <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
       <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>
-      <button class="plain" id="exportButton" data-copy="exportButton"></button>
       <button class="plain profile-button" id="profileButton" disabled data-copy="profile" data-copy-title="comingSoon"></button>
     </div>
     <div class="section-controls" id="sectionControls">
@@ -218,9 +217,23 @@
   </aside>
 
   <aside class="column column-right" id="rightColumn" aria-label="Inspector">
-    <details class="drawer" id="inspectorDrawer" data-drawer-key="arco.drawer.inspector" data-drawer-default="open">
-      <summary data-copy="inspectorTitle"></summary>
-      <div class="drawer-body" id="inspectorBody"></div>
+    <div class="inspector" id="inspectorBody"></div>
+    <details class="drawer print-drawer" id="printDrawer" data-drawer-key="arco.drawer.print">
+      <summary data-copy="printTitle"></summary>
+      <div class="drawer-body">
+        <button type="button" class="primary" id="printSave" data-copy="saveToCollection"></button>
+        <button type="button" class="plain" id="exportModule" data-copy="exportModule"></button>
+        <button type="button" class="plain" id="exportSelected" data-copy="exportSelection"></button>
+        <button type="button" class="plain" id="exportAll" data-copy="exportEverything"></button>
+        <div class="field">
+          <label for="clearanceInput" data-copy="clearance"></label>
+          <input id="clearanceInput" type="number">
+        </div>
+        <button type="button" class="plain" id="exportCoupon" data-copy="exportCoupon"></button>
+        <button type="button" class="plain" id="assemblyOpen" data-copy="assembly"></button>
+        <p class="hint" data-copy="exportNote"></p>
+        <p class="status" id="exportStatus" role="status"></p>
+      </div>
     </details>
   </aside>
 
@@ -232,20 +245,6 @@
   </div>
 
   <div class="title-block" id="titleBlock" aria-hidden="true"></div>
-
-  <section class="panel export-panel" id="exportPanel" hidden>
-    <h2 class="panel-title" data-copy="exportTitle"></h2>
-    <div class="field">
-      <label for="clearanceInput" data-copy="clearance"></label>
-      <input id="clearanceInput" type="number">
-    </div>
-    <button class="plain" id="exportSelected" data-copy="exportSelected"></button>
-    <button class="plain" id="exportAll" data-copy="exportAll"></button>
-    <button class="plain" id="exportCoupon" data-copy="exportCoupon"></button>
-    <button class="plain" id="assemblyOpen" data-copy="assembly"></button>
-    <p class="hint" data-copy="exportNote"></p>
-    <p class="status" id="exportStatus" role="status"></p>
-  </section>
 
   <details class="legend" id="legend" open>
     <summary data-copy="legendTitle"></summary>

@@ -22,6 +22,28 @@ export function usedPorts(services) {
   return used;
 }
 
+// Used out of capacity per port type of one module, in port type order
+export function portUse(ports, services, moduleId) {
+  const ends = new Map();
+  const count = (end) => ends.set(portKey(end.module, end.index), (ends.get(portKey(end.module, end.index)) || 0) + 1);
+  if (services) {
+    for (const string of [...services.pipes, ...services.wires, ...services.lines]) {
+      count(string.from);
+      count(string.to);
+    }
+    for (const tarp of services.tarps) for (const anchor of tarp.anchors) count(anchor);
+  }
+  const byType = new Map();
+  for (const port of ports) {
+    if (port.module !== moduleId || port.active === false) continue;
+    const row = byType.get(port.type) || { type: port.type, used: 0, capacity: 0 };
+    row.used += Math.min(port.capacity, ends.get(portKey(port.module, port.index)) || 0);
+    row.capacity += port.capacity;
+    byType.set(port.type, row);
+  }
+  return [...byType.values()];
+}
+
 // Ports drawn in the main view: active (or not marked) and in use
 export function drawnPorts(ports, services) {
   const used = usedPorts(services);

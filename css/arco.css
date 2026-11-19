@@ -351,6 +351,10 @@ body.grow-here #scene { cursor: crosshair; }
 .primary.danger { background: var(--fail); border-color: var(--fail); }
 
 /* Inspector */
+.inspector-head { padding: 14px 14px 2px; border-bottom: 1px solid var(--hairline); }
+.inspector .drawer-body .rows, .inspector .drawer-body .checks { margin: 0; }
+.drawer-label { margin: 4px 0 -6px; font: 400 10px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.print-drawer .drawer-body { gap: 8px; }
 .rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; }
 .rows dt { color: var(--ink-soft); }
 .rows dd { margin: 0; text-align: right; font-family: var(--font-mono); font-size: 12px; }

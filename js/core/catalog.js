@@ -255,3 +255,20 @@ export function hasPump(variant) {
   if (variant.family !== 'plant') return false;
   return makeRng(mixSeed(variant.seed >>> 0, PLANT_PUMP_SEED)).chance(PLANT_PUMP_CHANCE);
 }
+
+// Residents a housing module holds: a number, or one per footprint
+export const RESIDENT_CAPACITY = {
+  housing: 2, // plain housing unit
+  studio: 1, // one room studio
+  penthouse: 2, // top floor flat
+  shacks: { '1x1': 4, '1x2': 5, '2x2': 6 }, // stacked shacks by size
+  flared: { '1x1': 2, '1x2': 3, '2x2': 4, '2x3': 5 }, // Walled City flared housing by size
+};
+export const HOUSING_FAMILIES = Object.keys(RESIDENT_CAPACITY);
+
+// Residents of a variant, 0 for every non-housing family
+export function residentCapacity(variant) {
+  const entry = RESIDENT_CAPACITY[variant.family];
+  if (entry === undefined) return 0;
+  return typeof entry === 'number' ? entry : entry[variant.fp] || 0;
+}

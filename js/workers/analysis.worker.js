@@ -5,8 +5,8 @@ import { planServices } from '../core/services.js';
 import { pourPaths } from '../core/falls.js';
 import { walkingNetwork, walkingLines } from '../core/walking.js';
 
-// Active string ports, only what the renderer needs
-const portView = (port) => ({ module: port.module, index: port.index, type: port.type, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
+// Active string ports, only what the renderer and inspector need
+const portView = (port) => ({ module: port.module, index: port.index, type: port.type, capacity: port.capacity, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
 
 self.onmessage = (event) => {
   const { id, modules, seed } = event.data;
