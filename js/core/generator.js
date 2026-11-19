@@ -59,7 +59,7 @@ const CANTILEVERS = [0, 5, 12]; // cantilever tries by daring
 const UNSTABLE_TRIES = 10; // extra tries when unstable is allowed
 const CANTILEVER_MIN_LEVEL = 2; // lowest cantilever story
 const ROOF_CHANCE = 0.4; // chance a free top becomes a roof
-const CAP_CHANCE = [0.45, 0.65, 0.85]; // roof dressing by density
+const ROOF_FILL = { unit: [0.3, 0.4, 0.5], block: [0.3, 0.4, 0.5], mega: [0.25, 0.35, 0.45] }; // roof dressing chance by scale and density
 const GROUND_CHANCE = [0.2, 0.35, 0.55]; // ground dressing by density
 const THEME_SHARE = [0.25, 0.55, 0.85]; // themed share by theme mix
 const STYLE_POOL = 4; // style seeds per structure
@@ -105,6 +105,8 @@ const INDUSTRY = ['smokestack', 'chimney', 'cooling', 'tankfarm', 'pipes', 'pump
 const GENERATORS = [[0, 1], [0, 1], [1, 2]]; // generator rooms by density: block, mega
 const GENERATOR_GROUND_SHARE = 0.5; // share of generator rooms on the ground, not a roof
 const SPRINGS = [[0, 1], [0, 1], [0, 2]]; // springs by density: block, mega
+// Most plinth-level service pieces per structure: block, mega
+const PLINTH_CAPS = { well: [2, 3], spring: [1, 2], wheel: [2, 3] };
 const WELLS = [[0, 1], [0, 1], [0, 1]]; // wells by density: block, mega
 const RAIN_CATCHERS = [[0, 1], [1, 2], [1, 3]]; // rain catchers by density: block, mega
 const RAISED_WHEELS = [[0, 1], [0, 1], [0, 1]]; // raised water wheels by density: block, mega
@@ -133,12 +135,12 @@ const NEAR_CELLS = 2; // reach of near, in cells
 const DOCK_HOUSES = [['housing', 3], ['studio', 1.5], ['shacks', 1], ['deck', 1], ['panel', 1]]; // new modules a bridge docks to
 
 const GROUND_MASS = [
-  ['podium', 4], ['shop', 3], ['pilotis', 2.5], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8],
+  ['podium', 4], ['shop', 3], ['pilotis', 1], ['housing', 1.5], ['deck', 0.5], ['shacks', 0.8], ['flared', 0.8],
   ['foodstall', 0.4], ['laundromat', 0.3], ['barber', 0.25], ['pharmacy', 0.4], ['workshop', 0.5], ['courier', 0.4], ['canteen', 0.4], ['gym', 0.25], ['clinic', 0.3], ['arcade', 0.25],
 ];
 const UPPER_MASS = [
   ['housing', 5], ['studio', 2], ['hall', 1.5], ['deck', 1.5], ['brise', 1.2], ['fins', 1.2],
-  ['panel', 1.2], ['transfer', 0.8], ['spout', 0.4], ['pilotis', 0.7], ['stair', 0.3],
+  ['panel', 1.2], ['transfer', 0.8], ['spout', 0.4], ['pilotis', 0.3], ['stair', 0.3],
   ['shacks', 1.5], ['flared', 1.2],
   ['school', 0.3], ['library', 0.3], ['bathhouse', 0.25], ['clinic', 0.2], ['gym', 0.2],
 ];
@@ -193,6 +195,7 @@ function place(ctx, spec) {
     ctx.capped = true;
     return null;
   }
+  if (PLINTH_CAPS[spec.family] && plinthFull(ctx, spec.family)) return null;
   const variant = normalizeVariant({ mask: 0, roof: false, ...spec });
   const instance = { ...variant, x: spec.x, y: spec.y, z: spec.z, rot: spec.rot & 3 };
   if (spec.placement) instance.placement = spec.placement;
@@ -205,6 +208,14 @@ function place(ctx, spec) {
   if (ctx.opts.zone && !instanceInZone(instance, ctx.opts.zone)) return null;
   if (!checkPlacement(ctx.world, instance, { cap: Math.max(MAX_MODULES, ctx.limit), stream: ctx.stream }).ok) return null;
   return addModule(ctx.world, instance);
+}
+
+// Repeating plinth pieces stop at their cap
+function plinthFull(ctx, familyId) {
+  const cap = PLINTH_CAPS[familyId][ctx.opts.scale === 'mega' ? 1 : 0];
+  let count = 0;
+  for (const instance of ctx.world.modules.values()) if (instance.family === familyId) count++;
+  return count >= cap;
 }
 
 // Footprint position covering the anchor cell
@@ -1421,7 +1432,7 @@ export function generate(options) {
     roofs(ctx);
     // The planner goes before dressing, while roofs and ground are still free
     fillServices(ctx);
-    dressTops(ctx, CAP_CHANCE[opts.density]);
+    dressTops(ctx, ROOF_FILL[opts.scale][opts.density]);
     dressGround(ctx, GROUND_CHANCE[opts.density]);
     for (let round = 0; round < TOPUP_ROUNDS && world.modules.size < opts.budgetMin; round++) {
       dressTops(ctx, 1);

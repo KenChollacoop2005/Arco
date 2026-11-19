@@ -150,7 +150,7 @@ test('lookouts stand on support, attach to walls beside the deck and rail only t
   for (let h = 1; h <= 2; h++) for (let mask = 0; mask < 16; mask++) assertLookoutShape(normalizeVariant({ family: 'lookout', fp: '1x1', h, seed: 1, mask, roof: false }), `h${h} mask ${mask}`);
   // Generate and Grow: on support, mask from the walls at the deck
   let seen = 0;
-  for (const seed of ['arco', 'habitat', 'barbican', 'nakagin', 'golden', 'brunswick', 'quarry', 'beton', 'lumen', 'hulme', 'trellick', 'rotunda']) {
+  for (const seed of ['arco', 'habitat', 'barbican', 'nakagin', 'golden', 'brunswick', 'quarry', 'beton', 'lumen', 'hulme', 'trellick', 'rotunda', 'alton', 'byker', 'park', 'robin']) {
     for (const [scale, level] of [['block', 1], ['mega', 1], ['mega', 2]]) {
       const choices = { density: level, height: level, daring: level, theme: level };
       const base = generate({ seed, scale, ...choices });

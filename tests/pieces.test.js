@@ -296,7 +296,7 @@ test('runoff and disposal: a full body with 2 to 5 printed stubs, 1 or 2 pouring
   assert.ok(counts.size >= 3, `stub counts vary: ${[...counts]}`);
   // Pours in generated structures
   let pours = 0;
-  for (let index = 0; index < 30; index++) {
+  for (let index = 0; index < 40; index++) {
     const seed = 'p' + index;
     const { modules } = generate({ seed, scale: index % 2 ? 'mega' : 'block', density: index % 3, height: 1, services: 'high' });
     const context = stringContext(modules);

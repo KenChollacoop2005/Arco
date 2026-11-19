@@ -10,15 +10,15 @@ import { runChecks } from '../js/core/checks.js';
 import { assemblySteps } from '../js/core/assembly.js';
 import { makeBudget, budgetCap, withinBudget, growRoll, generateLimits, growLimits, placeCap, budgetParams, budgetFromParams } from '../js/core/budget.js';
 
-// Generate and Grow results, re-recorded after the raised wheel, platform sides and lookout deck walls
+// Generate and Grow results, re-recorded after the roof fill, pilotis and plinth caps tuning
 const BEFORE = {
-  'barbican mega 2': [203, 'a86ff90a88736667', 197, '398fd3bc83dc4b15'],
-  'habitat block 1': [31, 'b79dff1c375043fc', 32, 'ddbb4f42292825df'],
-  'arco unit 1': [1, '6b6828ffe3949732', 50, '65413d18e0ff9ce3'],
-  'beton block 0': [30, 'ff52a9a5cf7e987e', 41, '925712f2bd6819a9'],
-  'golden mega 1': [210, '8441bb5815b4bdab', 161, 'b2b3a22955ddb3e9'],
+  'barbican mega 2': [208, '9492f6adccb48715', 190, '0092419200959926'],
+  'habitat block 1': [32, 'a6080569911070d8', 36, '7e10369b1ad1312a'],
+  'arco unit 1': [1, '6b6828ffe3949732', 42, '790f8473940d355d'],
+  'beton block 0': [26, 'ec4ed5087adccbf6', 32, 'c75645fc12dee9bf'],
+  'golden mega 1': [198, '178ca571822cb7b1', 124, 'd92075600b157fcd'],
 };
-const OPENING_BEFORE = [17, '17ed3cdabbe96458'];
+const OPENING_BEFORE = [20, '40d036087cca72c8'];
 
 const choicesOf = (name) => {
   const [seed, scale, level] = name.split(' ');
@@ -42,7 +42,7 @@ const FIXED = makeBudget();
 const FANTASY = makeBudget({ mode: 'fantasy' });
 const MEGA = choicesOf('barbican mega 2');
 const BLOCK = choicesOf('habitat block 1');
-const ROOMY = choicesOf('golden block 1'); // a block that fantasy Grow can still extend
+const ROOMY = choicesOf('habitat block 1'); // a block that fantasy Grow can still extend
 // Grow under a budget, as the Build panel runs it
 const growUnder = (budget, choices, modules) => generate({ ...growOptions(choices, modules), ...growLimits(budget, choices.seed, modules.length) });
 // Stands, follows the rules and has an assembly order
