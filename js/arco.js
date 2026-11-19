@@ -28,6 +28,7 @@ import { drawnPorts } from './core/services.js';
 import { streamFrom } from './core/stream.js';
 import { createWaterworks } from './render/waterworks.js';
 import { createNightLights } from './render/nightlights.js';
+import { createParticles } from './render/particles.js';
 import { growLimits, placeCap } from './core/budget.js';
 import { setupDrawers } from './ui/drawers.js';
 import { setupGrowTool } from './ui/growtool.js';
@@ -390,6 +391,20 @@ app.modeListeners.push(refreshLights);
 app.structureListeners.push(() => refreshLights());
 query('#physicsToggle').addEventListener('change', refreshLights);
 view.onFrame(() => lightMotion && sharedUniforms.uEffects.value > 0 && (sharedUniforms.uGlow.value > 0 || (!!app.analysis && app.analysis.lights.beacons.some((beacon) => beacon.lit))));
+
+// Smoke, steam and droplets: Effects on, still structure, not Drawing
+const particles = createParticles(view, toggles.light);
+function refreshParticles() {
+  const still = app.analysis && app.structure && builtResult === app.structure;
+  particles.set(still ? app.analysis.emitters : null, still ? waterworks.falls() : []);
+  particles.setShown(sharedUniforms.uEffects.value > 0 && app.mode !== 'drawing' && !query('#physicsToggle').checked);
+}
+app.analysisListeners.push(refreshParticles);
+app.modeListeners.push(refreshParticles);
+app.structureListeners.push(() => refreshParticles());
+query('#physicsToggle').addEventListener('change', refreshParticles);
+toggles.watch('effects', refreshParticles);
+view.onFrame(() => particles.moving());
 
 // Home resets the view, like a double click on empty space
 window.addEventListener('keydown', (event) => {

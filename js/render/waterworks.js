@@ -10,6 +10,10 @@ const STREAM_LIFT_MM = 0.35; // water sits this far over the plinth top
 const BANK_MM = [1.4, 0.7]; // bank strip width and height
 const FLOW_SPEED = 0.9; // ripple speed, cycles per second
 const RIPPLE_MM = 9; // ripple spacing along the flow
+const STREAK_MM = 4.3; // fine streak spacing along the flow
+const STREAK_SPEED = 1.7; // streak speed, cycles per second
+const STREAK_MIX = 0.08; // streak strength
+const STREAK_WOBBLE = 2; // streak phase wobble
 export const STREAM_COLOR = 0x6fa7bd; // stream water
 export const STREAM_OPACITY = 0.85; // stream water opacity
 const POUR_LOOK = { runoff: [0xcfe6ee, 0.75], disposal: [0x5c5a33, 0.9] }; // clear runoff, murky brown-green sewage
@@ -44,7 +48,8 @@ varying float vFade;
 void main() {
   #include <clipping_planes_fragment>
   float ripple = 0.5 + 0.5 * sin((vAlong / ${RIPPLE_MM.toFixed(1)} - uTime * ${FLOW_SPEED.toFixed(2)} * uEffects) * 6.2831853);
-  gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.2 * ripple), uOpacity * vFade);
+  float streak = 0.5 + 0.5 * sin((vAlong / ${STREAK_MM.toFixed(1)} - uTime * ${STREAK_SPEED.toFixed(2)} * uEffects) * 6.2831853 + sin(vAlong * 0.37) * ${STREAK_WOBBLE.toFixed(1)});
+  gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.2 * ripple + ${STREAK_MIX.toFixed(2)} * streak), uOpacity * vFade);
 }`,
     transparent: true,
     depthWrite: false,
@@ -98,6 +103,8 @@ export function createWaterworks(view) {
     parts[kind].push(mesh);
     group.add(mesh);
   };
+  // Falling sheets for droplets: top, foot, outward
+  const falls = { stream: [], pours: [] };
   const refreshFlowing = () => {
     flowing = parts.stream.length > 0 || parts.pours.length > 0;
     view.requestRender();
@@ -106,6 +113,7 @@ export function createWaterworks(view) {
   // Channel strip along the stream cells, with banks, falling off the rim at its end
   function setStream(record) {
     drop('stream');
+    falls.stream = [];
     if (record && record.cells.length > 0) {
       const axis = record.alongX ? 0 : 1;
       const cross = 1 - axis;
@@ -132,6 +140,9 @@ export function createWaterworks(view) {
         quads.push([corner(-half, true, STREAM_LIFT_MM - high, flowFade(high, shape), high), corner(half, true, STREAM_LIFT_MM - high, flowFade(high, shape), high), corner(half, true, STREAM_LIFT_MM - low, flowFade(low, shape), low), corner(-half, true, STREAM_LIFT_MM - low, flowFade(low, shape), low)]);
       }
       keep('stream', new THREE.Mesh(quadGeometry(quads), streamMaterial));
+      const out = [0, 0, 0];
+      out[axis] = record.flow;
+      falls.stream = [{ top: point(rimAt(0), 0, STREAM_LIFT_MM), foot: point(rimAt(0), 0, STREAM_LIFT_MM - shape.fadeStart), out }];
       const banks = new THREE.InstancedMesh(cube, bankMaterial, 2);
       const matrix = new THREE.Matrix4();
       [-1, 1].forEach((sign, order) => {
@@ -158,6 +169,7 @@ export function createWaterworks(view) {
     drop('pours');
     const byFamily = {};
     for (const pour of pours) (byFamily[pour.family] = byFamily[pour.family] || []).push(...pourQuads(pour));
+    falls.pours = pours.filter((pour) => pour.drop > 0).map((pour) => ({ top: pour.points[0], foot: pour.points[1], out: [0, 0, 0] }));
     for (const [family, quads] of Object.entries(byFamily)) keep('pours', new THREE.Mesh(quadGeometry(quads), pourMaterials[family]));
     refreshFlowing();
   }
@@ -191,6 +203,7 @@ export function createWaterworks(view) {
       group.visible = on;
       view.requestRender();
     },
+    falls: () => [...falls.stream, ...falls.pours],
     // True when something flows on the plinth
     flowing: () => flowing && group.visible,
   };
