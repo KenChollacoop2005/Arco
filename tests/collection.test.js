@@ -4,6 +4,11 @@ import { COLLECTION_KEY, createCollection, makeEntry, parseCollection, serialize
 import { variantKey } from '../js/core/grid.js';
 import { rasterThumb } from '../js/core/thumb.js';
 import { generate } from '../js/core/generator.js';
+import { createBuild } from '../js/core/build.js';
+import { FAMILIES, FAMILY_IDS } from '../js/core/catalog.js';
+import { CELL_MM } from '../js/config.js';
+import { streamFrom } from '../js/core/stream.js';
+import { getSolids, sampleVariants } from './helpers.js';
 
 const THUMB = 'data:image/png;base64,AAAA';
 const housing = { family: 'housing', fp: '2x2', h: 3, seed: 583524249, mask: 5, roof: true };
@@ -150,4 +155,82 @@ test('saved modules carry a rarity, common by default, and a save time; both sur
   const text = JSON.stringify({ kind: 'arco-collection', version: 1, modules: [{ ...housing, rarity: 'mythic' }, { ...tank, rarity: 'rare' }] });
   assert.deepEqual(parseCollection(text).entries.map((item) => item.rarity), ['common', 'rare']);
   assert.equal(makeEntry(housing, THUMB).saved, 0);
+});
+
+// Placed copy of a saved record, alone on the plinth or by a small core
+function placeAlone(variant) {
+  for (const base of [[], [{ family: 'core', fp: '2x2', h: 2, seed: 1, mask: 15, roof: false, x: 0, y: 0, z: 0, rot: 0, id: 1 }]]) {
+    const build = createBuild(base);
+    for (const [cellX, cellY] of [[3, 3], [0, 0], [2, 0], [-1, 0], [0, 2], [0, -1], [1, 0], [0, 1]]) {
+      for (let rot = 0; rot < 4; rot++) {
+        const ghost = build.ghost(variant, (cellX + 0.5) * CELL_MM, (cellY + 0.5) * CELL_MM, rot);
+        if (!ghost.ok) continue;
+        const result = build.place(ghost.instance);
+        return build.modules.find((instance) => instance.id === result.id);
+      }
+    }
+  }
+  return null;
+}
+
+// Placed copy back in the spot it was saved from
+function placeBack(variant, source, structure) {
+  const build = createBuild(structure.modules.filter((instance) => instance.id !== source.id));
+  build.setStream(streamFrom(structure.stream));
+  const result = build.place({ ...variant, x: source.x, y: source.y, z: source.z, rot: source.rot });
+  return result.ok ? build.modules.find((instance) => instance.id === result.id) : null;
+}
+
+const SAVE_SEEDS = ['habitat', 'arco', 'barbican', 'beton', 'tower0', 'quarry', 'x9', 'balfron']; // structures that hold most families
+const THUMB_PX = 48; // test thumbnail size
+
+function thumbOf(solids, variant) {
+  const { render } = solids.buildVariant(variant, { connectors: true });
+  return Buffer.from(rasterThumb(render.positions, render.index, render.colors, THUMB_PX)).toString('base64');
+}
+
+test('every family saved and placed again equals the saved module, thumbnail included', async () => {
+  const solids = await getSolids();
+  const sources = new Map();
+  for (const seed of SAVE_SEEDS) {
+    for (const scale of ['block', 'mega']) {
+      const structure = generate({ seed, scale, services: 'high' });
+      for (const instance of structure.modules) if (!sources.has(instance.family)) sources.set(instance.family, { instance, structure });
+    }
+  }
+  for (const variant of sampleVariants()) if (!sources.has(variant.family)) sources.set(variant.family, { instance: variant, structure: null });
+  assert.deepEqual([...sources.keys()].sort(), [...FAMILY_IDS].sort());
+  const unplaced = [];
+  for (const [family, { instance, structure }] of sources) {
+    const store = memoryStore();
+    const shown = thumbOf(solids, instance);
+    const saved = createCollection(store).add(instance, THUMB, 1);
+    assert.ok(saved.ok && saved.stored, family);
+    const reloaded = createCollection(store);
+    const [entry] = reloaded.load();
+    assert.equal(entry.key, saved.key, family);
+    assert.equal(thumbOf(solids, entry.variant), shown, `${family} saved thumbnail matches what was seen`);
+    if (FAMILIES[family].disabled) {
+      unplaced.push(family);
+      continue;
+    }
+    const placed = placeAlone(entry.variant) || (structure && placeBack(entry.variant, instance, structure));
+    assert.ok(placed, `${family} could not be placed`);
+    assert.deepEqual(variantOf(placed), entry.variant, family);
+    assert.equal(variantKey(placed), entry.key, family);
+    assert.equal(thumbOf(solids, placed), shown, `${family} placed thumbnail`);
+  }
+  assert.deepEqual(unplaced, FAMILY_IDS.filter((id) => FAMILIES[id].disabled));
+});
+
+test('a placed platform keeps its saved sides until something is built beside it', () => {
+  const build = createBuild();
+  const terrace = { family: 'terrace', fp: '1x1', h: 1, seed: 1, mask: 3, roof: true };
+  const placed = build.place({ ...terrace, x: 0, y: 0, z: 0, rot: 0 });
+  const maskOf = () => build.modules.find((instance) => instance.id === placed.id).mask;
+  assert.equal(maskOf(), 3);
+  assert.equal(build.place({ family: 'core', fp: '1x1', h: 1, seed: 1, mask: 15, roof: false, x: 3, y: 3, z: 0, rot: 0 }).ok, true);
+  assert.equal(maskOf(), 3, 'a far placement leaves it alone');
+  assert.equal(build.place({ family: 'core', fp: '1x1', h: 1, seed: 2, mask: 15, roof: false, x: 1, y: 0, z: 0, rot: 0 }).ok, true);
+  assert.equal(maskOf(), 15 & ~1, 'a neighbour opens the side it touches');
 });

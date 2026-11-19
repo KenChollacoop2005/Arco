@@ -1,7 +1,22 @@
 import { CELL_MM, STORY_MM, MAX_MODULES } from '../config.js';
-import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight, instanceCells, instanceInZone } from './grid.js';
+import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight, instanceCells, instanceInZone, SIDES } from './grid.js';
 import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
 import { checkPlacement, validateStructure, reopenSides } from './placement.js';
+
+// Platform masks redone only beside the changed modules
+function reopenNear(modules, changed, keepIds = []) {
+  const near = new Set();
+  for (const instance of changed) {
+    for (const [cellX, cellY] of instanceCells(instance)) {
+      for (let level = instance.z; level < instance.z + instance.h; level++) near.add(`${cellX},${cellY},${level}`);
+    }
+  }
+  const beside = (instance) => instanceCells(instance).some(([cellX, cellY]) => SIDES.some(([stepX, stepY]) => near.has(`${cellX + stepX},${cellY + stepY},${instance.z + instance.h - 1}`)));
+  const fresh = new Map(reopenSides(modules).map((instance) => [instance.id, instance]));
+  const keep = new Set(keepIds);
+  const changedIds = new Set(changed.map((instance) => instance.id));
+  return modules.map((instance) => (!keep.has(instance.id) && (changedIds.has(instance.id) || beside(instance)) ? fresh.get(instance.id) : instance));
+}
 
 const UNDO_LIMIT = 100; // most steps kept for undo
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
@@ -138,14 +153,15 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       const result = check(instance);
       if (!result.ok) return { ok: false, reason: result.reason };
       instance.id = Math.max(0, ...modules.map((placed) => placed.id)) + 1;
-      commit(reopenSides([...modules, instance]));
+      // The placed module keeps its saved mask; neighbours adapt
+      commit(reopenNear([...modules, instance], [instance], [instance.id]));
       return { ok: true, reason: '', id: instance.id };
     },
     remove(ids) {
       const next = modules.filter((instance) => !ids.includes(instance.id));
       if (next.length === modules.length) return { ok: false, reason: '' };
       if (breaksOthers(next, 0)) return { ok: false, reason: RESTS_REASON };
-      commit(reopenSides(next));
+      commit(reopenNear(next, modules.filter((instance) => ids.includes(instance.id))));
       return { ok: true, reason: '' };
     },
     // Quarter turn of a placed module, in place
@@ -159,7 +175,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
-      commit(reopenSides(next));
+      commit(reopenNear(next, [current, turned]));
       return { ok: true, reason: '' };
     },
     // Swap in a whole structure as one step
