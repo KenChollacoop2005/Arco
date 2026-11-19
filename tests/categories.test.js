@@ -19,8 +19,9 @@ const LISTED = {
   nature: ['farm', 'garden', 'greenhouse', 'planted'],
   industrial: ['smokestack', 'chimney', 'tankfarm', 'gantry', 'cooling', 'generator', 'disposal'],
   walled: ['shacks', 'flared'],
+  utilities: ['smallpump', 'pumptank', 'pumproom', 'watermain', 'powerroom', 'turbine', 'solar', 'spring', 'well', 'raincatcher', 'wheel', 'wheelup', 'runoff'],
 };
-const ALWAYS = ['core', 'pilotis', 'transfer', 'housing', 'walkway', 'bridge', 'stair', 'ramp', 'deck', 'support', 'smallpump', 'pumptank', 'pumproom', 'watermain', 'powerroom', 'turbine', 'solar', 'spring', 'well', 'raincatcher', 'wheel', 'wheelup', 'runoff'];
+const ALWAYS = ['core', 'pilotis', 'transfer', 'housing', 'walkway', 'bridge', 'stair', 'ramp', 'deck', 'support'];
 const SEEDS = ['arco', 'habitat', 'barbican', 'nakagin', 'x9', 'golden', 'lumen', 'quarry'];
 
 test('every family carries a category; the listed ones toggle, the rest are always on', () => {
