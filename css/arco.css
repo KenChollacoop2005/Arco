@@ -46,10 +46,15 @@
   --gap: 16px;
   --panel-width: 252px;
   --logo-size: 24px;
-  /* Side columns; the stage sits between them */
+  /* Floating boxes over a full-width stage */
   --col-width: 268px;
-  --col-left: var(--col-width);
-  --col-right: var(--col-width);
+  --col-left: 0px;
+  --col-right: 0px;
+  --panel-left-width: 296px; /* left boxes, wide enough for every label */
+  --panel-right-width: 268px; /* inspector and action boxes */
+  --panel-gap: 8px; /* space between stacked boxes */
+  --legend-room: 80px; /* kept free under the boxes for the legend */
+  --build-scroll-max: 52vh; /* Build box scrolls past this height */
   --card-min: 100px;
   --rarity-uncommon: #2f9e78;
   --rarity-rare: #2346c7;
@@ -139,24 +144,53 @@ button { cursor: pointer; }
 }
 .menu-body hr { width: 100%; margin: 0; border: 0; border-top: 1px solid var(--hairline); }
 
-/* Side columns */
+/* Side columns: clear holders for stacked floating boxes */
 .column {
   position: fixed;
-  top: var(--bar-height);
-  bottom: 0;
-  width: var(--col-width);
+  top: calc(var(--bar-height) + var(--gap));
+  bottom: calc(var(--gap) + var(--legend-room));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--panel-gap);
   overflow-y: auto;
-  background: var(--paper);
+  pointer-events: none;
   z-index: 3;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
-.column-left { left: 0; border-right: 1px solid var(--hairline); }
-.column-right { right: 0; border-left: 1px solid var(--hairline); }
+.column-left { left: var(--gap); width: var(--panel-left-width); }
+.column-right { right: var(--gap); width: var(--panel-right-width); }
 
-.mode-pane { display: none; }
+.mode-pane { display: none; flex-direction: column; gap: var(--panel-gap); }
 body[data-mode='generate'] [data-pane='generate'],
 body[data-mode='collection'] [data-pane='collection'],
-body[data-mode='drawing'] [data-pane='drawing'] { display: block; }
+body[data-mode='drawing'] [data-pane='drawing'] { display: flex; }
+
+/* Panels: one box per thing, sized to its content */
+.panel {
+  flex: none;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  pointer-events: auto;
+}
+.panel > summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 14px 8px;
+  font: 400 11px/1.2 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+.panel[open] > summary { border-bottom: 1px solid var(--hairline); }
+.panel > summary::-webkit-details-marker { display: none; }
+.panel > summary::after { content: '+'; color: var(--ink-soft); }
+.panel[open] > summary::after { content: '\2212'; }
+.panel > .drawer-body { padding-top: 12px; }
+.build-panel > .drawer-body { max-height: var(--build-scroll-max); overflow-y: auto; scrollbar-width: thin; }
+.inspector-panel { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.inspector-panel > .drawer:last-child { border-bottom: 0; }
 
 /* Drawers: one style for every collapsible column section */
 .drawer { border-bottom: 1px solid var(--hairline); }
@@ -510,9 +544,9 @@ body[data-mode='collection'] .section-controls { display: none; }
 /* Narrow windows: the side columns slide over the full-width stage */
 @media (max-width: 1080px) {
   :root { --col-left: 0px; --col-right: 0px; --col-width: min(320px, 86vw); }
-  .column { z-index: 7; box-shadow: 0 0 24px rgba(0, 0, 0, 0.18); visibility: hidden; }
-  .column-left { transform: translateX(-100%); }
-  .column-right { transform: translateX(100%); }
+  .column { top: var(--bar-height); bottom: 0; width: var(--col-width); padding: var(--gap); background: var(--paper); pointer-events: auto; z-index: 7; box-shadow: 0 0 24px rgba(0, 0, 0, 0.18); visibility: hidden; }
+  .column-left { left: 0; transform: translateX(-100%); }
+  .column-right { right: 0; transform: translateX(100%); }
   body.left-open .column-left, body.right-open .column-right { transform: none; visibility: visible; }
   .edge-tab {
     position: fixed;
