@@ -118,5 +118,5 @@ export function createSketch(view) {
     return false;
   });
 
-  return { set, clear };
+  return { set, clear, warm: [{ material, kind: 'lines' }] };
 }

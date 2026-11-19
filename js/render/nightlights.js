@@ -107,6 +107,7 @@ export function createNightLights(view, light) {
 
   return {
     group,
+    warm: [{ material: poolMaterial, kind: 'mesh' }, { material: bulbOn, kind: 'instanced' }, { material: bulbOff, kind: 'instanced' }, { material: cordMaterial, kind: 'lines' }],
     // plan from lightPlan in core/lights.js
     set(plan) {
       clear();

@@ -29,6 +29,7 @@ import { streamFrom } from './core/stream.js';
 import { createWaterworks } from './render/waterworks.js';
 import { createNightLights } from './render/nightlights.js';
 import { createParticles } from './render/particles.js';
+import { warmUp } from './render/warmup.js';
 import { growLimits, placeCap } from './core/budget.js';
 import { setupDrawers } from './ui/drawers.js';
 import { setupGrowTool } from './ui/growtool.js';
@@ -74,6 +75,8 @@ const modules = createModuleView(view, (variants, onPart) =>
 const checker = createWorkerClient(new URL('./workers/checks.worker.js', import.meta.url));
 const analyst = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 const inspector = createInspector(query('#inspectorBody'));
+// Module shaders compile while the first structure is still in the workers
+warmUp(view, rig.camera, modules.warm);
 const drawing = createDrawing(view, rig, modules, query('#overlay'), query('#titleBlock'));
 const section = createSection(view, modules);
 const decor = createDecor(view);
@@ -402,6 +405,14 @@ function refreshParticles() {
 app.analysisListeners.push(refreshParticles);
 app.modeListeners.push(refreshParticles);
 app.structureListeners.push(() => refreshParticles());
+
+// Layer shaders compile while the first build animation plays
+let layersWarm = false;
+app.structureListeners.push((result, phase) => {
+  if (layersWarm || phase !== 'start') return;
+  layersWarm = true;
+  warmUp(view, rig.camera, [...strings.warm, ...waterworks.warm, ...particles.warm, ...nightLights.warm, ...decor.warm]);
+});
 query('#physicsToggle').addEventListener('change', refreshParticles);
 toggles.watch('effects', refreshParticles);
 view.onFrame(() => particles.moving());

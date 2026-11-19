@@ -226,8 +226,10 @@ export function createStrings(view) {
     plain.push(mesh);
   }
 
+  const instanced = [metal, ...Object.values(looks), cloth].flatMap((material) => [{ material, kind: 'instanced' }, { material, kind: 'instanced', colored: true }]);
   return {
     group,
+    warm: [...instanced, { material: water, kind: 'mesh' }, { material: canvas, kind: 'mesh' }],
     // Ports and strings from the services plan; light draws fewer and thinner
     set({ ports = [], pipes = [], wires = [], lines = [], sheets = [], laundry = [], tarps = [] } = {}, light = false) {
       clear();

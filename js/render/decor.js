@@ -33,6 +33,7 @@ export function createDecor(view) {
 
   return {
     group,
+    warm: [...parts.values()].map((part) => ({ material: part.material, kind: 'instanced', shadows: true })),
     set(items) {
       clear();
       for (const [type, part] of parts) {

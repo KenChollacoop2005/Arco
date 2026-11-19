@@ -196,6 +196,7 @@ export function createWaterworks(view) {
 
   return {
     group,
+    warm: [streamMaterial, ...Object.values(pourMaterials)].map((material) => ({ material, kind: 'mesh' })).concat([bankMaterial, boxMaterial].map((material) => ({ material, kind: 'instanced' }))),
     setStream,
     setPours,
     setBoxes,

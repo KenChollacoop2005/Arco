@@ -138,6 +138,7 @@ export function createParticles(view, light) {
 
   return {
     group,
+    warm: Object.values(materials).map((material) => ({ material, kind: 'points' })),
     // emitters from core/emitters.js, falls from the waterworks
     set(emitters, falls) {
       clear();

@@ -348,6 +348,8 @@ export function createModuleView(view, requestGeometry) {
     pick,
     pickPoint,
     boxOf,
+    // Materials to compile ahead of the first structure
+    warm: [{ material: materials.lit, kind: 'instanced', shadows: true }, { material: materials.cutBack, kind: 'instanced' }, { material: materials.cutFront, kind: 'instanced' }, ...sketch.warm],
     partOf: (key) => cache.get(key),
     get group() {
       return group;
