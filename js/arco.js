@@ -163,7 +163,7 @@ function select(id, extend) {
 
 const picker = createPicker(canvas, rig, modules, {
   onPick(id, extend, event) {
-    if (growTool.click(event) || builder.click(event)) return;
+    if (growTool.click(event) || residentPanel.click(id) || builder.click(event)) return;
     select(id, extend);
   },
   onDouble(id) {
@@ -422,6 +422,9 @@ const residentPanel = setupResidentPanel(app, residents, {
     const box = modules.boxOf(id);
     if (box) rig.face(box);
   },
+  idAt: (event) => picker.idAt(event),
+  setState: (id, state) => modules.setState(id, state),
+  canvas,
 });
 
 // Layer shaders compile while the first build animation plays

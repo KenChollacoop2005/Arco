@@ -26,6 +26,10 @@ const GRID_STRENGTH = 0.35; // plinth grid line strength
 const SELECT_MIX = 0.3; // selection tint amount
 const INVALID_MIX = 0.75; // bad placement tint amount
 const HIGHLIGHT_MIX = 0.6; // assembly step tint amount
+const ROOM_MIX = 0.45; // home with room, while placing a resident
+const FULL_MIX = 0.6; // full home or not a home, while placing
+const GREEN = 'vec3(0.55, 0.85, 0.6)'; // soft room green
+const GREY = 'vec3(0.62, 0.62, 0.6)'; // placing grey
 const DRAWING_KEEP = 0.6; // tint kept in drawing mode
 const BLUE = 'vec3(0.14, 0.27, 0.78)'; // drafting blue
 const RED = 'vec3(0.8, 0.16, 0.16)'; // fail red
@@ -48,6 +52,8 @@ export const STATE_GHOST = 2;
 export const STATE_INVALID = 3;
 export const STATE_HIDDEN = 4;
 export const STATE_HIGHLIGHT = 5;
+export const STATE_ROOM = 6;
+export const STATE_FULL = 7;
 
 export const sharedUniforms = {
   uTime: { value: 0 },
@@ -170,7 +176,9 @@ float gridLine = (1.0 - min(min(cellLine.x, cellLine.y), 1.0)) * step(ringRadius
 #endif
 if (vState > 0.5 && vState < 1.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${BLUE}, ${glsl(SELECT_MIX)});
 if (vState > 2.5 && vState < 3.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${RED}, ${glsl(INVALID_MIX)});
-if (vState > 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${ORANGE}, ${glsl(HIGHLIGHT_MIX)});
+if (vState > 4.5 && vState < 5.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${ORANGE}, ${glsl(HIGHLIGHT_MIX)});
+if (vState > 5.5 && vState < 6.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${GREEN}, ${glsl(ROOM_MIX)});
+if (vState > 6.5) diffuseColor.rgb = mix(diffuseColor.rgb, ${GREY}, ${glsl(FULL_MIX)});
 if (uDrawing > 0.5) {
   float keep = step(0.5, vState);
   diffuseColor.rgb = mix(${PAPER}, diffuseColor.rgb, keep * ${glsl(DRAWING_KEEP)});

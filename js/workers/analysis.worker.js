@@ -12,22 +12,23 @@ import { scoreLayout } from '../core/scoring.js';
 // Active string ports, only what the renderer and inspector need
 const portView = (port) => ({ module: port.module, index: port.index, type: port.type, capacity: port.capacity, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
 
-// Residents scored on a structure; previews give points per candidate home for one resident
+// Residents scored on a structure; previews give raw points per candidate home for one resident
 function residentReport({ modules, seed, residents, assignments, preview }) {
   const score = (given, cached) => {
     const results = cached || structureResults(modules, seed, residentExtras(residents, given));
     const evaluations = evaluateResidents(modules, results, residents, given);
-    return { evaluations, points: scoreLayout(evaluations, { unused: 0 }).points, results };
+    const layout = scoreLayout(evaluations, { unused: 0 });
+    return { evaluations, points: layout.points, raw: layout.raw, results };
   };
   const base = score(assignments);
   const previews = {};
   if (preview) {
     const mover = residents.find((resident) => resident.id === preview.resident);
+    // Extra water or power changes the services, so those rerun
     const extraWant = !!mover && mover.wants.some((trait) => trait.id === 'water' || trait.id === 'power');
-    const from = score({ ...assignments, [preview.resident]: null }, extraWant ? null : base.results).points;
-    for (const home of preview.homes) previews[home] = score({ ...assignments, [preview.resident]: home }, extraWant ? null : base.results).points - from;
+    for (const home of preview.homes) previews[home] = score({ ...assignments, [preview.resident]: home }, extraWant ? null : base.results).raw;
   }
-  return { evaluations: base.evaluations, points: base.points, previews };
+  return { evaluations: base.evaluations, points: base.points, raw: base.raw, previews };
 }
 
 self.onmessage = (event) => {

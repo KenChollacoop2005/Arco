@@ -1,4 +1,4 @@
-import { homeSpot, keepHomes, assignmentsOf, occupantsOf } from '../core/roster.js';
+import { homeSpot, keepHomes, assignmentsOf, occupantsOf, assignResident } from '../core/roster.js';
 import { makeFigure } from '../core/figure.js';
 
 // Resident state for the main view: records, homes, evaluations and scene marks
@@ -8,6 +8,7 @@ export function setupResidents(app, { marks, scorer }) {
   let evaluations = new Map();
   let points = 0;
   let selected = null;
+  let hidden = null;
   let token = 0;
   const figures = new Map();
   const listeners = [];
@@ -33,7 +34,7 @@ export function setupResidents(app, { marks, scorer }) {
     for (const home of homes) {
       const instance = byId(home);
       if (!instance) continue;
-      const living = occupantsOf(records, home);
+      const living = occupantsOf(records, home).filter((record) => record.id !== hidden);
       living.forEach((record, slot) => {
         const spot = homeSpot(instance, app.analysis, slot, living.length);
         pins.push({ point: spot.pin, color: figureOf(record).params.accent });
@@ -42,7 +43,7 @@ export function setupResidents(app, { marks, scorer }) {
     }
     marks.setPins(pins);
     const record = records.find((entry) => entry.id === selected);
-    marks.setFigure(record && stand ? figureOf(record) : null, stand ? stand.stand : null, stand ? stand.facing : 0);
+    marks.setFigure(record && stand && record.id !== hidden ? figureOf(record) : null, stand ? stand.stand : null, stand ? stand.facing : 0);
     marks.setShown(shown());
   }
 
@@ -110,6 +111,24 @@ export function setupResidents(app, { marks, scorer }) {
       notify();
     },
     setRecords,
+    // Moves one resident into a home with room, or out with null
+    assign(id, home) {
+      const next = assignResident(records, modulesNow(), id, home);
+      if (!next) return false;
+      setRecords(next);
+      return true;
+    },
+    // Raw points now and per candidate home for one resident
+    preview(id, homes) {
+      const structure = app.structure;
+      if (!structure) return Promise.resolve(null);
+      return scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records), preview: { resident: id, homes } });
+    },
+    // Hides one resident's pin and figure while they are carried
+    hide(id) {
+      hidden = id;
+      refreshMarks();
+    },
     refreshMarks,
     onChange(listener) {
       listeners.push(listener);

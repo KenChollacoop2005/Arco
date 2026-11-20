@@ -87,6 +87,7 @@ export function renderResidentCards(list, records, { evaluationOf, portrait, nam
     const evaluation = evaluationOf(record.id);
     const card = node('li', `resident-card${record.home === null ? ' is-unplaced' : ''}${shownId === record.id ? ' is-shown' : ''}`);
     card.tabIndex = 0;
+    card.dataset.id = record.id;
     card.setAttribute('role', 'button');
     card.setAttribute('aria-pressed', String(pressedId === record.id));
     const image = node('img', 'resident-portrait');

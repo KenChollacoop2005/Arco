@@ -53,5 +53,5 @@ export function createPicker(canvas, rig, moduleView, handlers) {
     if (travel <= CLICK_SLOP_PX) handlers.onPick(pickAt(event), event.shiftKey, event);
   });
   canvas.addEventListener('dblclick', (event) => handlers.onDouble(pickAt(event)));
-  return { targetAt, pointAt };
+  return { targetAt, pointAt, idAt: pickAt };
 }
