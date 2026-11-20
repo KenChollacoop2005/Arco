@@ -107,3 +107,19 @@ test('pins float above a home, or beside it when something sits on top', () => {
   const pair = [0, 1].map((slot) => homeSpot(upper, analysis, slot, 2).pin);
   assert.notDeepEqual(pair[0], pair[1]);
 });
+
+test('every trait and reason a resident can show has copy', async () => {
+  const { COPY } = await import('../js/ui/copy.js');
+  const { WANTS, HATES, DREAMS } = await import('../js/core/residents.js');
+  const { scorePuzzleLayout } = await import('../js/core/puzzle.js');
+  for (const [kind, table] of [['want', WANTS], ['hate', HATES], ['dream', DREAMS]]) for (const id of Object.keys(table)) assert.ok(COPY.traits[`${kind}:${id}`], `${kind}:${id}`);
+  const seen = new Set();
+  for (const name of readdirSync('puzzles').filter((file) => file.endsWith('.json')).slice(0, 4)) {
+    const puzzle = JSON.parse(readFileSync(`puzzles/${name}`, 'utf8'));
+    for (const layout of [puzzle.par.layout, { pieces: [], residents: {} }]) {
+      for (const result of scorePuzzleLayout(puzzle, layout).evaluations) for (const item of [...result.needs, ...result.wants, ...result.hates, ...(result.dream ? [result.dream] : [])]) seen.add(item.reason);
+    }
+  }
+  assert.ok(seen.size > 10);
+  for (const code of seen) assert.ok(COPY.reasons[code], code);
+});
