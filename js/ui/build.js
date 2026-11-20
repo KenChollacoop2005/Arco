@@ -149,6 +149,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   });
   query('#buildRotate').addEventListener('click', rotate);
   query('#buildDelete').addEventListener('click', remove);
+  query('#buildReturn').addEventListener('click', remove);
   search.addEventListener('input', refreshPalette);
   category.addEventListener('change', refreshPalette);
 

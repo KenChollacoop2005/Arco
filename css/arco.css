@@ -187,6 +187,9 @@ body[data-mode='drawing'] [data-pane='drawing'] { display: flex; }
 .inspector-panel { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .inspector-panel > .drawer:last-child { border-bottom: 0; }
 .action-panel { padding: 10px 14px; }
+.action-note { margin: 6px 0 0; }
+.anchor-chip { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border: 1px solid var(--ink-soft); font: 10px var(--font-mono); vertical-align: middle; }
+.lock-icon { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 
 /* Drawers: one style for every collapsible column section */
 .drawer { border-bottom: 1px solid var(--hairline); }

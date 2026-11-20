@@ -93,6 +93,9 @@ export const COPY = {
   cancel: 'Cancel',
   rotate: 'Rotate',
   remove: 'Delete',
+  returnToTray: 'Return to tray',
+  anchorNote: 'This piece anchors the site (a core, the ground floor, or under one), so it stays put.',
+  anchorChip: 'Anchor',
 
   drawingTitle: 'Drawing',
   viewAxon: 'Axonometric',

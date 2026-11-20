@@ -148,8 +148,13 @@ function refreshDuplicate() {
 
 function showInspector() {
   const selected = selectedModule();
-  inspector.render({ structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, lights: app.analysis && app.analysis.lights, printOf, socketsOf, fit: app.fit }, selected);
+  inspector.render({ anchored: !!selected && app.mode === 'puzzle' && builder.isLocked(selected.id), structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, lights: app.analysis && app.analysis.lights, printOf, socketsOf, fit: app.fit }, selected);
   query('#saveModule').disabled = !selected;
+  // Puzzle anchors can be looked at but not turned or returned
+  const anchored = !!selected && app.mode === 'puzzle' && builder.isLocked(selected.id);
+  for (const id of ['#buildRotate', '#buildDelete', '#buildReturn']) query(id).disabled = !selected || anchored;
+  query('#actionNote').hidden = !anchored;
+  query('#actionNote').textContent = anchored ? COPY.anchorNote : '';
   refreshDuplicate();
   query('#exportModule').disabled = !selected;
   query('#exportSelected').disabled = app.selection.length === 0;
@@ -219,6 +224,8 @@ app.structureListeners.push(async (result, phase) => {
   for (const listener of app.analysisListeners) listener(app.analysis, result);
 });
 
+// The action box follows the mode, anchors only lock in puzzles
+app.modeListeners.push(() => showInspector());
 app.modeListeners.push((mode) => {
   drawing.setActive(mode === 'drawing');
   if (mode !== 'drawing' && !query('input[name="drawingView"][value="axon"]').checked) {

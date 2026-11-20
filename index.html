@@ -201,10 +201,6 @@
             <button type="button" class="plain" id="buildClear" data-copy="clear"></button>
             <button type="button" class="plain sandbox-only" id="newResident" data-copy="newResident"></button>
           </div>
-          <div class="button-grid">
-            <button type="button" class="plain" id="buildRotate" data-copy="rotate"></button>
-            <button type="button" class="plain" id="buildDelete" data-copy="remove"></button>
-          </div>
           <div class="field-row">
             <input type="search" id="buildSearch" class="search" data-copy-placeholder="searchModules" aria-label="Search saved modules" autocomplete="off" spellcheck="false">
             <select id="buildCategory" class="select" aria-label="Category"></select>
@@ -264,9 +260,13 @@
     <!-- Action box, then the Resident drawer last on the right -->
     <section class="panel action-panel" aria-label="Module actions">
       <div class="button-grid">
-        <button type="button" class="plain" id="duplicateModule" data-copy="duplicate" disabled></button>
-        <button type="button" class="primary" id="saveModule" data-copy="save" disabled></button>
+        <button type="button" class="plain" id="buildRotate" data-copy="rotate" disabled></button>
+        <button type="button" class="plain sandbox-only" id="buildDelete" data-copy="remove" disabled></button>
+        <button type="button" class="plain puzzle-only" id="buildReturn" data-copy="returnToTray" disabled></button>
+        <button type="button" class="plain sandbox-only" id="duplicateModule" data-copy="duplicate" disabled></button>
+        <button type="button" class="primary sandbox-only" id="saveModule" data-copy="save" disabled></button>
       </div>
+      <p class="hint action-note" id="actionNote" hidden></p>
     </section>
     <section class="panel resident-panel" id="residentPanel" aria-label="Resident" hidden>
       <div class="drawer-body">

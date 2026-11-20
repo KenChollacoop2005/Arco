@@ -137,6 +137,18 @@ function rows(pairs) {
   return list;
 }
 
+// Small padlock drawn as an outline
+function lockIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('class', 'lock-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M3.5 5.5V4a2.5 2.5 0 0 1 5 0v1.5M2.5 5.5h7v5h-7z');
+  svg.append(path);
+  return svg;
+}
+
 // Water and power as two chips on one line; reasons and notes on hover or tap
 function needRow(flows, id) {
   const line = node('div', 'need-chips');
@@ -198,9 +210,16 @@ export function createInspector(body, prefix = 'arco.inspector') {
     return inner;
   }
 
-  function header(variant, family, placement) {
+  function header(variant, family, placement, anchored = false) {
     const top = node('div', 'inspector-head');
-    top.append(node('p', 'inspector-name', family.label), node('p', 'inspector-sub', `${COPY.family}: ${family.id}`));
+    const name = node('p', 'inspector-name', family.label);
+    if (anchored) {
+      const lock = node('span', 'anchor-chip', COPY.anchorChip);
+      lock.title = COPY.anchorNote;
+      lock.prepend(lockIcon());
+      name.append(' ', lock);
+    }
+    top.append(name, node('p', 'inspector-sub', `${COPY.family}: ${family.id}`));
     top.append(rows([[COPY.category, categoryLabel(family)], [COPY.role, family.group], [COPY.placement, placement], [COPY.footprint, footprintText(variant)]]));
     body.append(top);
   }
@@ -289,7 +308,7 @@ export function createInspector(body, prefix = 'arco.inspector') {
   // A placed module (it has an id) or a saved variant (no id)
   function moduleView(state, variant) {
     const placed = variant.id !== undefined;
-    header(variant, FAMILIES[variant.family], placed ? placementOf(variant) : defaultPlacement(variant));
+    header(variant, FAMILIES[variant.family], placed ? placementOf(variant) : defaultPlacement(variant), !!state.anchored);
     needsDrawer(state, variant, placed);
     connectionsDrawer(state, variant, placed);
     if (placed) walkingDrawer(state, variant);
