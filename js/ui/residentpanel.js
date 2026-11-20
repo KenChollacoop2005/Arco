@@ -20,6 +20,7 @@ export function setupResidentPanel(app, residents, hooks) {
   const page = query('#residentPage');
   const moveButton = query('#residentMove');
   const status = query('#residentStatus');
+  const tools = query('#residentTools');
   const records = () => residents.list();
   const recordOf = (id) => records().find((entry) => entry.id === id) || null;
   const nameOf = (id) => {
@@ -53,7 +54,7 @@ export function setupResidentPanel(app, residents, hooks) {
     const index = mates.findIndex((mate) => mate.id === record.id);
     nav.hidden = mates.length < 2;
     page.textContent = `${index + 1} ${COPY.residentOf} ${mates.length}`;
-    renderResidentDetail(detail, record, residents.evaluation(record.id), { portrait, nameOf, home: residents.homeOf(record.id) });
+    renderResidentDetail(detail, record, residents.evaluation(record.id), { portrait, nameOf, home: residents.homeOf(record.id), top: [tools] });
     moveButton.disabled = record.home === null || !!placing;
   }
 

@@ -114,33 +114,54 @@ export function renderResidentCards(list, records, { evaluationOf, portrait, nam
   }
 }
 
-function statusChip(met, yes, no, waiting) {
-  return node('span', `chip ${waiting ? '' : met ? 'chip-full' : 'chip-dry'}`, waiting ? COPY.residentNotPlaced : met ? yes : no);
-}
-
-// One trait line: icon, label, met or not, and the plain reason
-function traitLine(kind, trait, judged, nameOf, placed) {
-  const solid = kind === 'hate' ? !placed || judged.triggered : !placed || judged.met;
-  const line = node('li', 'trait-line');
-  const label = traitText(kind, trait, nameOf);
-  line.append(traitIcon(kind, solid, label), node('span', 'trait-label', label));
-  if (placed) {
-    const good = kind === 'hate' ? !judged.triggered : judged.met;
-    line.append(node('span', `chip ${good ? 'chip-full' : kind === 'hate' ? 'chip-dry' : 'chip-partial'}`, kind === 'hate' ? (judged.triggered ? COPY.traitTriggered : COPY.traitClear) : judged.met ? COPY.traitMet : COPY.traitNotMet));
-    line.append(node('p', 'need-reason', reasonText(judged.reason)));
-  }
+// Reason under a line, shown on hover as a tooltip or on tap
+export function withReason(line, text) {
+  if (!text) return line;
+  line.title = text;
+  line.classList.add('has-reason');
+  line.append(node('p', 'need-reason line-reason', text));
+  line.addEventListener('click', (event) => {
+    if (event.target.closest('button')) return;
+    line.classList.toggle('is-open');
+  });
   return line;
 }
 
-function section(title, children) {
-  const block = node('div', 'resident-section');
-  block.append(node('h4', 'resident-heading', title), ...children);
-  return block;
+// Needs as chips on one line, each with its reason
+function needChips(record, evaluation, placed) {
+  const line = node('div', 'need-chips');
+  const reasons = [];
+  record.needs.forEach((need, index) => {
+    const judged = placed ? evaluation.needs[index] : null;
+    const label = need === 'water' ? COPY.needWater : COPY.needPower;
+    const chip = node('span', `chip ${!placed ? '' : judged.met ? 'chip-full' : 'chip-dry'}`, `${label} ${!placed ? COPY.residentNotPlacedShort : judged.met ? COPY.needMet : COPY.needNotMet}`);
+    if (judged) {
+      chip.title = reasonText(judged.reason);
+      reasons.push(`${label}: ${reasonText(judged.reason)}`);
+    }
+    line.append(chip);
+  });
+  return withReason(line, reasons.join(' '));
 }
 
-// Full detail of one resident; evaluation may be null when unplaced or still scoring
-// stored: a saved resident away from any structure, so no needs or home
-export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null, stored = false }) {
+// One trait line: icon, short label, status chip; the reason on hover or tap
+function traitLine(kind, trait, judged, nameOf, placed, index) {
+  const solid = kind === 'hate' ? !placed || judged.triggered : !placed || judged.met;
+  const line = node('li', 'trait-line');
+  line.dataset.kind = kind;
+  line.dataset.index = String(index);
+  line.tabIndex = 0;
+  const label = traitText(kind, trait, nameOf);
+  line.append(traitIcon(kind, solid, label), node('span', 'trait-label', label));
+  if (!placed) return line;
+  const good = kind === 'hate' ? !judged.triggered : judged.met;
+  line.append(node('span', `chip ${good ? 'chip-full' : kind === 'hate' ? 'chip-dry' : 'chip-partial'}`, kind === 'hate' ? (judged.triggered ? COPY.traitTriggered : COPY.traitClear) : judged.met ? COPY.traitMet : COPY.traitNotMet));
+  return withReason(line, reasonText(judged.reason));
+}
+
+// Full detail of one resident, compact; evaluation may be null when unplaced or still scoring
+// stored: a saved resident away from any structure, so no needs or home; top: elements beside the name
+export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null, stored = false, top = [] }) {
   body.replaceChildren();
   const placed = record.home !== null && !!evaluation && evaluation.home !== null;
   const head = node('div', 'resident-head');
@@ -148,30 +169,19 @@ export function renderResidentDetail(body, record, evaluation, { portrait, nameO
   image.alt = '';
   image.src = portrait(record);
   const title = node('div', 'resident-title');
-  title.append(node('h3', 'resident-big-name', record.name));
+  const nameRow = node('div', 'resident-name-row');
+  nameRow.append(node('h3', 'resident-big-name', record.name), ...top);
+  title.append(nameRow);
   const where = home ? `${FAMILIES[home.family].label}, ${COPY.residentLevel} ${home.z}` : COPY.residentNotPlaced;
-  if (!stored) title.append(node('p', 'resident-where', where));
-  if (placed) title.append(node('p', 'resident-points', `${evaluation.points} ${COPY.residentPoints}`));
+  if (!stored) title.append(node('p', 'resident-where', placed ? `${where} · ${evaluation.points} ${COPY.residentPoints}` : where));
   if (!stored) title.append(meter(placed ? evaluation : null));
   head.append(image, title);
   body.append(head);
-  const needs = record.needs.map((need, index) => {
-    const judged = placed ? evaluation.needs[index] : null;
-    const line = node('div', 'need');
-    const value = node('span', 'need-value');
-    value.append(statusChip(judged && judged.met, COPY.needMet, COPY.needNotMet, !placed));
-    line.append(node('span', 'need-label', need === 'water' ? COPY.needWater : COPY.needPower), value);
-    if (judged) line.append(node('p', 'need-reason', reasonText(judged.reason)));
-    return line;
-  });
-  if (!stored) body.append(section(COPY.residentNeeds, needs));
-  const list = (kind, traits, judgedList) => {
-    const items = node('ul', 'trait-list');
-    traits.forEach((trait, index) => items.append(traitLine(kind, trait, judgedList ? judgedList[index] : {}, nameOf, placed)));
-    return items;
-  };
-  body.append(section(COPY.residentWants, [list('want', record.wants, placed ? evaluation.wants : null)]));
-  body.append(section(COPY.residentHates, record.hates.length > 0 ? [list('hate', record.hates, placed ? evaluation.hates : null)] : [node('p', 'need-none', COPY.residentNoHates)]));
-  if (record.dream) body.append(section(COPY.residentDream, [list('dream', [record.dream], placed ? [evaluation.dream] : null)]));
+  if (!stored) body.append(needChips(record, evaluation, placed));
+  const items = node('ul', 'trait-list');
+  record.wants.forEach((trait, index) => items.append(traitLine('want', trait, placed ? evaluation.wants[index] : {}, nameOf, placed, index)));
+  record.hates.forEach((trait, index) => items.append(traitLine('hate', trait, placed ? evaluation.hates[index] : {}, nameOf, placed, index)));
+  if (record.dream) items.append(traitLine('dream', record.dream, placed ? evaluation.dream : {}, nameOf, placed, 0));
+  body.append(items);
   if (placed && evaluation.happy) body.append(node('p', 'resident-happy', COPY.residentHappy));
 }

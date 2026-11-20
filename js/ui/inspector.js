@@ -1,4 +1,5 @@
 import { STORY_MM, MAX_OVERHANG_DEG, MAX_BRIDGE_MM, MIN_WALL_MM, BED_MM, LIGHT_RADIUS_CELLS } from '../config.js';
+import { withReason } from './residentview.js';
 import { fitStatus } from '../core/checks.js';
 import { FAMILIES, defaultPlacement, residentCapacity, canSupport } from '../core/catalog.js';
 import { placementOf } from '../core/placement.js';
@@ -136,15 +137,21 @@ function rows(pairs) {
   return list;
 }
 
-// One need: label, status chip and amount, then the reason and notes below
-function needLine(label, need, flows) {
-  const line = node('div', 'need');
-  const value = node('span', 'need-value');
-  if (need && need.status) value.append(node('span', `chip chip-${need.status}`, need.chip), node('span', 'need-amount', need.amount));
-  else if (!need || need.notes.length === 0) value.append(node('span', 'need-none', flows ? COPY.noNeed : COPY.checking));
-  line.append(node('span', 'need-label', label), value);
-  for (const text of need ? [need.reason, ...need.notes].filter(Boolean) : []) line.append(node('p', 'need-reason', text));
-  return line;
+// Water and power as two chips on one line; reasons and notes on hover or tap
+function needRow(flows, id) {
+  const line = node('div', 'need-chips');
+  const reasons = [];
+  for (const [label, need] of [[COPY.water, waterNeed(flows, id)], [COPY.power, powerNeed(flows, id)]]) {
+    const status = need && need.status;
+    const chip = node('span', `chip${status ? ` chip-${status}` : ''}`, status ? `${label} ${need.chip} ${need.amount}` : `${label}: ${flows ? COPY.noNeed : COPY.checking}`);
+    const texts = need ? [need.reason, ...need.notes].filter(Boolean) : [];
+    if (texts.length > 0) {
+      chip.title = texts.join(' ');
+      reasons.push(`${label}: ${texts.join(' ')}`);
+    }
+    line.append(chip);
+  }
+  return withReason(line, reasons.join(' '));
 }
 
 function checkLine(label, status, value, detail) {
@@ -225,8 +232,7 @@ export function createInspector(body, prefix = 'arco.inspector') {
     const needs = drawer('needs', COPY.needs, 'open');
     const capacity = residentCapacity(variant);
     if (placed) {
-      needs.append(needLine(COPY.water, waterNeed(flows, variant.id), flows));
-      needs.append(needLine(COPY.power, powerNeed(flows, variant.id), flows));
+      needs.append(needRow(flows, variant.id));
     }
     needs.append(rows([[COPY.residents, capacity > 0 ? String(capacity) : COPY.none]]));
     const own = placed && lights && lights.modules[variant.id];

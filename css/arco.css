@@ -590,9 +590,20 @@ body[data-mode='collection'] .section-controls { display: none; }
 .resident-points { font-family: var(--font-mono); color: var(--ink); }
 .resident-section { display: grid; gap: 6px; }
 .resident-heading { margin: 0; font: 400 10px/1.2 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
-.trait-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.trait-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .trait-line { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-size: 12px; }
-.trait-line .need-reason { grid-column: 2 / 4; }
+.trait-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trait-line .line-reason { grid-column: 2 / 4; }
+/* Compact lines: the plain reason on hover (title) or tap */
+.has-reason { cursor: help; }
+.line-reason { display: none; }
+.has-reason.is-open .line-reason { display: block; }
+.need-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.need-chips .line-reason { flex-basis: 100%; }
+.resident-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.resident-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.resident-tools button { padding: 2px 8px; font-size: 11px; }
+.resident-tools .resident-nav { gap: 2px; }
 .resident-happy { margin: 0; padding: 4px 8px; border: 1px solid var(--pass); color: var(--pass); font-size: 12px; text-align: center; }
 .resident-detail { display: grid; gap: 12px; }
 .archive-residents { display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
