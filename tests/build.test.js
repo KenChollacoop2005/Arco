@@ -171,3 +171,39 @@ test('a generated structure becomes the build and can be edited and undone', () 
   build.undo();
   assert.equal(build.modules.length, 0);
 });
+
+test('a lifted module moves as one undo step, keeps its id, and anchors or supports refuse', () => {
+  const build = createBuild();
+  assert.equal(build.place(at(housing, 0, 0, 0)).ok, true);
+  assert.equal(build.place(at(housing, 3, 0, 0)).ok, true);
+  assert.equal(build.place(at(housing, 3, 0, 2)).ok, true);
+  const [first, base, top] = build.modules.map((instance) => instance.id);
+  // A module that carries another stays put
+  assert.equal(build.lift(base).ok, false);
+  assert.equal(build.lifted(), null);
+  assert.equal(build.lift(first).ok, true);
+  // While lifted the ghost may use its old cells
+  const ghost = build.ghost(housing, 12.5, 12.5, 1);
+  assert.equal(ghost.ok, true);
+  assert.equal(ghost.instance.z, 0);
+  const spot = build.ghost(housing, -2 * CELL_MM + 12.5, 12.5, 1).instance;
+  assert.equal(build.move(first, spot).ok, true);
+  assert.equal(build.lifted(), null);
+  const moved = build.modules.find((instance) => instance.id === first);
+  assert.deepEqual([moved.x, moved.y, moved.z, moved.rot], [-2, 0, 0, 1]);
+  assert.equal(build.modules.length, 3);
+  assert.equal(build.undo(), true);
+  const back = build.modules.find((instance) => instance.id === first);
+  assert.deepEqual([back.x, back.y, back.z, back.rot], [0, 0, 0, 0]);
+  assert.equal(build.redo(), true);
+  // A move onto another module is refused and nothing changes
+  build.lift(top);
+  const before = build.modules;
+  assert.equal(build.move(top, at(housing, -2, 0, 0)).ok, false);
+  assert.equal(build.modules, before);
+  build.drop();
+  // Locked ids refuse
+  build.setRules({ locked: [first] });
+  assert.equal(build.lift(first).ok, false);
+  assert.equal(build.move(first, at(housing, 5, 0, 0)).ok, false);
+});

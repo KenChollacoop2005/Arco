@@ -301,6 +301,14 @@ export function setupResidentPanel(app, residents, hooks) {
     click,
     cancel,
     placing: () => (placing ? placing.id : null),
+    // Picks up a housed resident, as Move does
+    move(id) {
+      const record = recordOf(id);
+      if (!record || record.home === null || placing) return false;
+      residents.select(id);
+      start(record, 'move');
+      return true;
+    },
     setPressed(id) {
       pressed = id;
       renderBox();

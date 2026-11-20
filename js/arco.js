@@ -11,6 +11,7 @@ import { createDecor } from './render/decor.js';
 import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED, STATE_HIGHLIGHT, sharedUniforms } from './render/materials.js';
+import * as THREE from '../vendor/three/three.module.min.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
@@ -82,6 +83,8 @@ setupLegend(query('#legend'));
 const MODES = ['generate', 'puzzle', 'collection', 'drawing']; // top bar tabs
 const MODE_SETTING = 'arco.mode'; // tab open at the last visit
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
+const PIN_HIT_PX = 12; // right-click reach around a resident pin
+const RIGHT_CLICK_SLOP_PX = 5; // a right press that moves further is a pan
 
 const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
 const solids = createWorkerClient(new URL('./workers/solids.worker.js', import.meta.url));
@@ -303,6 +306,8 @@ const builder = setupBuild(app, canvas, modules, collectionPanel, {
   grow: growStructure,
   targetAt: (event) => picker.targetAt(event),
   rayAt: (event) => picker.rayAt(event),
+  idAt: (event) => picker.idAt(event),
+  moved: (id, instance) => residents.follow(id, instance),
 });
 setupSlideovers(app);
 const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.pointAt(event, back), zone: createZone(view), builder });
@@ -486,6 +491,36 @@ const residentPanel = setupResidentPanel(app, residents, {
     if (!result.stored) return COPY.residentStoreFull;
     return result.added ? COPY.residentSaved : COPY.residentAlreadySaved;
   },
+});
+
+// Right-click picks up a resident by their pin, or a placed module; a right-drag pans instead
+let rightDown = null;
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.button === 2) rightDown = [event.clientX, event.clientY];
+});
+// Housed resident whose pin is under the pointer
+function pinAt(event) {
+  const rect = canvas.getBoundingClientRect();
+  let best = null;
+  for (const spot of residents.pinSpots()) {
+    const ndc = new THREE.Vector3(...spot.point).project(rig.camera);
+    const gap = Math.hypot(rect.left + ((ndc.x + 1) / 2) * rect.width - event.clientX, rect.top + ((1 - ndc.y) / 2) * rect.height - event.clientY);
+    if (gap <= PIN_HIT_PX && (!best || gap < best.gap)) best = { id: spot.id, gap };
+  }
+  return best ? best.id : null;
+}
+canvas.addEventListener('contextmenu', (event) => {
+  const start = rightDown;
+  rightDown = null;
+  if (builder.holding() || residentPanel.placing() !== null || app.mode === 'drawing' || app.mode === 'collection') return;
+  if (start && Math.hypot(event.clientX - start[0], event.clientY - start[1]) > RIGHT_CLICK_SLOP_PX) return;
+  const pin = pinAt(event);
+  if (pin !== null && residentPanel.move(pin)) {
+    event.stopPropagation();
+    return;
+  }
+  const id = picker.idAt(event);
+  if (id && builder.lift(id)) event.stopPropagation();
 });
 
 // Layer shaders compile while the first build animation plays

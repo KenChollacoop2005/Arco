@@ -81,6 +81,8 @@ export const COPY = {
   growNoneHere: 'Nothing fits in this zone with seed',
   buildSeed: 'edited by hand',
   buildPicked: 'Click or drop on the plinth to place. R rotates, Esc puts it down.',
+  buildMoving: 'Click a new spot to move it. R rotates, Esc or right-click puts it back.',
+  buildMovingPuzzle: 'Click a new spot to move it, or the tray to return it. R rotates, Esc or right-click puts it back.',
   buildSelectFirst: 'Click a module on the plinth first.',
   growWorking: 'Growing',
   growAdded: 'modules added, seed',

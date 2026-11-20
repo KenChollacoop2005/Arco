@@ -3,14 +3,18 @@ import { COPY } from './copy.js';
 import { renderBuildCards, CATEGORY_COPY } from './cards.js';
 import { confirmAt } from './confirm.js';
 import { FAMILIES } from '../core/catalog.js';
-import { variantKey } from '../core/grid.js';
+import { variantKey, cellInPlinth } from '../core/grid.js';
+import { CELL_MM } from '../config.js';
+import { STATE_HIDDEN, STATE_NORMAL, STATE_SELECTED } from '../render/materials.js';
 
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 const ALL = 'all'; // category filter value for every category
 const SANDBOX_COUNT = Infinity; // pieces of each saved module in the sandbox
 const COPY_PREFIX = 'copy:'; // key of a duplicate, never a saved card
+const MOVE_PREFIX = 'move:'; // key of a placed module being moved
+const TRAY_SKIP = '.button-grid, .field-row, summary'; // controls in the drawer, not the tray
 
-// Hooks: show(modules, {only}), grow(modules, zone), targetAt(event), rayAt(event)
+// Hooks: show(modules, {only}), grow(modules, zone), targetAt(event), rayAt(event), moved(id, instance)
 export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   const query = (selector) => document.querySelector(selector);
   const status = query('#buildStatus');
@@ -57,7 +61,15 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   }
 
   const isCopy = () => !!picked && picked.key.startsWith(COPY_PREFIX);
-  const pickedText = () => (isCopy() ? COPY.duplicatePicked : COPY.buildPicked);
+  const moving = () => (picked && picked.moving !== undefined ? picked.moving : null);
+  const pickedText = () => (isCopy() ? COPY.duplicatePicked : moving() !== null ? (tray ? COPY.buildMovingPuzzle : COPY.buildMoving) : COPY.buildPicked);
+  // The lifted module shows again where it stood
+  function unlift() {
+    const id = moving();
+    if (id === null) return;
+    build.drop();
+    moduleView.setState(id, app.selection.includes(id) ? STATE_SELECTED : STATE_NORMAL);
+  }
 
   // Searches along the pointer ray, so raised spans over gaps can be reached
   function ghostAt(event) {
@@ -79,6 +91,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
 
   // Picking the pressed card again puts it down, unless keep is set
   function pick(entry, keep = false) {
+    unlift();
     picked = entry && (keep || !picked || picked.key !== entry.key) ? entry : null;
     turn = 0;
     status.textContent = picked ? pickedText() : '';
@@ -198,7 +211,9 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     if (!active() || TYPING_TAGS.includes(event.target.tagName)) return;
     const key = event.key.toLowerCase();
     const command = event.ctrlKey || event.metaKey;
-    if (command && key === 'z' && !event.shiftKey) step(build.undo());
+    // Undo while moving only puts the module back
+    if (command && moving() !== null && (key === 'z' || key === 'y')) pick(null);
+    else if (command && key === 'z' && !event.shiftKey) step(build.undo());
     else if (command && (key === 'y' || key === 'z')) step(build.redo());
     else if (command) return;
     else if (key === 'r') rotate();
@@ -215,12 +230,44 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     pick(null);
   });
 
+  // A moved module goes to its new spot, keeping its id and residents
+  function placeMoved(ghost) {
+    const id = moving();
+    const result = ghost.ok ? build.move(id, ghost.instance) : ghost;
+    if (!result.ok) {
+      status.textContent = result.reason;
+      return;
+    }
+    const instance = build.modules.find((candidate) => candidate.id === id);
+    picked = null;
+    status.textContent = '';
+    refreshPalette();
+    if (hooks.moved) hooks.moved(id, instance);
+    apply(new Set([id]));
+  }
+
+  // Pointer over no module and past the plinth edge
+  function offScene(event) {
+    if (hooks.idAt && hooks.idAt(event)) return false;
+    const target = hooks.targetAt(event);
+    return !target || !cellInPlinth(Math.floor(target.x / CELL_MM), Math.floor(target.y / CELL_MM));
+  }
+
   // Places the picked module at the pointer; true when it tried
   function place(event) {
     if (!active() || !picked) return false;
     pointerEvent = event;
     const ghost = ghostAt(event);
+    // Dropping a moved module on empty space puts it back
+    if (moving() !== null && (!ghost || offScene(event))) {
+      pick(null);
+      return true;
+    }
     if (!ghost) return true;
+    if (moving() !== null) {
+      placeMoved(ghost);
+      return true;
+    }
     if (picked.count <= 0) {
       pick(null);
       return true;
@@ -231,7 +278,26 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     return true;
   }
 
-  app.modeListeners.push(refreshGhost);
+  // Dropping a moved module on the tray returns it in a puzzle, else puts it back
+  query('#buildDrawer').addEventListener('click', (event) => {
+    const id = moving();
+    if (id === null || event.target.closest(TRAY_SKIP)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!tray) {
+      pick(null);
+      return;
+    }
+    unlift();
+    picked = null;
+    status.textContent = '';
+    if (report(build.remove([id]))) refreshPalette();
+  }, true);
+
+  app.modeListeners.push(() => {
+    if (!active() && moving() !== null) pick(null);
+    refreshGhost();
+  });
   collectionPanel.onChange((list) => {
     // Switched off families stay out of the palette
     entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled).map((entry) => ({ ...entry, count: SANDBOX_COUNT }));
@@ -308,6 +374,25 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       if (isCopy()) pick(null);
     },
     click: place,
+    // Right-click on a placed module picks it up to move; false when refused
+    lift(id) {
+      if (!active() || picked) return false;
+      const result = build.lift(id);
+      if (!result.ok) {
+        status.textContent = build.isLocked(id) && tray ? COPY.anchorNote : result.reason;
+        return false;
+      }
+      const { id: unused, x, y, z, rot, ...variant } = result.instance;
+      picked = { key: MOVE_PREFIX + id, variant, count: 1, moving: id };
+      turn = rot & 3;
+      moduleView.setState(id, STATE_HIDDEN);
+      status.textContent = pickedText();
+      refreshPalette();
+      refreshGhost();
+      return true;
+    },
+    // True while a module or card is held
+    holding: () => !!picked,
     setTray,
     // Parks and brings back one whole build, history included
     snapshot: () => build.snapshot(),

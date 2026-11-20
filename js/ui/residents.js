@@ -29,9 +29,11 @@ export function setupResidents(app, { marks, scorer }) {
     for (const listener of listeners) listener();
   }
 
+  let spots = [];
   // Pins for occupied homes; the selected resident's pin pulses
   function refreshMarks() {
     const pins = [];
+    spots = [];
     const homes = [...new Set(records.map((record) => record.home).filter((home) => home !== null))];
     for (const home of homes) {
       const instance = byId(home);
@@ -40,6 +42,7 @@ export function setupResidents(app, { marks, scorer }) {
       living.forEach((record, slot) => {
         const spot = homeSpot(instance, app.analysis, slot, living.length);
         pins.push({ point: spot.pin, color: figureOf(record).params.accent, selected: record.id === selected });
+        spots.push({ id: record.id, point: spot.pin });
       });
     }
     marks.setPins(pins);
@@ -112,6 +115,12 @@ export function setupResidents(app, { marks, scorer }) {
       return record && record.home !== null ? byId(record.home) : null;
     },
     selected: () => selected,
+    // Pin points of housed residents, while pins show
+    pinSpots: () => (shown() ? spots : []),
+    // A home moved by Build keeps its residents
+    follow(home, instance) {
+      for (const record of records) if (record.home === home) places[record.id] = instance;
+    },
     select(id) {
       selected = id;
       refreshMarks();

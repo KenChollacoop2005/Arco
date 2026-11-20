@@ -103,6 +103,9 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
   let redoStack = [];
   // Puzzle rules: locked site ids, masks kept as given, ids from a base
   let rules = { locked: new Set(), keepMasks: false, idBase: 0 };
+  // Module picked up to move; placement checks leave it out
+  let lifted = null;
+  const standing = () => (lifted === null ? modules : modules.filter((instance) => instance.id !== lifted));
   const near = (list, changed, keepIds) => (rules.keepMasks ? list : reopenNear(list, changed, keepIds));
   const lockedIn = (ids) => ids.some((id) => rules.locked.has(id));
 
@@ -146,7 +149,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     ghost(variant, xMm, yMm, rot) {
       const turn = rot & 3;
       const [originX, originY] = snapOrigin(xMm, yMm, variant.fp, turn);
-      const world = worldFromModules(modules);
+      const world = worldFromModules(standing());
       const instance = { ...normalizeVariant(variant), x: originX, y: originY, z: restLevel(world, variant.fp, turn, originX, originY), rot: turn };
       if (isDocked(instance)) instance.z = dockLevel(world, instance, placeCap);
       if (FAMILIES[instance.family].disabled) return { instance, ok: false, reason: DISABLED_REASON };
@@ -160,7 +163,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       const [stepX, stepY, stepZ] = ray.direction;
       if (stepZ >= 0) return null;
       let refused = null;
-      for (let level = worldHeight(worldFromModules(modules)); level >= 0 && level * STORY_MM >= floorMm - RAY_SLACK_MM; level--) {
+      for (let level = worldHeight(worldFromModules(standing())); level >= 0 && level * STORY_MM >= floorMm - RAY_SLACK_MM; level--) {
         const reach = (level * STORY_MM - originZ) / stepZ;
         if (reach < 0) continue;
         const candidate = this.ghost(variant, originX + stepX * reach, originY + stepY * reach, rot);
@@ -180,11 +183,41 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       commit(near([...modules, instance], [instance], [instance.id]));
       return { ok: true, reason: '', id: instance.id };
     },
+    // Picks a placed module up to move it; refused for anchors and supports
+    lift(id) {
+      const current = modules.find((instance) => instance.id === id);
+      if (!current) return { ok: false, reason: '' };
+      if (lockedIn([id])) return { ok: false, reason: LOCKED_REASON };
+      if (breaksOthers(modules.filter((instance) => instance.id !== id), 0)) return { ok: false, reason: RESTS_REASON };
+      lifted = id;
+      return { ok: true, reason: '', instance: current };
+    },
+    // Puts a lifted module down without moving it
+    drop() {
+      lifted = null;
+    },
+    lifted: () => lifted,
+    // Moves a placed module to a new spot as one step, keeping its id
+    move(id, spec) {
+      const current = modules.find((instance) => instance.id === id);
+      if (!current) return { ok: false, reason: '' };
+      if (lockedIn([id])) return { ok: false, reason: LOCKED_REASON };
+      const moved = { ...current, x: spec.x, y: spec.y, z: spec.z, rot: spec.rot & 3 };
+      const rest = modules.filter((instance) => instance.id !== id);
+      const result = checkPlacement(worldFromModules(rest), { ...moved, id: 0 }, { ignoreCap: true, stream: placeStream });
+      if (!result.ok) return { ok: false, reason: result.reason };
+      const next = [...rest, moved];
+      if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
+      lifted = null;
+      commit(near(next, [current, moved], [id]));
+      return { ok: true, reason: '', id };
+    },
     remove(ids) {
       const next = modules.filter((instance) => !ids.includes(instance.id));
       if (next.length === modules.length) return { ok: false, reason: '' };
       if (lockedIn(ids)) return { ok: false, reason: LOCKED_REASON };
       if (breaksOthers(next, 0)) return { ok: false, reason: RESTS_REASON };
+      if (ids.includes(lifted)) lifted = null;
       commit(near(next, modules.filter((instance) => ids.includes(instance.id))));
       return { ok: true, reason: '' };
     },
@@ -218,6 +251,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     // Whole state, to park one build while another is shown
     snapshot: () => ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules }),
     restore(state) {
+      lifted = null;
       ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules } = state);
     },
     // Puzzle rules; locked ids can be selected but never moved or removed
@@ -226,12 +260,14 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     },
     isLocked: (id) => rules.locked.has(id),
     undo() {
+      lifted = null;
       if (undoStack.length === 0) return false;
       redoStack.push(modules);
       modules = undoStack.pop();
       return true;
     },
     redo() {
+      lifted = null;
       if (redoStack.length === 0) return false;
       undoStack.push(modules);
       modules = redoStack.pop();
