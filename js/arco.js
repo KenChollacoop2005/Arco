@@ -101,6 +101,7 @@ export const app = {
   modeListeners: [],
   structureListeners: [],
   analysisListeners: [],
+  selectListeners: [],
 };
 
 // Storage access can throw, so it stays lazy
@@ -157,6 +158,7 @@ function select(id, extend) {
   app.selection = next;
   if (next.length === 0) builder.endDuplicate();
   showInspector();
+  for (const listener of app.selectListeners) listener(next);
 }
 
 const picker = createPicker(canvas, rig, modules, {
@@ -414,7 +416,13 @@ const residentMarks = createResidentMarks(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 const residents = setupResidents(app, { marks: residentMarks, scorer: (payload) => scorer.call({ kind: 'residents', ...payload }) });
 app.residents = residents;
-const residentPanel = setupResidentPanel(app, residents);
+const residentPanel = setupResidentPanel(app, residents, {
+  select: (id) => select(id, false),
+  face: (id) => {
+    const box = modules.boxOf(id);
+    if (box) rig.face(box);
+  },
+});
 
 // Layer shaders compile while the first build animation plays
 let layersWarm = false;

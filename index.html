@@ -238,11 +238,26 @@
       </div>
     </details>
     </section>
-    <!-- Action box: always last on the right -->
+    <!-- Action box, then the Resident drawer last on the right -->
     <section class="panel action-panel" aria-label="Module actions">
       <div class="button-grid">
         <button type="button" class="plain" id="duplicateModule" data-copy="duplicate" disabled></button>
         <button type="button" class="primary" id="saveModule" data-copy="save" disabled></button>
+      </div>
+    </section>
+    <section class="panel resident-panel" id="residentPanel" aria-label="Resident" hidden>
+      <div class="drawer-body">
+        <div class="resident-nav" id="residentNav" hidden>
+          <button type="button" class="plain" id="residentPrev" data-copy-title="residentPrev">&lsaquo;</button>
+          <span id="residentPage"></span>
+          <button type="button" class="plain" id="residentNext" data-copy-title="residentNext">&rsaquo;</button>
+        </div>
+        <div class="resident-detail" id="residentDetail"></div>
+        <div class="button-grid">
+          <button type="button" class="plain" id="residentMove" data-copy="residentMove"></button>
+          <button type="button" class="primary" id="residentSave" data-copy="residentSave"></button>
+        </div>
+        <p class="status" id="residentStatus" role="status"></p>
       </div>
     </section>
   </aside>

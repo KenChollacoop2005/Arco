@@ -25,6 +25,8 @@ const MAX_POLAR = 1.6; // lowest camera angle
 const VIEW_TWEEN_S = 0.45; // view change time
 const FRAME_FILL = 0.42; // module share of view when framed
 const MIN_FRAME_SIZE_MM = 20; // smallest size used for framing
+const FACE_MIN_OFFSET_MM = 8; // homes this near the middle need no turn
+const FACE_KEEP_DOT = 0.5; // already facing within about 60 degrees
 const TARGET_HEIGHT_SHARE = 0.5; // target height along the model
 const TARGET_DROP_MM = 6; // target sits a little low
 const PAN_SLACK_MM = 10; // pan range past the model
@@ -268,6 +270,18 @@ export function createCameraRig(canvas, reducedMotion) {
             ? viewDirection(0, ELEVATION_TILT_DEG)
             : viewDirection(CAMERA_AZIMUTH_DEG, CAMERA_ELEVATION_DEG);
       moveTo(direction, 1, new THREE.Vector3(0, 0, targetHeight()), false);
+    },
+    // Turns around the plinth until the box's side faces the camera, zoom kept
+    face(box) {
+      const center = box.getCenter(new THREE.Vector3());
+      const plan = new THREE.Vector2(center.x - controls.target.x, center.y - controls.target.y);
+      const direction = currentDirection();
+      const across = Math.hypot(direction.x, direction.y);
+      if (plan.length() < FACE_MIN_OFFSET_MM || across < 1e-3) return;
+      plan.normalize();
+      if (plan.dot(new THREE.Vector2(direction.x / across, direction.y / across)) > FACE_KEEP_DOT) return;
+      following = false;
+      moveTo(new THREE.Vector3(plan.x * across, plan.y * across, direction.z), currentZoom(), controls.target.clone(), false);
     },
     frame(box) {
       const center = box.getCenter(new THREE.Vector3());
