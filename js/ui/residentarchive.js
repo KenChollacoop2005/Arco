@@ -1,5 +1,5 @@
 import { renderResidentCards, renderResidentDetail } from './residentview.js';
-import { portraitOf } from './portrait.js';
+import { portraitOf, cardPortraitOf } from './portrait.js';
 import { confirmAt } from './confirm.js';
 import { makeFigure } from '../core/figure.js';
 import { figureMesh } from '../render/figure.js';
@@ -19,6 +19,7 @@ export function setupResidentArchive(app, { store, showroom, archive }) {
     return figures.get(record.looks);
   };
   const portrait = (record) => portraitOf(record.looks, figureOf(record));
+  const cardPortrait = (record) => cardPortraitOf(record.looks, figureOf(record));
   const nameOf = (id) => {
     const record = store.list().find((entry) => entry.id === id);
     return record ? record.name : COPY.residentTitle;
@@ -40,7 +41,7 @@ export function setupResidentArchive(app, { store, showroom, archive }) {
     detail.hidden = !record;
     if (record) renderResidentDetail(detail, record, null, { portrait, nameOf, stored: true });
     const selectedId = record ? record.id : null;
-    renderResidentCards(list, records, { evaluationOf: () => null, portrait, nameOf, onPress: choose, pressedId: selectedId, shownId: selectedId });
+    renderResidentCards(list, records, { evaluationOf: () => null, portrait: cardPortrait, nameOf, onPress: choose, pressedId: selectedId, shownId: selectedId });
     // Each card gets a remove button, like module cards
     [...list.children].forEach((card, index) => {
       const entry = records[index];

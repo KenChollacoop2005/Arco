@@ -1,6 +1,6 @@
 import { convexHull } from '../core/hull.js';
 import { makeRng } from '../core/rng.js';
-import { figureTop } from '../core/figure.js';
+import { figureTop, partTop } from '../core/figure.js';
 
 const PORTRAIT_SIZE = [96, 120]; // card portrait in CSS pixels
 const PIXEL_SCALE = 2; // canvas pixels per CSS pixel
@@ -17,6 +17,11 @@ const DARK_WASH = '#b9b5ad'; // hair and props wash
 const LEAF_WASH = '#b7c7a8'; // leaves wash
 const ACCENT_ALPHA = 0.45; // accent wash strength
 const cache = new Map();
+const CARD_PORTRAIT_PX = 96; // square card portrait, CSS pixels
+const CARD_BELOW_NECK = 0.22; // crop this far under the shoulders, share of height
+const ACCESSORY_PEEK_MM = 6; // the accessory shows at least this much
+const CARD_PAD = 0.08; // margin inside the square, share of the side
+const cardCache = new Map();
 
 const circle = (centre, radius, steps = ROUND_STEPS) => Array.from({ length: steps }, (unused, index) => {
   const angle = (index / steps) * Math.PI * 2;
@@ -113,6 +118,37 @@ export function drawShapes(context, shapes, { seed = 1, accent = '#888', toPixel
 }
 
 const projectPoint = project;
+
+// Head-and-shoulders crop, straight on, with the feature and enough of the accessory to read
+export function cardFrame(figure) {
+  const top = figureTop(figure);
+  const accessory = figure.parts.filter((part) => part.role === 'accessory');
+  const accessoryTop = accessory.length > 0 ? Math.max(...accessory.map(partTop)) : Infinity;
+  const bottom = Math.max(0, Math.min(figure.joints.neck[2] - CARD_BELOW_NECK * figure.heightMm, accessoryTop - ACCESSORY_PEEK_MM));
+  return { top, bottom };
+}
+
+// Square card portrait PNG, cached per looks seed
+export function cardPortraitOf(looks, figure) {
+  if (cardCache.has(looks)) return cardCache.get(looks);
+  const canvas = document.createElement('canvas');
+  const side = CARD_PORTRAIT_PX * PIXEL_SCALE;
+  canvas.width = canvas.height = side;
+  const context = canvas.getContext('2d');
+  const shapes = sketchShapes(figure, FRONT);
+  const { top, bottom } = cardFrame(figure);
+  const span = ((top - bottom) / side) * (1 + CARD_PAD * 2);
+  const offset = [side / 2, side / 2 + ((top + bottom) / 2) / span];
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, side, side);
+  context.clip();
+  drawShapes(context, shapes, { seed: looks, accent: accentCss(figure.params.accent), toPixel: (point) => [point[0] / span + offset[0], point[1] / span + offset[1]], line: LINE_PX * 1.2 });
+  context.restore();
+  const url = canvas.toDataURL('image/png');
+  cardCache.set(looks, url);
+  return url;
+}
 
 export const accentCss = (color) => `#${color.toString(16).padStart(6, '0')}`;
 

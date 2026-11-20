@@ -80,12 +80,14 @@ export function meter(evaluation) {
   return bar;
 }
 
-// Residents box cards: never consumed, a checklist of who is placed
-export function renderResidentCards(list, records, { evaluationOf, portrait, nameOf, onPress, onDrag, pressedId = null, shownId = null }) {
+// Residents box cards, shaped like module cards: never consumed, a checklist of who is placed
+export function renderResidentCards(list, records, { evaluationOf, portrait, nameOf, onPress, onDrag, pressedId = null, shownId = null, accentOf = null }) {
   list.replaceChildren();
   for (const record of records) {
     const evaluation = evaluationOf(record.id);
-    const card = node('li', `resident-card${record.home === null ? ' is-unplaced' : ''}${shownId === record.id ? ' is-shown' : ''}`);
+    const placed = record.home !== null && !!evaluation && evaluation.home !== null;
+    const card = node('li', `card resident-card${record.home === null ? ' is-unplaced' : ' is-placed'}${placed && evaluation.happy ? ' is-happy' : ''}${shownId === record.id ? ' is-shown' : ''}`);
+    if (accentOf) card.style.setProperty('--resident-accent', accentOf(record));
     card.tabIndex = 0;
     card.dataset.id = record.id;
     card.setAttribute('role', 'button');
@@ -93,9 +95,7 @@ export function renderResidentCards(list, records, { evaluationOf, portrait, nam
     const image = node('img', 'resident-portrait');
     image.alt = '';
     image.src = portrait(record);
-    const text = node('span', 'resident-text');
-    text.append(node('strong', 'resident-name', record.name), iconRow(record, record.home === null ? null : evaluation, nameOf), meter(record.home === null ? null : evaluation));
-    card.append(image, text);
+    card.append(image, node('strong', 'card-name resident-name', record.name), iconRow(record, record.home === null ? null : evaluation, nameOf), meter(record.home === null ? null : evaluation));
     card.addEventListener('click', () => onPress(record));
     card.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;

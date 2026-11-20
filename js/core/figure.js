@@ -106,7 +106,8 @@ function partsInMetres(params, joints) {
     parts.push({ kind: 'cone', a: add(top, [0, 0, -R * 0.3]), b: add(top, [0, 0, -R * 0.24]), r1: R * 1.45, r2: R * 1.45, color: DARK_PARTS });
     parts.push({ kind: 'cone', a: add(top, [0, 0, -R * 0.28]), b: add(top, [0, 0, R * 0.32]), r1: R * 0.8, r2: R * 0.7, color: DARK_PARTS });
   }
-  // One accessory
+  // One accessory, its parts marked for the card crop
+  const accessoryFrom = parts.length;
   const sign = params.side;
   const hand = joints[sign > 0 ? 'handR' : 'handL'];
   if (params.accessory === 'bag') {
@@ -145,6 +146,7 @@ function partsInMetres(params, joints) {
     capsule([bikeX, -0.48, wheel], bars, 0.02, DARK_PARTS);
     capsule(add(bars, [-0.18, 0, 0]), add(bars, [0.18, 0, 0]), 0.018, DARK_PARTS);
   }
+  for (const part of parts.slice(accessoryFrom)) part.role = 'accessory';
   return parts;
 }
 

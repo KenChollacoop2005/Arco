@@ -552,14 +552,14 @@ body[data-mode='collection'] .section-controls { display: none; }
 /* Residents: cards, trait icons, happiness meter */
 .panel-count { margin-left: auto; margin-right: 10px; color: var(--ink-soft); }
 .panel-count:empty { display: none; }
-.resident-cards { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.resident-cards:empty { display: none; }
-.resident-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; padding: 5px 8px 5px 5px; border: 1px solid var(--hairline); background: var(--paper); cursor: pointer; }
+/* Resident cards: the module card shape, portrait on top */
+.resident-card { gap: 4px; align-content: start; background: var(--paper); }
+.resident-card.is-placed { border-color: var(--resident-accent, var(--hairline)); }
+.resident-card.is-happy { border-color: var(--rarity-legendary); box-shadow: inset 0 0 0 1px var(--rarity-legendary); }
 .resident-card:hover, .resident-card[aria-pressed='true'] { border-color: var(--ink); }
-.resident-card[aria-pressed='true'] { box-shadow: inset 0 0 0 1px var(--ink); }
 .resident-card.is-shown { background: var(--field-bg); }
-.resident-card .resident-portrait { width: 40px; height: 50px; object-fit: contain; }
-.resident-text { display: grid; gap: 4px; min-width: 0; }
+.resident-card .resident-portrait { width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; }
+.resident-card .meter { max-width: none; }
 .resident-name { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .trait-icons { display: flex; flex-wrap: wrap; gap: 0; }
 .trait-icon { width: 14px; height: 14px; flex: none; overflow: visible; }
@@ -595,11 +595,10 @@ body[data-mode='collection'] .section-controls { display: none; }
 .trait-line .need-reason { grid-column: 2 / 4; }
 .resident-happy { margin: 0; padding: 4px 8px; border: 1px solid var(--pass); color: var(--pass); font-size: 12px; text-align: center; }
 .resident-detail { display: grid; gap: 12px; }
-.resident-card { position: relative; }
 .archive-residents { display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .archive-subtitle { margin: 0; font: 800 22px/1 var(--font-wordmark); letter-spacing: 0.04em; text-transform: uppercase; }
-.archive-resident-cards { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.archive .resident-card { background: var(--field-bg); padding-right: 26px; }
+.archive-resident-cards { --card-min: 120px; }
+.archive .resident-card { background: var(--field-bg); }
 .archive .resident-card.is-shown { outline: 1px dashed var(--ink-soft); outline-offset: 2px; }
 .archive-resident { padding: 14px; }
 .archive[data-shown='resident'] .archive-actions, .archive[data-shown='resident'] #archiveInspector { display: none; }

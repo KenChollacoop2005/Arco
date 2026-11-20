@@ -75,3 +75,18 @@ test('the portrait sketch outlines every part', async () => {
     for (let index = 1; index < shapes.length; index++) assert.ok(shapes[index - 1].depth >= shapes[index].depth);
   }
 });
+
+test('the card frame holds the head and shoulders, the feature and some of the accessory', async () => {
+  const { cardFrame } = await import('../js/ui/portrait.js');
+  for (const seed of SEEDS.slice(0, 120)) {
+    const figure = makeFigure(seed);
+    const { top, bottom } = cardFrame(figure);
+    assert.equal(top, figureTop(figure));
+    assert.ok(bottom < figure.joints.neck[2], `${seed}: shoulders in frame`);
+    const accessory = figure.parts.filter((part) => part.role === 'accessory');
+    assert.ok(accessory.length > 0, `${seed}: accessory parts marked`);
+    assert.ok(Math.max(...accessory.map(partTop)) > bottom, `${seed}: ${figure.params.accessory} shows`);
+    // Head-and-shoulders: never the whole figure unless the accessory sits low
+    if (['umbrella', 'plant', 'book'].includes(figure.params.accessory)) assert.ok(bottom > 0, `${seed}: cropped`);
+  }
+});

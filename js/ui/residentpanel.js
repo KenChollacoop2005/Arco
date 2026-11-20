@@ -1,5 +1,5 @@
 import { renderResidentCards, renderResidentDetail } from './residentview.js';
-import { portraitOf } from './portrait.js';
+import { portraitOf, cardPortraitOf, accentCss } from './portrait.js';
 import { occupantsOf, roomIn } from '../core/roster.js';
 import { isHome } from '../core/residents.js';
 import { STATE_NORMAL, STATE_SELECTED, STATE_ROOM, STATE_FULL } from '../render/materials.js';
@@ -27,6 +27,8 @@ export function setupResidentPanel(app, residents, hooks) {
     return record ? record.name : id;
   };
   const portrait = (record) => portraitOf(record.looks, residents.figureOf(record));
+  const cardPortrait = (record) => cardPortraitOf(record.looks, residents.figureOf(record));
+  const accentOf = (record) => accentCss(residents.figureOf(record).params.accent);
   const housemates = (record) => (record.home === null ? [record] : occupantsOf(records(), record.home));
   let pressed = null;
   let placing = null;
@@ -40,7 +42,7 @@ export function setupResidentPanel(app, residents, hooks) {
     // In the sandbox the box shows once someone exists
     box.hidden = records().length === 0;
     count.textContent = records().length > 0 ? String(records().length) : '';
-    renderResidentCards(list, records(), { evaluationOf: residents.evaluation, portrait, nameOf, onPress: press, onDrag: drag, pressedId: pressed, shownId: residents.selected() });
+    renderResidentCards(list, records(), { evaluationOf: residents.evaluation, portrait: cardPortrait, accentOf, nameOf, onPress: press, onDrag: drag, pressedId: pressed, shownId: residents.selected() });
   }
 
   function renderDrawer() {
