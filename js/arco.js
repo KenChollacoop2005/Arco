@@ -124,6 +124,7 @@ const browserStore = {
 };
 const collection = createCollection(browserStore);
 const collectionPanel = setupCollection(collection);
+collectionPanel.useParts(modules);
 
 const printOf = (instance) => {
   const part = modules.partOf(variantKey(instance));

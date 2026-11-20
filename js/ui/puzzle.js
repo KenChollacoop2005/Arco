@@ -9,6 +9,7 @@ import { easternDate } from '../core/daily.js';
 import { layoutModules, anchorIds } from '../core/puzzle.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
+import { variantKey } from '../core/grid.js';
 
 const KINDS = ['daily', 'infinite']; // puzzle worlds beside the sandbox
 const KIND_SETTING = 'arco.puzzle.kind'; // remembered puzzle type
@@ -80,7 +81,26 @@ export function setupPuzzle(app, hooks) {
       hooks.builder.setTray(app.world === SANDBOX ? null : []);
       return;
     }
-    hooks.builder.setTray(trayLeft(app.puzzle, modules).map((entry) => ({ ...entry, thumb: thumbs.get(entry.key) || '' })));
+    hooks.builder.setTray(trayLeft(app.puzzle, modules).map((entry) => ({ ...entry, thumb: thumbOf(entry.variant) })));
+  }
+
+  // Thumbnail by the variant's own key; a missing part is built, then the tray redraws
+  const asked = new Set();
+  function thumbOf(variant) {
+    const key = variantKey(variant);
+    if (thumbs.has(key)) return thumbs.get(key);
+    const part = hooks.moduleView.partOf(key);
+    if (part) {
+      thumbs.set(key, makeThumb(part));
+      return thumbs.get(key);
+    }
+    if (!asked.has(key)) {
+      asked.add(key);
+      hooks.moduleView.prepare([variant]).then(() => {
+        if (app.puzzle && app.structure && hooks.moduleView.partOf(key)) refreshTray(app.structure.modules);
+      }, () => {});
+    }
+    return '';
   }
 
   function renderIntro() {
@@ -168,7 +188,6 @@ export function setupPuzzle(app, hooks) {
   // Tray thumbnails come from the built parts
   function prepareThumbs(puzzle) {
     hooks.moduleView.prepare(puzzle.tray.map((entry) => entry.variant)).then(() => {
-      for (const entry of puzzle.tray) if (!thumbs.has(entry.key) && hooks.moduleView.partOf(entry.key)) thumbs.set(entry.key, makeThumb(hooks.moduleView.partOf(entry.key)));
       if (app.puzzle === puzzle && app.structure) refreshTray(app.structure.modules);
     }, () => {});
   }

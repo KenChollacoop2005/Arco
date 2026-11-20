@@ -107,6 +107,13 @@ export function createCollection(storage) {
       const added = addAll(parsed.entries);
       return { ok: true, added, stored: added > 0 ? persist() : true };
     },
+    // Fills in a missing thumbnail
+    setThumb(key, thumb) {
+      const entry = entries.find((candidate) => candidate.key === key);
+      if (!entry || !thumb || entry.thumb === thumb) return { stored: true };
+      entries = entries.map((candidate) => (candidate === entry ? { ...candidate, thumb } : candidate));
+      return { stored: persist() };
+    },
     toJson: () => serializeCollection(entries),
   };
 }

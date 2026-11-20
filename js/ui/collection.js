@@ -1,4 +1,5 @@
 import { rasterThumb } from '../core/thumb.js';
+import { variantKey } from '../core/grid.js';
 import { COPY } from './copy.js';
 import { showToast } from './toast.js';
 import { download } from './exportpanel.js';
@@ -28,6 +29,7 @@ export function setupCollection(collection) {
 
   // Listeners redraw the Build drawer and the Collection page
   function render() {
+    fillThumbs();
     const entries = collection.list();
     query('#collectionExport').disabled = entries.length === 0;
     for (const listener of listeners) listener(entries);
@@ -65,9 +67,32 @@ export function setupCollection(collection) {
     render();
   });
 
+  // Cards saved without a picture get one once their part is built
+  let moduleView = null;
+  const asked = new Set();
+  function fillThumbs() {
+    if (!moduleView) return;
+    for (const entry of collection.list()) {
+      if (entry.thumb || asked.has(entry.key)) continue;
+      asked.add(entry.key);
+      moduleView.prepare([entry.variant]).then(() => {
+        const part = moduleView.partOf(variantKey(entry.variant));
+        const thumb = part ? makeThumb(part) : '';
+        if (!thumb) return;
+        collection.setThumb(entry.key, thumb);
+        render();
+      }, () => {});
+    }
+  }
+
   collection.load();
   render();
   return {
+    // The module view builds parts for cards that lack a picture
+    useParts(view) {
+      moduleView = view;
+      fillThumbs();
+    },
     save,
     remove,
     render,
