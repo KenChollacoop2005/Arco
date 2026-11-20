@@ -191,6 +191,13 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     event.preventDefault();
   });
 
+  // Right-click puts a picked module back in its tray
+  window.addEventListener('contextmenu', (event) => {
+    if (!active() || !picked) return;
+    event.preventDefault();
+    pick(null);
+  });
+
   // Places the picked module at the pointer; true when it tried
   function place(event) {
     if (!active() || !picked) return false;

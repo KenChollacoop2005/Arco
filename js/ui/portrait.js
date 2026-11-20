@@ -5,8 +5,8 @@ import { figureTop } from '../core/figure.js';
 const PORTRAIT_SIZE = [96, 120]; // card portrait in CSS pixels
 const PIXEL_SCALE = 2; // canvas pixels per CSS pixel
 const PAD = 0.1; // margin around the figure, share of height
-const VIEW_YAW = -0.42; // three-quarter turn, radians
-const VIEW_PITCH = 0.12; // slight look down, radians
+export const THREE_QUARTER = { yaw: -0.42, pitch: 0.12 }; // three-quarter turn and slight look down, radians
+export const FRONT = { yaw: 0, pitch: 0 }; // straight on, orthographic
 const ROUND_STEPS = 14; // points around a circle
 const JITTER_PX = 0.55; // hand wobble per point, canvas px
 const LINE_PX = 1.6; // main stroke width, canvas px
@@ -24,11 +24,11 @@ const circle = (centre, radius, steps = ROUND_STEPS) => Array.from({ length: ste
 });
 
 // 3D point to screen: x right, y down, depth away from the viewer
-export function project(point) {
+export function project(point, view = THREE_QUARTER) {
   const [x, y, z] = point;
-  const turnedX = x * Math.cos(VIEW_YAW) - y * Math.sin(VIEW_YAW);
-  const depth = x * Math.sin(VIEW_YAW) + y * Math.cos(VIEW_YAW);
-  return [turnedX, -(z * Math.cos(VIEW_PITCH) - depth * Math.sin(VIEW_PITCH)), depth];
+  const turnedX = x * Math.cos(view.yaw) - y * Math.sin(view.yaw);
+  const depth = x * Math.sin(view.yaw) + y * Math.cos(view.yaw);
+  return [turnedX, -(z * Math.cos(view.pitch) - depth * Math.sin(view.pitch)), depth];
 }
 
 // Circle around an axis in 3D, as points
@@ -48,15 +48,16 @@ function ring3d(centre, axis, radius) {
 
 const WASH = { dark: DARK_WASH, leaf: LEAF_WASH }; // part colour to fill wash
 
-// Figure parts as flat outlines, far ones first
-export function sketchShapes(figure) {
+// Figure parts as flat outlines, far ones first; each keeps its part name
+export function sketchShapes(figure, view = THREE_QUARTER) {
   const shapes = [];
+  const project = (point) => projectPoint(point, view);
   for (const part of figure.parts) {
     const fill = part.color === 'accent' ? 'accent' : WASH[part.color] || PAPER;
     if (part.kind === 'ring') {
       const outer = ring3d(part.c, part.axis, part.r + part.tube).map(project);
       const inner = ring3d(part.c, part.axis, part.r - part.tube).map(project);
-      shapes.push({ points: outer, depth: project(part.c)[2], fill: null }, { points: inner, depth: project(part.c)[2], fill: null });
+      shapes.push({ points: outer, depth: project(part.c)[2], fill: null, part: part.name || null }, { points: inner, depth: project(part.c)[2], fill: null, part: part.name || null });
       continue;
     }
     let flat;
@@ -71,7 +72,7 @@ export function sketchShapes(figure) {
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) flat.push(project([part.c[0] + sx * half[0], part.c[1] + sy * half[1], part.c[2] + sz * half[2]]));
     }
     const centre = project(part.kind === 'capsule' || part.kind === 'cone' ? part.a.map((value, index) => (value + part.b[index]) / 2) : part.c);
-    shapes.push({ points: convexHull(flat), depth: centre[2], fill });
+    shapes.push({ points: convexHull(flat), depth: centre[2], fill, part: part.name || null });
   }
   return shapes.sort((first, second) => second.depth - first.depth);
 }
@@ -110,6 +111,8 @@ export function drawShapes(context, shapes, { seed = 1, accent = '#888', toPixel
   }
   context.globalAlpha = 1;
 }
+
+const projectPoint = project;
 
 export const accentCss = (color) => `#${color.toString(16).padStart(6, '0')}`;
 

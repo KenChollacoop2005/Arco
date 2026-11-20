@@ -80,12 +80,13 @@ export function setupResidentPanel(app, residents, hooks) {
   // Starts placing (from a card) or moving (from the drawer) one resident
   function start(record, mode, quiet = false) {
     if (placing) stop();
-    placing = { id: record.id, mode, previews: null, raw: 0, structure: app.structure };
+    // A click carries the figure on the cursor; a drag shows the card instead
+    placing = { id: record.id, mode, previews: null, raw: 0, structure: app.structure, carried: !quiet && !!hooks.carry };
     pressed = mode === 'place' ? record.id : null;
     boxStatus.textContent = mode === 'place' ? COPY.residentPlacing : '';
     status.textContent = mode === 'move' ? COPY.residentMoving : '';
     glow(record.id);
-    if (mode === 'move' && hooks.carry) hooks.carry(record);
+    if (placing.carried) hooks.carry(record);
     // A drag keeps its card in place; the list redraws after the drop
     if (quiet) for (const card of list.children) card.setAttribute('aria-pressed', String(card.dataset.id === record.id));
     else render();
@@ -100,7 +101,7 @@ export function setupResidentPanel(app, residents, hooks) {
 
   function stop() {
     if (!placing) return;
-    if (placing.mode === 'move' && hooks.drop) hooks.drop();
+    if (placing.carried && hooks.drop) hooks.drop();
     placing = null;
     pressed = null;
     peek.hidden = true;
@@ -204,6 +205,13 @@ export function setupResidentPanel(app, residents, hooks) {
   });
   window.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !placing || TYPING_TAGS.includes(event.target.tagName)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    cancel();
+  }, true);
+  // Right-click puts a carried resident back where they came from
+  window.addEventListener('contextmenu', (event) => {
+    if (!placing) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     cancel();

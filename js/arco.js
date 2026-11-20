@@ -448,7 +448,7 @@ const residentPanel = setupResidentPanel(app, residents, {
   idAt: (event) => picker.idAt(event),
   setState: (id, state) => modules.setState(id, state),
   canvas,
-  // Move resident: the pin hides and the figure hangs from the cursor
+  // Carrying a resident: the pin hides and the figure hangs from the cursor
   carry: (record) => {
     residents.hide(record.id);
     ragdoll.start(residents.figureOf(record), record.looks);

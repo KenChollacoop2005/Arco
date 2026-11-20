@@ -36,3 +36,25 @@ export function stepRig(rig, { pin, at, gravity, damping, iterations }) {
   }
   return rig;
 }
+
+// Pendulum swing of a carried figure from cursor motion, angle always capped
+export function makeSwing(x = 0) {
+  return { angle: 0, speed: 0, lastX: x, lag: [0, 0], time: 0 };
+}
+
+// One frame: push from cursor speed, spring back, damping; hands lag behind and bob
+export function stepSwing(swing, x, { push, spring, damping, maxAngle, handLag, maxLag, bob, bobRate }) {
+  const moved = x - swing.lastX;
+  swing.lastX = x;
+  swing.speed = (swing.speed - moved * push - swing.angle * spring) * damping;
+  swing.angle += swing.speed;
+  if (Math.abs(swing.angle) > maxAngle) {
+    swing.angle = Math.sign(swing.angle) * maxAngle;
+    swing.speed = 0;
+  }
+  const target = Math.max(-maxLag, Math.min(maxLag, -moved * handLag));
+  swing.lag[0] += (target - swing.lag[0]) * (1 - damping);
+  swing.time += bobRate;
+  swing.lag[1] = Math.sin(swing.time) * bob;
+  return swing;
+}
