@@ -54,15 +54,11 @@ export function validateLayout(puzzle, layout) {
   }
   const modules = layoutModules(puzzle, layout);
   const world = worldFromModules(modules);
-  if (world.modules.size !== modules.length) problems.push('overlap');
   const stream = streamFrom(puzzle.stream);
-  for (const instance of modules) {
-    const result = checkPlacement(world, instance, { stream, ignoreCap: true });
-    if (!result.ok) {
-      problems.push(instance.id >= PIECE_ID_BASE ? 'placement' : 'site-broken');
-      break;
-    }
-  }
+  // Pieces first, so an overlap is the piece's fault; then the site, which only a piece can break
+  const ordered = [...modules.filter((instance) => instance.id >= PIECE_ID_BASE), ...modules.filter((instance) => instance.id < PIECE_ID_BASE)];
+  const broken = ordered.find((instance) => !checkPlacement(world, instance, { stream, ignoreCap: true }).ok);
+  if (broken) problems.push(broken.id >= PIECE_ID_BASE ? 'placement' : 'site-broken');
   if (problems.length === 0 && checkStability(modules.map(toBody)).status !== 'pass') problems.push('unstable');
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
   const known = new Set(puzzle.residents.map((resident) => resident.id));
