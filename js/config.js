@@ -298,6 +298,7 @@ export const FIGURE_BODY_COLOR = 0xeeebe3; // matte off-white
 export const FIGURE_DARK_COLOR = 0x5d5a55; // hair and small dark parts
 export const PIN_RISE_MM = 9; // pin height above a home's top
 export const PIN_SPREAD_MM = 6; // gap between pins on one home
+export const FIGURE_STAND_OUT_MM = 1.5; // figure stands this far out of its wall
 
 // Puzzle points, fixed and never puzzle dependent
 export const POINTS = {

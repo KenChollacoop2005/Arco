@@ -1,7 +1,8 @@
-import { RESIDENT_RECORD_VERSION, HAPPY_SEGMENTS, HAPPY_HATE_COST, HAPPY_DREAM_GAIN } from '../config.js';
+import { RESIDENT_RECORD_VERSION, HAPPY_SEGMENTS, HAPPY_HATE_COST, HAPPY_DREAM_GAIN, CELL_MM, STORY_MM, PIN_RISE_MM, PIN_SPREAD_MM, FIGURE_STAND_OUT_MM } from '../config.js';
 import { WANTS, HATES, DREAMS, rollResident } from './residents.js';
 import { residentCapacity } from './catalog.js';
 import { hashString, mixSeed } from './rng.js';
+import { SIDES, instanceCells } from './grid.js';
 
 export const RESIDENTS_KEY = 'arco.residents'; // storage key for saved residents
 const FILE_KIND = 'arco-residents'; // marks a saved residents list
@@ -156,4 +157,24 @@ export function createResidentStore(storage) {
       return { stored: write() };
     },
   };
+}
+
+// Pin above a home (or beside it when covered) and where its figure stands, in mm
+export function homeSpot(instance, analysis, slot = 0, slots = 1) {
+  const cells = instanceCells(instance);
+  const centre = [0, 1].map((axis) => (cells.reduce((sum, cell) => sum + cell[axis], 0) / cells.length + 0.5) * CELL_MM);
+  const top = (instance.z + instance.h) * STORY_MM;
+  const entry = analysis && analysis.modules[instance.id];
+  const covered = !!entry && entry.above.length > 0;
+  const faces = analysis ? analysis.faces.filter((face) => face.module === instance.id && face.dir < SIDES.length) : [];
+  // Most open wall, lowest story first
+  const best = faces.reduce((pick, face) => (!pick || face.reach > pick.reach || (face.reach === pick.reach && face.level < pick.level) ? face : pick), null);
+  const spread = (slot - (slots - 1) / 2) * PIN_SPREAD_MM;
+  if (!best) return { pin: [centre[0] + spread, centre[1], top + PIN_RISE_MM], stand: [centre[0], centre[1], top], facing: 0 };
+  const [stepX, stepY] = SIDES[best.dir];
+  const out = CELL_MM / 2 + FIGURE_STAND_OUT_MM;
+  const stand = [(best.x + 0.5) * CELL_MM + stepX * out, (best.y + 0.5) * CELL_MM + stepY * out, best.level * STORY_MM];
+  const along = [-stepY * spread, stepX * spread];
+  const pin = covered ? [stand[0] + along[0], stand[1] + along[1], (best.level + 1) * STORY_MM + PIN_RISE_MM] : [centre[0] + along[0], centre[1] + along[1], top + PIN_RISE_MM];
+  return { pin, stand, facing: Math.atan2(stepX, -stepY) };
 }

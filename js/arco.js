@@ -38,6 +38,8 @@ import { createShowroom } from './render/showroom.js';
 import { setupArchive } from './ui/archive.js';
 import { readSetting, writeSetting } from './ui/legend.js';
 import { setupSlideovers } from './ui/slideover.js';
+import { createResidentMarks } from './render/residents.js';
+import { setupResidents } from './ui/residents.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -406,12 +408,18 @@ app.analysisListeners.push(refreshParticles);
 app.modeListeners.push(refreshParticles);
 app.structureListeners.push(() => refreshParticles());
 
+// Residents: pins, the selected figure and scores from their own worker
+const residentMarks = createResidentMarks(view);
+const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
+const residents = setupResidents(app, { marks: residentMarks, scorer: (payload) => scorer.call({ kind: 'residents', ...payload }) });
+app.residents = residents;
+
 // Layer shaders compile while the first build animation plays
 let layersWarm = false;
 app.structureListeners.push((result, phase) => {
   if (layersWarm || phase !== 'start') return;
   layersWarm = true;
-  warmUp(view, rig.camera, [...strings.warm, ...waterworks.warm, ...particles.warm, ...nightLights.warm, ...decor.warm]);
+  warmUp(view, rig.camera, [...strings.warm, ...waterworks.warm, ...particles.warm, ...nightLights.warm, ...decor.warm, ...residentMarks.warm]);
 });
 query('#physicsToggle').addEventListener('change', refreshParticles);
 toggles.watch('effects', refreshParticles);

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { rollResident } from '../js/core/residents.js';
-import { residentRecord, parseResident, serializeResidents, parseResidents, assignResident, roomIn, keepHomes, rollSandboxResident, happiness, createResidentStore, assignmentsOf } from '../js/core/roster.js';
+import { analyze } from '../js/core/analysis.js';
+import { STORY_MM, CELL_MM, PIN_RISE_MM } from '../js/config.js';
+import { homeSpot, residentRecord, parseResident, serializeResidents, parseResidents, assignResident, roomIn, keepHomes, rollSandboxResident, happiness, createResidentStore, assignmentsOf } from '../js/core/roster.js';
 
 const memoryStore = () => {
   const data = new Map();
@@ -85,4 +87,23 @@ test('saved residents stay after a reload, once each', () => {
   const broken = createResidentStore({ getItem: () => null, setItem: () => { throw new Error('full'); } });
   broken.load();
   assert.equal(broken.add(record).stored, false);
+});
+
+test('pins float above a home, or beside it when something sits on top', () => {
+  const lower = { id: 1, family: 'housing', fp: '1x1', h: 2, x: 0, y: 0, z: 0, rot: 0, seed: 1, mask: 0 };
+  const upper = { id: 2, family: 'housing', fp: '1x1', h: 1, x: 0, y: 0, z: 2, rot: 0, seed: 1, mask: 0 };
+  const neighbour = { id: 3, family: 'housing', fp: '1x1', h: 3, x: 1, y: 0, z: 0, rot: 0, seed: 1, mask: 0 };
+  const modules = [lower, upper, neighbour];
+  const analysis = analyze(modules);
+  const top = homeSpot(upper, analysis);
+  assert.deepEqual(top.pin, [CELL_MM / 2, CELL_MM / 2, 3 * STORY_MM + PIN_RISE_MM]);
+  const covered = homeSpot(lower, analysis);
+  assert.ok(covered.pin[2] <= 2 * STORY_MM + PIN_RISE_MM);
+  // Stands outside an open wall, never toward the neighbour on +x
+  assert.ok(covered.stand[0] <= CELL_MM, String(covered.stand));
+  const outside = covered.stand[0] < 0 || covered.stand[1] < 0 || covered.stand[1] > CELL_MM;
+  assert.ok(outside, String(covered.stand));
+  assert.equal(covered.stand[2], 0);
+  const pair = [0, 1].map((slot) => homeSpot(upper, analysis, slot, 2).pin);
+  assert.notDeepEqual(pair[0], pair[1]);
 });
