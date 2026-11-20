@@ -209,15 +209,37 @@ function neededFamilies(residents) {
   return needs;
 }
 
-// Pieces to add so every trait finds what it names in the puzzle
+export const WANT_HOMES = { neighbour: 2, nextto: 2, community: 3, roommate: 1 }; // homes a want needs in the puzzle
+export const WANT_OTHERS = { neighbour: 1, nextto: 1, community: 2, roommate: 1 }; // other residents a want needs
+export const WANT_SHARED = ['roommate']; // wants that need a home for two or more
+const ADDED_HOME = 'housing'; // home added for count wants, room for two
+
+// Homes and a shared home the count wants need, from the residents' wants
+export function homeNeeds(residents) {
+  const wants = residents.flatMap((resident) => resident.wants.map((trait) => trait.id));
+  return { homes: Math.max(0, ...wants.map((id) => WANT_HOMES[id] || 0)), shared: wants.some((id) => WANT_SHARED.includes(id)) };
+}
+
+// Pieces to add so every trait finds what it names in the puzzle, homes included
 export function missingPieces(rng, residents, modules) {
   const present = new Set(modules.map((instance) => instance.family));
   const added = [];
+  const variantOfFamily = (family) => normalizeVariant({ family: family.id, fp: family.footprints[0], h: family.minStories, seed: rng.int(1, 0x7fffffff), mask: 15, roof: false });
   for (const need of neededFamilies(residents)) {
     if (need.some((id) => present.has(id))) continue;
     const family = FAMILIES[need[need.length - 1]];
     present.add(family.id);
-    added.push(normalizeVariant({ family: family.id, fp: family.footprints[0], h: family.minStories, seed: rng.int(1, 0x7fffffff), mask: 15, roof: false }));
+    added.push(variantOfFamily(family));
+  }
+  // Count wants: enough homes, and one with room for two for a roommate
+  const homes = [...modules, ...added].filter(isHome);
+  const need = homeNeeds(residents);
+  let count = homes.length;
+  let shared = homes.some((instance) => residentCapacity(instance) >= 2);
+  while (count < need.homes || (need.shared && !shared)) {
+    added.push(variantOfFamily(FAMILIES[ADDED_HOME]));
+    count += 1;
+    shared = true;
   }
   return added;
 }
