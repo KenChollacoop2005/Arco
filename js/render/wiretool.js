@@ -8,12 +8,14 @@ const TYPE_COLORS = { power: 0xe0a800, 'water-out': 0x1f6fb2, 'water-in': 0x67b7
 export const PORT_COLORS = TYPE_COLORS;
 const PICKED_COLOR = 0xff5a1f; // the port being connected from
 const BLOCKED_COLOR = 0xc0392b; // candidates with no clear route, and refused ghosts
-const DIM_COLOR = 0xb8b4ac; // ports out of play while one is picked
-const NO_ROUTE_COLOR = 0x8f8a82; // matching ports with no legal route
+const DIM_COLOR = 0x6f6b65; // ports out of play while one is picked
+const NO_ROUTE_COLOR = 0x9a948b; // matching ports with no legal route
 const GHOST_OK_COLOR = 0x2f9e5a; // ghost string with a legal route
 const SELECTED_COLOR = 0xff5a1f; // the selected string
-const SCALES = { normal: 1, dim: 0.6, candidate: 1.4, blocked: 0.8, picked: 1.7, hover: 1.7 }; // marker size per state
-const DASH_MM = [2.2, 1.4]; // ghost dash and gap
+const SCALES = { normal: 1, dim: 0.5, candidate: 1.6, blocked: 0.75, picked: 1.8, hover: 1.9 }; // marker size per state
+const TUBE_MM = 0.55; // ghost and selected string radius
+const TUBE_SIDES = 6; // tube sides
+const GHOST_OPACITY = 0.8; // ghost string see-through
 
 // Wiring tool marks: every port as a coloured ball, the ghost string and the selected string
 export function createWireMarks(view) {
@@ -26,24 +28,31 @@ export function createWireMarks(view) {
   balls.count = 0;
   balls.frustumCulled = false;
   group.add(balls);
-  const lineOf = (material) => {
-    const line = new THREE.Line(new THREE.BufferGeometry(), material);
-    line.renderOrder = MARK_ORDER;
-    line.frustumCulled = false;
-    line.visible = false;
-    group.add(line);
-    return line;
+  const tubeOf = (material) => {
+    const tube = new THREE.Mesh(new THREE.BufferGeometry(), material);
+    tube.renderOrder = MARK_ORDER;
+    tube.frustumCulled = false;
+    tube.visible = false;
+    group.add(tube);
+    return tube;
   };
-  const ghost = lineOf(new THREE.LineDashedMaterial({ color: GHOST_OK_COLOR, dashSize: DASH_MM[0], gapSize: DASH_MM[1], depthTest: false, transparent: true }));
-  const selected = lineOf(new THREE.LineBasicMaterial({ color: SELECTED_COLOR, depthTest: false, transparent: true }));
+  const ghost = tubeOf(new THREE.MeshBasicMaterial({ color: GHOST_OK_COLOR, depthTest: false, transparent: true, opacity: GHOST_OPACITY }));
+  const selected = tubeOf(new THREE.MeshBasicMaterial({ color: SELECTED_COLOR, depthTest: false, transparent: true }));
   const matrix = new THREE.Matrix4();
   const color = new THREE.Color();
 
-  function setLine(line, points) {
-    line.geometry.dispose();
-    line.geometry = new THREE.BufferGeometry().setFromPoints((points || []).map((point) => new THREE.Vector3(...point)));
-    if (line === ghost) line.computeLineDistances();
-    line.visible = !!points && points.length > 1;
+  // A thin tube along a polyline, one straight piece per segment
+  function setLine(tube, points) {
+    tube.geometry.dispose();
+    const corners = (points || []).map((point) => new THREE.Vector3(...point)).filter((point, index, list) => index === 0 || point.distanceTo(list[index - 1]) > 1e-6);
+    tube.visible = corners.length > 1;
+    if (!tube.visible) {
+      tube.geometry = new THREE.BufferGeometry();
+      return;
+    }
+    const path = new THREE.CurvePath();
+    for (let index = 1; index < corners.length; index++) path.add(new THREE.LineCurve3(corners[index - 1], corners[index]));
+    tube.geometry = new THREE.TubeGeometry(path, Math.max(1, corners.length - 1) * 2, TUBE_MM, TUBE_SIDES, false);
   }
 
   return {
