@@ -285,6 +285,19 @@ export const EXTRA_SUPPLY = 0.5; // extra water or power: units above the home's
 export const OUTWARD_REACH_CELLS = 4; // a side face looks out when this many cells are free
 export const NOISY_FAMILIES = ['generator', 'powerroom', 'pumproom']; // noise when adjacent
 export const BRIDGE_FAMILIES = ['walkway', 'bridge', 'gantry']; // join masses, never part of one
+export const RESIDENT_RECORD_VERSION = 1; // resident record format
+export const HAPPY_SEGMENTS = 5; // happiness meter segments
+export const HAPPY_HATE_COST = 0.25; // meter share lost per triggered hate
+export const HAPPY_DREAM_GAIN = 0.2; // meter share gained by a met dream
+
+// Resident figures: architectural scale people
+export const FIGURE_HEIGHT_M = [1.55, 1.9]; // seeded standing height range
+export const FIGURE_STORY_M = 3; // a story in real metres, sets the figure scale
+export const FIGURE_ACCENTS = [0xc8553d, 0x2a7ab0, 0xd9a400, 0x3f8f5a, 0x8e5aa8, 0xd97a2b, 0x2f9e9e, 0xb8486e]; // one seeded accent each
+export const FIGURE_BODY_COLOR = 0xeeebe3; // matte off-white
+export const FIGURE_DARK_COLOR = 0x5d5a55; // hair and small dark parts
+export const PIN_RISE_MM = 9; // pin height above a home's top
+export const PIN_SPREAD_MM = 6; // gap between pins on one home
 
 // Puzzle points, fixed and never puzzle dependent
 export const POINTS = {
