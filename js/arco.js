@@ -40,6 +40,7 @@ import { readSetting, writeSetting } from './ui/legend.js';
 import { setupSlideovers } from './ui/slideover.js';
 import { createResidentMarks } from './render/residents.js';
 import { setupResidents } from './ui/residents.js';
+import { setupResidentPanel } from './ui/residentpanel.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -413,6 +414,7 @@ const residentMarks = createResidentMarks(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 const residents = setupResidents(app, { marks: residentMarks, scorer: (payload) => scorer.call({ kind: 'residents', ...payload }) });
 app.residents = residents;
+const residentPanel = setupResidentPanel(app, residents);
 
 // Layer shaders compile while the first build animation plays
 let layersWarm = false;
