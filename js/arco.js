@@ -47,6 +47,8 @@ import { setupResidentArchive } from './ui/residentarchive.js';
 import { setupPuzzle } from './ui/puzzle.js';
 import { setupScoreTab } from './ui/scoretab.js';
 import { setupResults } from './ui/results.js';
+import { createPuzzleStore } from './core/puzzlestore.js';
+import { easternDate } from './core/daily.js';
 import { layoutOf } from './core/puzzleplay.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -555,20 +557,35 @@ function screenOfResident(id) {
 const recordOf = (id) => residents.list().find((record) => record.id === id) || null;
 setupScoreTab(app, residents, { recordOf, nameOf: residentPanel.nameOf, screenOf: screenOfResident });
 
-// Submit opens the results sheet for a valid layout
+// Results, streak, wins and the Infinite best stay in this browser
+const puzzleStore = createPuzzleStore(browserStore);
+puzzleStore.load();
+function puzzleStats(game) {
+  if (game.kind === 'infinite') {
+    const { played, best } = puzzleStore.infiniteStats();
+    return [[COPY.resultsPlayed, played], [COPY.resultsBest, best ? `${best.percent}%` : '0%']];
+  }
+  const { played, streak, wins } = puzzleStore.dailyStats(easternDate());
+  const day = puzzleStore.daily(game.date);
+  return [[COPY.resultsPlayed, played], [COPY.resultsStreak, streak], [COPY.resultsWins, wins], [COPY.resultsBest, day ? `${day.best.percent}%` : '0%']];
+}
+
+// Submit records the result and opens the results sheet for a valid layout
 const results = setupResults(app, {
   recordOf,
   nameOf: residentPanel.nameOf,
   portrait: residentPanel.portrait,
   showPar: puzzle.showPar,
   hidePar: puzzle.hidePar,
-  stats: () => [],
+  stats: puzzleStats,
 });
 puzzle.submit.addEventListener('click', () => {
   const report = residents.report();
   if (!app.game || !report || !report.valid || report.puzzle !== app.puzzle) return;
   residentPanel.cancel();
-  results.open(report, app.game);
+  const game = app.game;
+  const saved = game.kind === 'daily' ? puzzleStore.recordDaily(game.date, report.score, game.ranked) : puzzleStore.recordInfinite(game.seed, report.score);
+  results.open(report, game, saved.stored ? '' : COPY.resultsSaveFailed);
 });
 puzzle.onGame(() => results.close());
 

@@ -71,9 +71,9 @@ export function setupResults(app, hooks) {
     share.textContent = shareText({ title: shareTitle(game), residents: game.puzzle.residents, evaluations: report.evaluations, score, par: game.puzzle.par.points });
   }
 
-  function open(report, game) {
+  function open(report, game, note = '') {
     shown = { report, game };
-    status.textContent = '';
+    status.textContent = note;
     render();
     parBar.hidden = true;
     sheet.hidden = false;
