@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { figureParams, makeFigure, figureTop, PRESENTATIONS, PROPS, HAIRS, POSTURES, BUILDS } from '../js/core/figure.js';
+import { figureParams, makeFigure, figureTop, partTop, HEAD_SHAPES, FEATURES, ACCESSORIES, BUILDS } from '../js/core/figure.js';
 import { FIGURE_HEIGHT_M, FIGURE_STORY_M, STORY_MM } from '../js/config.js';
 
 const SEEDS = Array.from({ length: 300 }, (unused, index) => (index * 2654435761) >>> 0);
@@ -17,12 +17,12 @@ test('different seeds give different parameter sets', () => {
   for (let index = 1; index < SEEDS.length; index++) {
     const first = figureParams(SEEDS[index - 1]);
     const second = figureParams(SEEDS[index]);
-    const differ = ['presentation', 'build', 'posture', 'hair', 'prop', 'accent', 'skirt'].filter((field) => first[field] !== second[field]).length + (Math.abs(first.height - second.height) >= 0.05 ? 1 : 0);
+    const differ = ['headShape', 'feature', 'accessory', 'accent', 'build'].filter((field) => first[field] !== second[field]).length + (Math.abs(first.height - second.height) >= 0.05 ? 1 : 0) + (Math.abs(first.headSize - second.headSize) >= 0.05 ? 1 : 0);
     assert.ok(differ >= 2, `${SEEDS[index - 1]} and ${SEEDS[index]}`);
   }
   // Every option shows up
   const all = SEEDS.map(figureParams);
-  for (const [field, options] of [['presentation', PRESENTATIONS], ['prop', PROPS], ['hair', HAIRS], ['posture', POSTURES], ['build', Object.keys(BUILDS)]]) {
+  for (const [field, options] of [['headShape', HEAD_SHAPES], ['feature', FEATURES], ['accessory', ACCESSORIES], ['build', Object.keys(BUILDS)]]) {
     assert.deepEqual(new Set(all.map((params) => params[field])), new Set(options), field);
   }
 });
@@ -34,9 +34,15 @@ test('figures stay at architectural scale', () => {
     assert.ok(figure.params.height >= FIGURE_HEIGHT_M[0] && figure.params.height <= FIGURE_HEIGHT_M[1]);
     assert.ok(figure.heightMm <= FIGURE_HEIGHT_M[1] * perMetre && figure.heightMm < STORY_MM * 0.7);
     // Head top within 6 cm of the rolled height; only umbrellas reach higher
-    const head = figure.joints.head[2] + figure.parts.find((part) => part.kind === 'sphere').r;
+    const head = partTop(figure.parts.find((part) => part.name === 'head'));
     assert.ok(Math.abs(head / perMetre - figure.params.height) < 0.06, `${seed}: head at ${head / perMetre}`);
-    if (figure.params.prop !== 'umbrella') assert.ok(figureTop(figure) <= figure.heightMm + 0.35 * perMetre);
+    if (figure.params.accessory !== 'umbrella') assert.ok(figureTop(figure) <= figure.heightMm + 0.35 * perMetre);
+    // A peg person: a big head, a peg body, two floating hands, no arms or legs
+    const names = figure.parts.map((part) => part.name).filter(Boolean);
+    assert.deepEqual(names, ['body', 'shoulders', 'head', 'handL', 'handR']);
+    const headPart = figure.parts.find((part) => part.name === 'head');
+    assert.ok(headPart.r > figure.parts.find((part) => part.name === 'body').r2, `${seed}: head bigger than the shoulders`);
+    for (const hand of ['handL', 'handR']) assert.ok(Math.abs(figure.joints[hand][0]) > figure.parts.find((part) => part.name === 'body').r2 || figure.joints[hand][1] < 0, `${seed}: ${hand} floats clear`);
     for (const part of figure.parts) for (const value of Object.values(part).flat().filter((entry) => typeof entry === 'number')) assert.ok(Number.isFinite(value));
   }
 });
