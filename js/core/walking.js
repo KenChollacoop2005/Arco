@@ -167,3 +167,32 @@ export function walkingLines(network, modules) {
   }
   return target;
 }
+
+// Shortest walk from each reached module down to the plinth, as points in mm
+export function plinthRoutes(network) {
+  const { graph } = network;
+  const parent = new Map(graph.ground.map((key) => [key, null]));
+  const queue = [...graph.ground];
+  for (let head = 0; head < queue.length; head++) {
+    for (const { to } of graph.links.get(queue[head]) || []) {
+      if (parent.has(to)) continue;
+      parent.set(to, queue[head]);
+      queue.push(to);
+    }
+  }
+  const depth = new Map(queue.map((key, index) => [key, index]));
+  const point = (key) => {
+    const [x, y, level] = key.split(',').map(Number);
+    return [(x + 0.5) * CELL_MM, (y + 0.5) * CELL_MM, level * STORY_MM + WALK_LIFT_MM];
+  };
+  const routes = {};
+  for (const [key, owner] of graph.owner) {
+    if (owner === PLINTH || !parent.has(key)) continue;
+    const best = routes[owner.id];
+    if (best && best.order <= depth.get(key)) continue;
+    const keys = [];
+    for (let at = key; at !== null; at = parent.get(at)) keys.push(at);
+    routes[owner.id] = { order: depth.get(key), points: keys.map(point) };
+  }
+  return Object.fromEntries(Object.entries(routes).map(([id, route]) => [id, route.points]));
+}

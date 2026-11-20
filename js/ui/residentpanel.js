@@ -2,6 +2,7 @@ import { renderResidentCards, renderResidentDetail } from './residentview.js';
 import { portraitOf, cardPortraitOf, accentCss } from './portrait.js';
 import { occupantsOf, roomIn } from '../core/roster.js';
 import { isHome } from '../core/residents.js';
+import { traitFocus } from '../core/focus.js';
 import { STATE_NORMAL, STATE_SELECTED, STATE_ROOM, STATE_FULL } from '../render/materials.js';
 import { COPY } from './copy.js';
 
@@ -245,7 +246,41 @@ export function setupResidentPanel(app, residents, hooks) {
     } else if (!current || current.home !== null || last !== undefined) residents.select(null);
   });
 
-  residents.onChange(render);
+  // Hovering or tapping a trait shows what it is about in the scene
+  let focused = null;
+  function focusOn(target) {
+    const record = recordOf(residents.selected());
+    const line = target && target.closest ? target.closest('.trait-line, [data-need]') : null;
+    if (!record || !line || !hooks.focus || placing) return;
+    if (line === focused) return;
+    focused = line;
+    const kind = line.dataset.need ? 'need' : line.dataset.kind;
+    const trait = kind === 'need' ? { id: line.dataset.need } : kind === 'dream' ? record.dream : record[kind === 'want' ? 'wants' : 'hates'][Number(line.dataset.index)];
+    const home = residents.homeOf(record.id);
+    const homeOf = (id) => {
+      const other = recordOf(id);
+      return other ? other.home : null;
+    };
+    const focus = traitFocus(kind, trait, { modules: modulesNow(), home, homeOf, analysis: app.analysis || {}, start: record.start });
+    hooks.focus(focus);
+    for (const card of list.children) card.classList.toggle('is-focus', focus.residents.includes(card.dataset.id));
+  }
+  function unfocus() {
+    if (!focused) return;
+    focused = null;
+    if (hooks.focus) hooks.focus(null);
+    for (const card of list.children) card.classList.remove('is-focus');
+  }
+  detail.addEventListener('pointerover', (event) => focusOn(event.target));
+  detail.addEventListener('focusin', (event) => focusOn(event.target));
+  detail.addEventListener('click', (event) => focusOn(event.target));
+  detail.addEventListener('pointerleave', unfocus);
+  detail.addEventListener('focusout', unfocus);
+
+  residents.onChange(() => {
+    unfocus();
+    render();
+  });
   render();
   return {
     render,

@@ -3,7 +3,7 @@ import { structureMounts } from '../core/mounts.js';
 import { stringContext } from '../core/strings.js';
 import { planServices } from '../core/services.js';
 import { pourPaths } from '../core/falls.js';
-import { walkingNetwork, walkingLines } from '../core/walking.js';
+import { walkingNetwork, walkingLines, plinthRoutes } from '../core/walking.js';
 import { lightPlan } from '../core/lights.js';
 import { particleEmitters } from '../core/emitters.js';
 import { residentExtras, structureResults, evaluateResidents } from '../core/residents.js';
@@ -62,7 +62,7 @@ self.onmessage = (event) => {
     const flows = { ports, services, pours: pourPaths(modules, context) };
     // Walking: per module reach and nearest amenities, and the drawing lines
     const network = walkingNetwork(modules);
-    const walking = { modules: network.modules, lines: walkingLines(network, modules) };
+    const walking = { modules: network.modules, lines: walkingLines(network, modules), routes: plinthRoutes(network) };
     // Lit windows, outdoor lights and the cells they light
     const lights = lightPlan(modules, services);
     self.postMessage({ id, done: true, result: { ...analyze(modules), flows, walking, lights, emitters: particleEmitters(modules) } });

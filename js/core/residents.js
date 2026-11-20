@@ -30,7 +30,7 @@ function voxels(instance) {
 }
 
 // Fewest cells between two modules along any axis
-function cellGap(first, second) {
+export function cellGap(first, second) {
   let best = Infinity;
   for (const [ax, ay, az] of voxels(first)) for (const [bx, by, bz] of voxels(second)) best = Math.min(best, Math.max(Math.abs(ax - bx), Math.abs(ay - by), Math.abs(az - bz)));
   return best;

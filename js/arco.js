@@ -10,7 +10,7 @@ import { createSection } from './render/section.js';
 import { createDecor } from './render/decor.js';
 import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
-import { STATE_NORMAL, STATE_SELECTED, sharedUniforms } from './render/materials.js';
+import { STATE_NORMAL, STATE_SELECTED, STATE_HIGHLIGHT, sharedUniforms } from './render/materials.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
@@ -39,6 +39,7 @@ import { setupArchive } from './ui/archive.js';
 import { readSetting, writeSetting } from './ui/legend.js';
 import { setupSlideovers } from './ui/slideover.js';
 import { createResidentMarks } from './render/residents.js';
+import { createHighlight } from './render/highlight.js';
 import { setupResidents } from './ui/residents.js';
 import { setupResidentPanel } from './ui/residentpanel.js';
 import { createRagdoll } from './ui/ragdoll.js';
@@ -423,6 +424,7 @@ app.structureListeners.push(() => refreshParticles());
 
 // Residents: pins, the selected figure and scores from their own worker
 const residentMarks = createResidentMarks(view);
+const traitHighlight = createHighlight(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 // In a puzzle the shared puzzle rules score the layout, ids mapped both ways
 async function scoreResidents(payload) {
@@ -448,6 +450,12 @@ const residentPanel = setupResidentPanel(app, residents, {
   idAt: (event) => picker.idAt(event),
   setState: (id, state) => modules.setState(id, state),
   canvas,
+  // Trait focus: modules lit up, plus level lines, light rings and routes
+  focus: (focus) => {
+    traitHighlight.set(focus);
+    const lit = new Set(focus ? focus.modules : []);
+    for (const instance of app.structure ? app.structure.modules : []) modules.setState(instance.id, lit.has(instance.id) ? STATE_HIGHLIGHT : app.selection.includes(instance.id) ? STATE_SELECTED : STATE_NORMAL);
+  },
   // Carrying a resident: the pin hides and the figure hangs from the cursor
   carry: (record) => {
     residents.hide(record.id);

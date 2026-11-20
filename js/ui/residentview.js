@@ -135,6 +135,7 @@ function needChips(record, evaluation, placed) {
     const judged = placed ? evaluation.needs[index] : null;
     const label = need === 'water' ? COPY.needWater : COPY.needPower;
     const chip = node('span', `chip ${!placed ? '' : judged.met ? 'chip-full' : 'chip-dry'}`, `${label} ${!placed ? COPY.residentNotPlacedShort : judged.met ? COPY.needMet : COPY.needNotMet}`);
+    chip.dataset.need = need;
     if (judged) {
       chip.title = reasonText(judged.reason);
       reasons.push(`${label}: ${reasonText(judged.reason)}`);

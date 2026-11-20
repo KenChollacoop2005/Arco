@@ -786,3 +786,4 @@ body[data-mode='puzzle'] .sandbox-only { display: none; }
 .results-share { margin: 0; padding: 10px 12px; background: var(--field-bg); border: 1px solid var(--hairline); font: 14px/1.5 var(--font-mono); white-space: pre-wrap; user-select: all; }
 .results .status:empty { display: none; }
 .par-bar { top: auto; bottom: var(--gap); }
+.resident-card.is-focus { outline: 2px solid var(--ink); outline-offset: 1px; }
