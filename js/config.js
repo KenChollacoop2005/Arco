@@ -299,3 +299,22 @@ export const POINTS = {
   unusedPiece: 2, // each tray piece left unused
   unusedCap: 10, // most points from unused pieces
 };
+
+// Puzzles: content rules, site split, tray, par search
+export const PUZZLE_FORMAT_VERSION = 1; // puzzle file format
+export const PUZZLE_GENERATOR_VERSION = 1; // puzzle generator rules
+export const PUZZLE_MAX_PIECES = 25; // most modules in the answer
+export const PUZZLE_ANSWER = { density: 0, height: 1, daring: 1, theme: 1, services: 'high' }; // Generate choices for the answer
+export const PUZZLE_RESIDENTS = [3, 5]; // residents per puzzle
+export const PUZZLE_PRESET_RESIDENTS = [0, 2]; // residents already living in locked homes
+export const PUZZLE_SITE_SHARE = 0.5; // share of the answer pre-placed and locked
+export const PUZZLE_DECOYS = [2, 4]; // extra tray pieces beside the answer
+export const PUZZLE_TRAIT_SHARE = [0.45, 0.85]; // share of traits the answer satisfies
+export const PUZZLE_TRAIT_TRIES = 12; // resident rolls tried per answer
+export const PUZZLE_REROLLS = 24; // seeds tried before giving up
+export const PAR_STEPS = 20; // hill-climb steps for par
+export const PAR_PIECE_SHARE = 0.45; // share of steps that move a tray piece
+export const PAR_PLACE_TRIES = 16; // spots tried when placing a piece
+export const PAR_POINTS = [60, 700]; // healthy par range
+export const PAR_START_SHARE = 0.5; // the empty tray scores at most this share of par
+export const PIECE_ID_BASE = 1000; // ids of placed tray pieces start here
