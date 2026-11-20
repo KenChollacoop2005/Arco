@@ -203,7 +203,7 @@ export function consumerStatus(node, solved, inLinks, noLink) {
 }
 
 // Source, pump, main and consumer roles of one module
-function rolesOf(instance, roofOpen, powered) {
+function rolesOf(instance, roofOpen, powered, extra = {}) {
   const roles = [];
   const pump = hasPump(instance) ? PUMP_KINDS[instance.family] : null;
   const live = !powered || powered.has(instance.id);
@@ -222,7 +222,7 @@ function rolesOf(instance, roofOpen, powered) {
   // A raised wheel passes water on; what passes by gravity turns it
   if (WHEEL_JUNCTIONS.includes(instance.family)) roles.push({ kind: 'main', supply: 0, head: null, wheel: true });
   const cells = instanceCells(instance).length;
-  const demand = (DEMAND_PER_CELL[instance.family] || 0) * cells + (DEMAND_PER_MODULE[instance.family] || 0);
+  const demand = (DEMAND_PER_CELL[instance.family] || 0) * cells + (DEMAND_PER_MODULE[instance.family] || 0) + (extra[instance.id] || 0);
   if (demand > 0) roles.push({ kind: 'consumer', supply: 0, head: null, demand });
   // A flat roof with nothing on it sheds rain from its gutter
   if (roofOpen && FAMILIES[instance.family].stack && roles.every((role) => role.kind === 'consumer')) roles.push({ kind: 'source', supply: WATER_SOURCES.roof[0], head: null, row: 'roof', roof: true });
@@ -260,7 +260,7 @@ function spillOf(world, node, instances, consumerAt, context) {
 }
 
 // Water network of a structure: nodes, pipes, flows and diagnostics, seeded
-export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules), powered = null, shared = {} } = {}) {
+export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules), powered = null, shared = {}, extra = {} } = {}) {
   const world = worldFromModules(modules);
   const rng = makeRng(mixSeed(hashString(String(seedText)), WATER_SEED));
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
@@ -293,7 +293,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const members = mainOf.has(instance.id) ? modules.filter((other) => mainOf.get(other.id) === instance.id) : [instance];
     const roofOpen = instanceCells(instance).every(([cellX, cellY]) => !moduleAt(world, cellX, cellY, instance.z + instance.h));
     const level = Math.max(...members.map((member) => member.z + member.h));
-    for (const role of rolesOf(instance, roofOpen, powered)) {
+    for (const role of rolesOf(instance, roofOpen, powered, extra)) {
       const own = members.flatMap((member) => portsOf.get(member.id) || []);
       const gutter = role.roof ? own.filter((port) => port.type === 'water-out' && port.roof) : own.filter((port) => !port.roof);
       const node = { id: role.roof ? `${instance.id}:roof` : String(instance.id), module: instance.id, members: members.map((member) => member.id), level, ...role, ins: gutter.filter((port) => port.type === 'water-in'), outs: gutter.filter((port) => port.type === 'water-out') };

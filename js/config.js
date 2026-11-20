@@ -266,3 +266,36 @@ export const WIRE_CABLES = [1, 3]; // cables strung on one link; the pair cap tr
 export const WIRE_BUNDLE_MM = 0.9; // spacing of cables sharing a conduit
 export const WIRE_SAMPLE_MM = 1.5; // sample spacing along a conduit check
 export const CATENARY_STEPS = 16; // straight pieces per free span
+
+// Residents: rolls and want, hate and dream parameters
+export const RESIDENT_WANTS = [1, 4]; // wants per resident
+export const RESIDENT_HATES = [0, 2]; // hates per resident
+export const RESIDENT_DREAM_CHANCE = 0.5; // share of residents with a dream
+export const RESIDENT_ROLL_TRIES = 40; // draws tried before a roll gives up on a slot
+export const HIGH_STORY = [2, 4]; // high up: home at or above this story
+export const LOW_STORY = [0, 1]; // low down: home at or below this story
+export const HEIGHTS_STORY = [2, 3]; // hates heights: home above this story
+export const INDUSTRY_CELLS = [2, 3]; // away from or near industry: within this many cells
+export const DISPOSAL_CELLS = [2, 3]; // near disposal: within this many cells
+export const AMENITY_STEPS = [6, 12]; // near an amenity: walking steps
+export const LONG_WALK_STEPS = [8, 14]; // long walk: more steps than this to the plinth
+export const CROWDING_HOMES = [2, 3]; // crowding: more adjacent homes than this
+export const TALL_STORIES = [4, 6]; // dream: building at least this many stories
+export const EXTRA_SUPPLY = 0.5; // extra water or power: units above the home's demand
+export const OUTWARD_REACH_CELLS = 4; // a side face looks out when this many cells are free
+export const NOISY_FAMILIES = ['generator', 'powerroom', 'pumproom']; // noise when adjacent
+export const BRIDGE_FAMILIES = ['walkway', 'bridge', 'gantry']; // join masses, never part of one
+
+// Puzzle points, fixed and never puzzle dependent
+export const POINTS = {
+  needMet: 10, // a need met
+  needMissed: -15, // a need not met
+  wantMet: 8, // a want met
+  wantMissed: -4, // a want not met
+  hateTriggered: -8, // a hate triggered
+  dreamMet: 6, // a dream met
+  dreamMissed: 0, // a dream missed
+  happy: 20, // every want met, no hate, dream met if any
+  unusedPiece: 2, // each tray piece left unused
+  unusedCap: 10, // most points from unused pieces
+};

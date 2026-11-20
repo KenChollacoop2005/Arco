@@ -58,12 +58,14 @@ export function stringLightDemand(runs = []) {
 }
 
 // Water, power and plain lines of a structure as strings, seeded and render only
-export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules) } = {}) {
+// extra: added demand per module id, {water, power}, for residents' wants
+export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules), extra = {} } = {}) {
+  const addWater = extra.water || {};
   const byKey = new Map(mounts.map((port) => [portKey(port.module, port.index), port]));
   const portOf = (end) => byKey.get(portKey(end.module, end.index));
   // Gravity water, then power, then pumped water
   const shared = {};
-  const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared });
+  const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared, extra: addWater });
   const wheels = {};
   for (const instance of modules) if (WHEEL_FAMILIES.includes(instance.family)) wheels[instance.id] = (gravity.solved.nodes[String(instance.id)] || { received: 0 }).received;
   // Lines first: string lights add demand to the module that feeds them
@@ -72,9 +74,11 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
     return (!role || role.kind === 'consumer') && mounts.some((port) => port.module === instance.id && port.active && port.type === 'power' && !port.relay);
   }).map((instance) => instance.id));
   const plain = planLines(modules, seedText, { ports: mounts, context, owners });
-  const power = planPower(modules, seedText, { ports: mounts, context, wheels, extra: stringLightDemand(plain.lights) });
+  const lightExtra = stringLightDemand(plain.lights);
+  for (const [id, amount] of Object.entries(extra.power || {})) lightExtra[id] = (lightExtra[id] || 0) + amount;
+  const power = planPower(modules, seedText, { ports: mounts, context, wheels, extra: lightExtra });
   const pumpsOn = new Set(modules.filter((instance) => PUMP_KINDS[instance.family] && hasPump(instance) && power.consumers[instance.id] && power.consumers[instance.id].status === 'full').map((instance) => instance.id));
-  const water = planWater(modules, seedText, { ports: mounts, context, powered: pumpsOn, shared });
+  const water = planWater(modules, seedText, { ports: mounts, context, powered: pumpsOn, shared, extra: addWater });
   const pipes = water.links.map((link) => ({
     ...makeString('pipe', portOf(link.fromPort), portOf(link.toPort), link.points, { spans: link.spans, collars: solidEntries(context, link.points.slice(1, -1)) }),
     units: water.solved.links[link.id].units,

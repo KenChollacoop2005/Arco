@@ -132,7 +132,8 @@ export function walkingNetwork(modules) {
       const steps = nearestIn(field.any, keys);
       if (steps < Infinity) nearest[type] = { steps, stepFree: nearestIn(field.free, keys) < Infinity };
     }
-    report[instance.id] = { reached: nearestIn(fromPlinth, keys) < Infinity, stepFree: nearestIn(freeFromPlinth, keys) < Infinity, nearest };
+    const plinthSteps = nearestIn(fromPlinth, keys);
+    report[instance.id] = { reached: plinthSteps < Infinity, stepFree: nearestIn(freeFromPlinth, keys) < Infinity, plinthSteps, nearest };
   }
   // Steps between two modules, Infinity when no route
   const between = (fromId, toId) => nearestIn(spread(graph, voxelsOf(graph, byId.get(fromId)), false), voxelsOf(graph, byId.get(toId)));
