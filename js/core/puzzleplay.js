@@ -132,3 +132,14 @@ export function playScore(puzzle, layout, { preview = null, cache = new Map() } 
   }
   return { valid: checked.valid, problems: checked.problems, score, evaluations, previews };
 }
+
+// Problems in the order a player should fix them
+export const PROBLEM_ORDER = ['bad-layout', 'unknown-piece', 'anchor-moved', 'over-count', 'placement', 'site-broken', 'unstable', 'not-a-home', 'home-full', 'unknown-resident'];
+
+// Submit state from a live report: ready, or the one problem to show
+export function submitStatus(report) {
+  if (!report) return { ready: false, problem: null };
+  if (report.valid) return { ready: true, problem: null };
+  const ranked = [...report.problems].sort((first, second) => PROBLEM_ORDER.indexOf(first) - PROBLEM_ORDER.indexOf(second));
+  return { ready: false, problem: ranked[0] || null };
+}

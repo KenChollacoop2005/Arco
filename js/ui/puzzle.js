@@ -2,7 +2,7 @@ import { PIECE_ID_BASE, DAILY_TEST_MODE } from '../config.js';
 import { COPY } from './copy.js';
 import { makeThumb } from './collection.js';
 import { confirmAt } from './confirm.js';
-import { puzzleStart, trayLeft, dailyNumber } from '../core/puzzleplay.js';
+import { puzzleStart, trayLeft, dailyNumber, submitStatus } from '../core/puzzleplay.js';
 import { layoutModules, anchorIds } from '../core/puzzle.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
@@ -90,7 +90,10 @@ export function setupPuzzle(app, hooks) {
     submit.disabled = !current || !report.valid || app.showingPar;
     if (!app.puzzle || app.showingPar) check.textContent = '';
     else if (!current) check.textContent = loading.has(app.world) ? '' : COPY.puzzleScoring;
-    else check.textContent = report.valid ? COPY.puzzleReady : report.problems.map((problem) => COPY.puzzleProblems[problem] || problem).join(' ');
+    else {
+      const state = submitStatus(report);
+      check.textContent = state.ready ? COPY.puzzleReady : COPY.puzzleProblems[state.problem] || state.problem || '';
+    }
   }
 
   function park() {

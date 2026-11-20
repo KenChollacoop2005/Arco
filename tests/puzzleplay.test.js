@@ -8,7 +8,7 @@ import { streamFrom } from '../js/core/stream.js';
 import { assignmentsOf } from '../js/core/roster.js';
 import { anchorIds, unusedTrayPieces } from '../js/core/puzzle.js';
 import { variantKey } from '../js/core/grid.js';
-import { dailyNumber, puzzleStart, trayLeft, layoutOf, scoreChange, shareText, playScore, SHARE_MARKS } from '../js/core/puzzleplay.js';
+import { dailyNumber, puzzleStart, trayLeft, layoutOf, scoreChange, shareText, playScore, SHARE_MARKS, submitStatus } from '../js/core/puzzleplay.js';
 
 const FAST_DAY = '2026-12-18'; // a daily that needed no reroll
 const puzzle = parsePuzzle(readFileSync(new URL(`../puzzles/${FAST_DAY}.json`, import.meta.url), 'utf8'));
@@ -163,4 +163,28 @@ test('the share grid has one row per resident and the score against par', () => 
   const first = report.evaluations[0];
   const marks = [...lines[1].matchAll(new RegExp(`${SHARE_MARKS.met}|${SHARE_MARKS.missed}`, 'gu'))];
   assert.equal(marks.length, first.wants.length);
+});
+
+test('Submit: ready for the par layout, blocked with one reason when too many of a piece are used, the structure does not stand, or pieces are taken away under others', () => {
+  const par = puzzle.par.layout;
+  assert.deepEqual(submitStatus(playScore(puzzle, par)), { ready: true, problem: null });
+  assert.deepEqual(submitStatus(null), { ready: false, problem: null });
+  // One piece more than the tray holds, set down clear of everything
+  const entry = puzzle.tray.find((item) => par.pieces.some((piece) => piece.key === item.key));
+  const spareCells = [[-5, 0, 0], [-5, 1, 0], [-5, -1, 0], [-4, 2, 0], [-4, -2, 0], [-3, 3, 0]];
+  const extra = spareCells.slice(0, entry.count).map((cell) => ({ key: entry.key, cell, rot: 0 }));
+  const over = submitStatus(playScore(puzzle, { ...par, pieces: [...par.pieces, ...extra] }));
+  assert.equal(over.ready, false);
+  assert.ok(['over-count', 'placement'].includes(over.problem), over.problem);
+  // A tray piece floating over empty ground does not stand
+  const floating = submitStatus(playScore(puzzle, { pieces: [{ key: puzzle.tray[0].key, cell: [0, 0, 6], rot: 0 }], residents: {} }));
+  assert.equal(floating.ready, false);
+  assert.ok(['placement', 'unstable'].includes(floating.problem), floating.problem);
+  // Every par piece taken away again is fine; a site piece under another one taken away is not
+  assert.equal(submitStatus(playScore(puzzle, { pieces: [], residents: {} })).ready, true);
+  const anchors = anchorIds(puzzle.site);
+  const under = puzzle.site.find((instance) => !anchors.has(instance.id) && puzzle.site.some((other) => other.z === instance.z + instance.h && other.x === instance.x && other.y === instance.y));
+  if (under) assert.equal(submitStatus(playScore(puzzle, { pieces: [], residents: {}, site: { [under.id]: null } })).ready, false);
+  const anchor = [...anchors][0];
+  assert.deepEqual(submitStatus(playScore(puzzle, { pieces: [], residents: {}, site: { [anchor]: null } })).problem, 'anchor-moved');
 });
