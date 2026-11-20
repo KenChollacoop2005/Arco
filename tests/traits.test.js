@@ -56,6 +56,10 @@ test('wants about who lives where: alone, roommate, neighbour, community, next t
   assert.equal(want(STACK, { id: 'community' }, { home: 1, assignments: { b: 3 }, others: ['b'] }).reason, 'too-few-neighbours');
   assert.equal(want(STACK, { id: 'nextto', resident: 'b' }, { home: 1, assignments: { b: 2 }, others: ['b'] }).met, true);
   assert.equal(want(LONE, { id: 'nextto', resident: 'b' }, { home: 1, assignments: { b: null }, others: ['b'] }).reason, 'friend-away');
+  // Next to means the neighbouring home, never the same one; roommate and neighbour stay apart
+  assert.deepEqual(want(STACK, { id: 'nextto', resident: 'b' }, { home: 1, assignments: { b: 1 }, others: ['b'] }), { id: 'nextto', resident: 'b', met: false, reason: 'friend-same-home' });
+  assert.equal(want(STACK, { id: 'neighbour' }, { home: 1, assignments: { b: 1 }, others: ['b'] }).met, false);
+  assert.equal(want(STACK, { id: 'roommate' }, { home: 1, assignments: { b: 3 }, others: ['b'] }).met, false);
 });
 
 test('wants extra water, extra power and a lit outdoor area, met and not', () => {
@@ -159,4 +163,37 @@ test('the conflict table keeps contradictions off one resident', () => {
     assert.ok(typeof resident.name === 'string' && resident.name.includes(' '));
   }
   assert.deepEqual(rollResident(5, 'r1', { amenities: ['gym'] }), rollResident(5, 'r1', { amenities: ['gym'] }));
+});
+
+// Pairs that can never both hold, worked out here apart from the conflict table
+function neverBoth(first, second) {
+  const has = (one, two) => (first.kind + ':' + first.id === one && second.kind + ':' + second.id === two ? [first, second] : second.kind + ':' + second.id === one && first.kind + ':' + first.id === two ? [second, first] : null);
+  if (first.kind === second.kind && first.id === second.id) return true;
+  const exact = [['want:alone', 'want:roommate'], ['want:stepfree', 'hate:stairs'], ['want:outward', 'hate:view'], ['want:lit', 'hate:dark'], ['want:stay', 'want:move']];
+  if (exact.some(([one, two]) => has(one, two))) return true;
+  // Home story z: high wants z >= story, low z <= story, heights hates z > story, ground hates z = 0
+  const highLow = has('want:high', 'want:low');
+  if (highLow && highLow[0].story > highLow[1].story) return true;
+  const highHeights = has('want:high', 'hate:heights');
+  if (highHeights && highHeights[0].story > highHeights[1].story) return true;
+  const lowGround = has('want:low', 'hate:ground');
+  if (lowGround && lowGround[0].story < 1) return true;
+  // Next to a resident counts their home next door, and so does a feud with them
+  const friendFeud = has('want:nextto', 'hate:feud');
+  if (friendFeud && friendFeud[0].resident === friendFeud[1].resident) return true;
+  // An amenity wanted within s steps but hated within t steps needs s > t
+  const amenity = has('want:amenity', 'hate:amenity');
+  if (amenity && amenity[0].type === amenity[1].type && amenity[0].steps <= amenity[1].steps) return true;
+  return false;
+}
+
+test('10,000 rolled residents never carry two traits that cannot both hold', () => {
+  for (let seed = 1; seed <= 10000; seed++) {
+    const others = seed % 2 === 0 ? ['r2', 'r3'] : ['r2', 'r3', 'r4'];
+    const traits = traitsOf(rollResident(seed, 'r1', { amenities: ['gym', 'clinic', 'market'], others, start: seed % 4 === 0 ? 7 : null }));
+    for (const [index, first] of traits.entries()) for (const second of traits.slice(index + 1)) assert.ok(!neverBoth(first, second), `${seed} ${first.kind}:${first.id} ${second.kind}:${second.id}`);
+  }
+  // The table itself covers each listed contradiction
+  const traitOf = (tagText, extra = {}) => ({ kind: tagText.split(':')[0], id: tagText.split(':')[1], ...extra });
+  for (const [first, second] of [['want:roommate', 'want:nextto'], ['want:high', 'want:low'], ['want:low', 'hate:ground'], ['want:alone', 'want:community']]) assert.ok(conflicting(traitOf(first), traitOf(second)), `${first} ${second}`);
 });

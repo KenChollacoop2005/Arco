@@ -43,6 +43,8 @@ const outward = (ctx, home) => ctx.analysis.faces.some((face) => face.module ===
 const litHome = (ctx, home) => voxels(home).some(([x, y, level]) => ctx.litKeys.has(`${x},${y},${level}`));
 const adjacentHomes = (ctx, home) => ctx.adjacent(home.id).map((id) => ctx.byId.get(id)).filter(isHome);
 const sameOrNext = (ctx, home, otherHome) => otherHome !== null && otherHome !== undefined && (otherHome === home.id || ctx.adjacent(home.id).includes(otherHome));
+const nextHome = (ctx, home, otherHome) => otherHome !== null && otherHome !== undefined && otherHome !== home.id && ctx.adjacent(home.id).includes(otherHome);
+const friendReason = (ctx, home, otherHome) => (nextHome(ctx, home, otherHome) ? 'next-to-friend' : otherHome === home.id ? 'friend-same-home' : 'friend-away');
 const verdict = (met, yes, no) => ({ met: !!met, reason: met ? yes : no });
 
 // Base water demand of a home, from the same tables the solver reads
@@ -69,7 +71,7 @@ export const WANTS = {
   roommate: { test: (ctx, home) => verdict(ctx.occupants(home.id).length >= 2, 'has-roommate', 'lives-alone') },
   neighbour: { test: (ctx, home) => verdict(adjacentHomes(ctx, home).some((other) => ctx.occupants(other.id).length > 0), 'has-neighbour', 'no-neighbour') },
   community: { test: (ctx, home) => verdict(adjacentHomes(ctx, home).filter((other) => ctx.occupants(other.id).length > 0).length >= 2, 'in-community', 'too-few-neighbours') },
-  nextto: { needs: 'others', roll: (rng, setup) => ({ resident: rng.pick(setup.others) }), test: (ctx, home, resident, trait) => verdict(sameOrNext(ctx, home, ctx.homeOf(trait.resident)), 'next-to-friend', 'friend-away') },
+  nextto: { needs: 'others', roll: (rng, setup) => ({ resident: rng.pick(setup.others) }), test: (ctx, home, resident, trait) => ({ met: nextHome(ctx, home, ctx.homeOf(trait.resident)), reason: friendReason(ctx, home, ctx.homeOf(trait.resident)) }) },
   water: { test: (ctx, home) => verdict(ctx.waterIn(home) >= waterBase(home) + EXTRA_SUPPLY, 'extra-water', 'no-extra-water') },
   power: { test: (ctx, home) => verdict(ctx.powerIn(home) >= ctx.powerBase(home) + EXTRA_SUPPLY, 'extra-power', 'no-extra-power') },
   lit: { test: (ctx, home) => verdict(litHome(ctx, home), 'lit-outside', 'dark-outside') },
@@ -108,6 +110,8 @@ const TABLES = { want: WANTS, hate: HATES, dream: DREAMS };
 // Pairs that may not both appear on one resident; same marks a shared parameter
 export const CONFLICTS = [
   ['want:alone', 'want:roommate'],
+  ['want:roommate', 'want:nextto'],
+  ['want:alone', 'want:community'],
   ['want:high', 'want:low'],
   ['want:high', 'hate:heights'],
   ['want:low', 'hate:ground'],
