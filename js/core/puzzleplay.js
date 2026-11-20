@@ -7,7 +7,8 @@ import { scoreLayout } from './scoring.js';
 
 export const DAILY_FIRST_DATE = '2026-11-19'; // daily number 1
 const DAY_MS = 86400000; // one day in milliseconds
-export const SHARE_MARKS = { met: '✅', missed: '❌', hate: '⚠️', dream: '⭐', dreamMissed: '▫️' }; // share grid symbols
+export const SHARE_MARKS = { met: '🟩', missed: '⬜', hate: '🟥', dream: '🟨', dreamMissed: '⬛' }; // share grid squares
+export const SHARE_WORDS = { ofPar: 'of par', points: 'pts', par: 'par' }; // share text words, draft copy
 
 // Daily number counted from the first daily
 export const dailyNumber = (date) => Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(DAILY_FIRST_DATE + 'T00:00:00Z')) / DAY_MS) + 1;
@@ -87,18 +88,18 @@ export function scoreChange(before, after) {
   return { total, cause: changes[0] || null, changes };
 }
 
-// Share grid: one row per resident, then score against par
-export function shareText({ title, residents, evaluations, score, par }) {
+// Share text: title with the share of par, one row per resident, points against par, the link
+export function shareText({ title, residents, evaluations, score, par, link = '' }) {
   const byId = new Map(evaluations.map((result) => [result.id, result]));
   const rows = residents.map((resident) => {
     const result = byId.get(resident.id);
-    if (!result || result.home === null) return SHARE_MARKS.missed.repeat(resident.wants.length);
-    const marks = result.wants.map((want) => (want.met ? SHARE_MARKS.met : SHARE_MARKS.missed));
-    for (const hate of result.hates) if (hate.triggered) marks.push(SHARE_MARKS.hate);
-    if (result.dream) marks.push(result.dream.met ? SHARE_MARKS.dream : SHARE_MARKS.dreamMissed);
+    const placed = !!result && result.home !== null;
+    const marks = resident.wants.map((want, index) => (placed && result.wants[index].met ? SHARE_MARKS.met : SHARE_MARKS.missed));
+    if (placed) for (const hate of result.hates) if (hate.triggered) marks.push(SHARE_MARKS.hate);
+    if (resident.dream) marks.push(placed && result.dream.met ? SHARE_MARKS.dream : SHARE_MARKS.dreamMissed);
     return marks.join('');
   });
-  return [title, ...rows, `${score.points} / ${par} (${score.percent}%)`].join('\n');
+  return [`${title} · ${score.percent}% ${SHARE_WORDS.ofPar}`, ...rows, `${score.points} ${SHARE_WORDS.points} · ${SHARE_WORDS.par} ${par}`, ...(link ? [link] : [])].join('\n');
 }
 
 const BLOCKING = ['bad-layout', 'unknown-piece']; // problems that leave nothing to score

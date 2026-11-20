@@ -416,6 +416,8 @@ export const COPY = {
   resultsCopyFailed: 'Could not copy. Select the text and copy it.',
   resultsShowPar: 'Show par',
   resultsHidePar: 'Back to my layout',
+  resultsParTitle: 'Par breakdown',
+  resultsMine: 'My results',
   resultsClose: 'Close',
   resultsUnplaced: 'Not placed',
   resultsStreak: 'Streak',

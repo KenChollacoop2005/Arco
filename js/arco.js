@@ -592,6 +592,8 @@ const results = setupResults(app, {
   nameOf: residentPanel.nameOf,
   portrait: residentPanel.portrait,
   showPar: puzzle.showPar,
+  // Par's own breakdown, scored by the same rules
+  parReport: (shownPuzzle) => scorer.call({ kind: 'puzzle', puzzle: shownPuzzle, layout: shownPuzzle.par.layout, preview: null }),
   hidePar: puzzle.hidePar,
   stats: puzzleStats,
 });

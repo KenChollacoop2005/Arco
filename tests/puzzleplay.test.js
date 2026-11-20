@@ -154,15 +154,25 @@ test('score changes name the biggest cause', () => {
   assert.equal(gone.cause.delta, -POINTS.needMet);
 });
 
-test('the share grid has one row per resident and the score against par', () => {
+test('share text: title with the share of par, a row of squares per resident, points against par, then the link', () => {
   const report = playScore(puzzle, puzzle.par.layout);
-  const text = shareText({ title: 'Arco 30', residents: puzzle.residents, evaluations: report.evaluations, score: report.score, par: puzzle.par.points });
+  const text = shareText({ title: 'Arco Daily #30', residents: puzzle.residents, evaluations: report.evaluations, score: report.score, par: puzzle.par.points, link: 'https://example.org/arco/' });
   const lines = text.split('\n');
-  assert.equal(lines.length, puzzle.residents.length + 2);
-  assert.equal(lines[lines.length - 1], `${puzzle.par.points} / ${puzzle.par.points} (100%)`);
-  const first = report.evaluations[0];
-  const marks = [...lines[1].matchAll(new RegExp(`${SHARE_MARKS.met}|${SHARE_MARKS.missed}`, 'gu'))];
-  assert.equal(marks.length, first.wants.length);
+  assert.equal(lines.length, puzzle.residents.length + 3);
+  assert.equal(lines[0], 'Arco Daily #30 · 100% of par');
+  assert.equal(lines[lines.length - 2], `${puzzle.par.points} pts · par ${puzzle.par.points}`);
+  assert.equal(lines[lines.length - 1], 'https://example.org/arco/');
+  puzzle.residents.forEach((resident, index) => {
+    const result = report.evaluations.find((entry) => entry.id === resident.id);
+    const expected = [...result.wants.map((want) => (want.met ? '🟩' : '⬜')), ...result.hates.filter((hate) => hate.triggered).map(() => '🟥'), ...(resident.dream ? [result.dream.met ? '🟨' : '⬛'] : [])].join('');
+    assert.equal(lines[index + 1], expected, resident.id);
+  });
+  // Unplaced residents miss every want and their dream; no link, no link line
+  const empty = shareText({ title: 'Arco Test', residents: puzzle.residents, evaluations: [], score: { points: 0, percent: 0 }, par: 88 }).split('\n');
+  assert.equal(empty[0], 'Arco Test · 0% of par');
+  assert.equal(empty[1], '⬜'.repeat(puzzle.residents[0].wants.length) + (puzzle.residents[0].dream ? '⬛' : ''));
+  assert.equal(empty[empty.length - 1], '0 pts · par 88');
+  assert.deepEqual(SHARE_MARKS, { met: '🟩', missed: '⬜', hate: '🟥', dream: '🟨', dreamMissed: '⬛' });
 });
 
 test('Submit: ready for the par layout, blocked with one reason when too many of a piece are used, the structure does not stand, or pieces are taken away under others', () => {

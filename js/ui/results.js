@@ -11,11 +11,14 @@ function node(tag, className, text) {
 
 const signed = (value) => (value > 0 ? `+${value}` : String(value));
 
-// Title line of the share grid
+// Title of the share text, before the share of par
 export function shareTitle(game) {
   if (game.test) return COPY.resultsShareTest;
   return game.kind === 'daily' ? `${COPY.resultsShareTitle} ${COPY.puzzleDaily} #${dailyNumber(game.date)}` : `${COPY.resultsShareTitle} ${COPY.puzzleInfinite} ${game.seed}`;
 }
+
+// Link shared under the grid: this page without its query
+const siteLink = () => `${location.origin}${location.pathname}`;
 
 // Results sheet after Submit: score, breakdown, share grid, Show par
 // hooks: recordOf(id), nameOf(id), portrait(record), showPar(), hidePar(), stats(game) as [label, value] pairs
@@ -48,9 +51,13 @@ export function setupResults(app, hooks) {
     return item;
   }
 
-  function render() {
-    const { report, game } = shown;
+  // view is mine or par; par shows par's own breakdown the same way
+  function render(view = 'mine') {
+    const { game } = shown;
+    const report = view === 'par' ? shown.par : shown.report;
     const score = report.score;
+    sheet.dataset.view = view;
+    query('#resultsTitle').textContent = view === 'par' ? COPY.resultsParTitle : COPY.resultsTitle;
     query('#resultsPoints').textContent = String(score.points);
     query('#resultsPercent').textContent = `${score.percent}% ${COPY.scoreOfPar} (${COPY.resultsPar} ${game.puzzle.par.points})`;
     const stats = query('#resultsStats');
@@ -69,11 +76,11 @@ export function setupResults(app, hooks) {
       line.append(node('span', '', `${COPY.resultsUnusedLine} (${unused.count})`), node('span', 'results-value', signed(unused.points)));
       list.append(line);
     }
-    share.textContent = shareText({ title: shareTitle(game), residents: game.puzzle.residents, evaluations: report.evaluations, score, par: game.puzzle.par.points });
+    if (view === 'mine') share.textContent = shareText({ title: shareTitle(game), residents: game.puzzle.residents, evaluations: report.evaluations, score, par: game.puzzle.par.points, link: siteLink() });
   }
 
   function open(report, game, note = '') {
-    shown = { report, game };
+    shown = { report, game, par: null };
     status.textContent = note;
     render();
     parBar.hidden = true;
@@ -100,20 +107,40 @@ export function setupResults(app, hooks) {
       status.textContent = COPY.resultsCopyFailed;
     }
   });
-  // Show par: the sheet steps aside while the par layout builds in
-  query('#resultsPar').addEventListener('click', () => {
+  // Show par: the sheet steps aside while the par layout builds in, then shows par's breakdown
+  query('#resultsPar').addEventListener('click', async () => {
     sheet.hidden = true;
     query('#parText').textContent = `${COPY.resultsPar} ${shown.game.puzzle.par.points} ${COPY.resultsPoints}`;
     parBar.hidden = false;
     hooks.showPar();
+    const current = shown;
+    try {
+      current.par = current.par || (await hooks.parReport(current.game.puzzle));
+    } catch {
+      return;
+    }
+    if (shown !== current || parBar.hidden) return;
+    render('par');
+    sheet.hidden = false;
+  });
+  query('#resultsMine').addEventListener('click', () => {
+    parBar.hidden = true;
+    hooks.hidePar();
+    render('mine');
   });
   query('#parBack').addEventListener('click', () => {
     parBar.hidden = true;
     hooks.hidePar();
   });
   query('#parResults').addEventListener('click', () => {
+    if (shown.par) {
+      render('par');
+      sheet.hidden = false;
+      return;
+    }
     parBar.hidden = true;
     hooks.hidePar();
+    render('mine');
     sheet.hidden = false;
   });
   window.addEventListener('keydown', (event) => {
