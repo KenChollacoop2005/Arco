@@ -19,6 +19,7 @@ function reopenNear(modules, changed, keepIds = []) {
 }
 
 const UNDO_LIMIT = 100; // most steps kept for undo
+const RAY_SLACK_MM = 0.5; // a level counts as visible this far under the surface hit
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
 const DISABLED_REASON = 'This part is switched off for now'; // draft UI copy
 const LOCKED_REASON = 'This part anchors the site and stays put'; // draft UI copy
@@ -151,6 +152,23 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       if (FAMILIES[instance.family].disabled) return { instance, ok: false, reason: DISABLED_REASON };
       const result = checkPlacement(world, instance, { cap: placeCap, stream: placeStream });
       return { instance, ok: result.ok, reason: result.reason };
+    },
+    // Candidate along a pointer ray {origin, direction} in mm: the highest level the ray crosses
+    // where the module would rest, down to the visible surface at floorMm; ok ones first
+    ghostOnRay(variant, ray, rot, floorMm = 0) {
+      const [originX, originY, originZ] = ray.origin;
+      const [stepX, stepY, stepZ] = ray.direction;
+      if (stepZ >= 0) return null;
+      let refused = null;
+      for (let level = worldHeight(worldFromModules(modules)); level >= 0 && level * STORY_MM >= floorMm - RAY_SLACK_MM; level--) {
+        const reach = (level * STORY_MM - originZ) / stepZ;
+        if (reach < 0) continue;
+        const candidate = this.ghost(variant, originX + stepX * reach, originY + stepY * reach, rot);
+        if (candidate.instance.z !== level) continue;
+        if (candidate.ok) return candidate;
+        refused = refused || candidate;
+      }
+      return refused;
     },
     place(spec) {
       const instance = { ...normalizeVariant(spec), x: spec.x, y: spec.y, z: spec.z, rot: spec.rot & 3 };

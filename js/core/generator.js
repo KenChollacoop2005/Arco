@@ -19,7 +19,7 @@ import {
   structureHash,
   instanceInZone,
 } from './grid.js';
-import { CATEGORIES, UTILITIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType } from './catalog.js';
+import { CATEGORIES, UTILITIES, categoryOn, FAMILIES, FAMILY_IDS, PLUG_ENDS, JUNCTION_FAMILIES, BUTT_SIDES, END_FAMILIES, END_OPEN, END_CAP, END_STEP, isDocked, hasPump, canSupport, normalizeVariant, sideType, forcedOpen } from './catalog.js';
 import { checkPlacement, validateStructure, reopenSides } from './placement.js';
 import { streamOf, onStream, streamRecord } from './stream.js';
 import { quickStable, checkStability } from './stability.js';
@@ -775,8 +775,8 @@ function setMasks(world, locked) {
       const joined = !shut && meets(instance, side, (other) => !closed(other, side));
       if (!joined) mask |= 1 << ((side - instance.rot + 4) & 3);
     }
-    // A dock side stays a connector side
-    instance.mask = mask & ~(instance.dock || 0);
+    // A dock side stays a connector side; a family's own open sides stay open
+    instance.mask = (mask | forcedOpen(instance.family)) & ~(instance.dock || 0);
   }
 }
 

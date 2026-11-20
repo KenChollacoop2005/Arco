@@ -122,6 +122,9 @@ const AMENITY_TYPES = { market: 'market', shop: 'shop', hall: 'hall', ...Object.
 
 // Sides a family always keeps open, as a local side mask
 const OPEN_SIDES = { arch: 0b0101 };
+
+// Local sides a family always keeps open, as a mask
+export const forcedOpen = (familyId) => OPEN_SIDES[familyId] || 0;
 // Families that may carry a junction box on an outward wall
 export const JUNCTION_FAMILIES = ['housing', 'studio', 'hall', 'penthouse', 'shacks', 'flared', 'shop', 'stair', 'deck', 'core', 'podium', 'pumproom'];
 // Local side that meets the building a ground piece leans on or climbs to

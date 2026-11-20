@@ -10,7 +10,7 @@ const ALL = 'all'; // category filter value for every category
 const SANDBOX_COUNT = Infinity; // pieces of each saved module in the sandbox
 const COPY_PREFIX = 'copy:'; // key of a duplicate, never a saved card
 
-// Hooks: show(modules, {only}), grow(modules, zone), targetAt(event)
+// Hooks: show(modules, {only}), grow(modules, zone), targetAt(event), rayAt(event)
 export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   const query = (selector) => document.querySelector(selector);
   const status = query('#buildStatus');
@@ -59,8 +59,15 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   const isCopy = () => !!picked && picked.key.startsWith(COPY_PREFIX);
   const pickedText = () => (isCopy() ? COPY.duplicatePicked : COPY.buildPicked);
 
+  // Searches along the pointer ray, so raised spans over gaps can be reached
   function ghostAt(event) {
-    const target = event ? hooks.targetAt(event) : null;
+    if (!event) return null;
+    if (hooks.rayAt) {
+      const ray = hooks.rayAt(event);
+      const found = build.ghostOnRay(picked.variant, ray, turn, ray.floor);
+      if (found) return found;
+    }
+    const target = hooks.targetAt(event);
     return target ? build.ghost(picked.variant, target.x, target.y, turn) : null;
   }
 

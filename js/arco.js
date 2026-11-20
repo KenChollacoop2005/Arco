@@ -300,6 +300,7 @@ const builder = setupBuild(app, canvas, modules, collectionPanel, {
   show: showBuild,
   grow: growStructure,
   targetAt: (event) => picker.targetAt(event),
+  rayAt: (event) => picker.rayAt(event),
 });
 setupSlideovers(app);
 const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.pointAt(event, back), zone: createZone(view), builder });
