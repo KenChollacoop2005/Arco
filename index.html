@@ -280,6 +280,7 @@
         <button type="button" class="plain puzzle-only" id="buildReturn" data-copy="returnToTray" disabled></button>
         <button type="button" class="plain sandbox-only" id="duplicateModule" data-copy="duplicate" disabled></button>
         <button type="button" class="primary sandbox-only" id="saveModule" data-copy="save" disabled></button>
+        <button type="button" class="plain" id="wireTool" data-copy="wireTool" data-copy-title="wireToolTitle" aria-pressed="false" disabled></button>
       </div>
       <p class="hint action-note" id="actionNote" hidden></p>
     </section>
@@ -377,6 +378,12 @@
     </div>
     <p class="status" id="resultsStatus" role="status"></p>
   </section>
+  <div class="assembly wire-bar" id="wireBar" role="status" hidden>
+    <span class="assembly-count" id="wireText"></span>
+    <button type="button" class="plain" id="wireCut" data-copy="wireCut" hidden></button>
+    <button type="button" class="plain" id="wireDone" data-copy="wireDone"></button>
+  </div>
+  <p class="wire-peek" id="wirePeek" hidden></p>
   <div class="assembly par-bar" id="parBar" hidden>
     <span class="assembly-count" data-copy="resultsViewingPar"></span>
     <button type="button" class="plain" id="parBack" data-copy="resultsHidePar"></button>

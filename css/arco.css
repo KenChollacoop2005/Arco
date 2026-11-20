@@ -619,6 +619,21 @@ body[data-mode='collection'] .section-controls { display: none; }
 .archive[data-shown='resident'] .archive-actions, .archive[data-shown='resident'] #archiveInspector { display: none; }
 
 /* Placing and moving residents */
+/* Wiring tool */
+.wire-bar { top: auto; bottom: var(--gap); }
+.wire-bar .assembly-count { min-width: 300px; max-width: 520px; text-align: left; font-family: var(--font-ui); }
+.wire-peek { position: fixed; left: 0; top: 0; z-index: 9; margin: 0; padding: 2px 7px; border: 1px solid var(--ink); background: var(--paper); font: 12px var(--font-mono); pointer-events: none; white-space: nowrap; }
+#wireTool[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+body.wiring #residentCards, body.wiring #buildPalette { pointer-events: none; opacity: 0.55; }
+.port-list { margin: 0; padding: 0; list-style: none; }
+.port-list > li { padding: 6px 0; border-top: 1px solid var(--hairline); }
+.port-list > li:first-child { border-top: 0; }
+.port-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.port-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: middle; }
+.port-strings { margin: 4px 0 0 14px; padding: 0; list-style: none; font-size: 12px; }
+.port-strings li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.port-strings .manual-tag { margin-left: 6px; padding: 0 4px; border: 1px solid var(--ink); font: 10px var(--font-mono); text-transform: uppercase; }
+.port-list button.plain { padding: 2px 8px; font-size: 11px; }
 .score-peek { position: fixed; z-index: 9; padding: 2px 7px; border: 1px solid var(--ink); background: var(--paper); font: 12px var(--font-mono); pointer-events: none; transform: translate(14px, -24px); }
 .score-peek.is-gain { border-color: var(--pass); color: var(--pass); }
 .score-peek.is-loss { border-color: var(--fail); color: var(--fail); }

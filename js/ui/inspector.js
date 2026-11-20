@@ -8,6 +8,8 @@ import { variantMounts } from '../core/mounts.js';
 import { COPY } from './copy.js';
 import { bindDrawer } from './drawers.js';
 import { footprintText, categoryLabel } from './cards.js';
+import { stringTypeOf, pairKey } from '../core/wiring.js';
+import { PORT_COLORS } from '../render/wiretool.js';
 
 const RULE_ORDER = ['size', 'base', 'overhang', 'bridge', 'wall', 'solid'];
 const WATER_STATUS = { full: 'waterFull', partial: 'waterPartial', dry: 'waterDry' }; // consumer status to copy key
@@ -119,6 +121,25 @@ export function walkingText(walking, id, label = (type) => type) {
 }
 
 const PORT_COPY = { power: 'portPower', 'water-in': 'portWaterIn', 'water-out': 'portWaterOut', line: 'portLine' }; // port type to copy key
+const CUTTABLE = { pipes: 'water', wires: 'power', lines: 'line', lights: 'line' }; // service lists by string type
+const hexColor = (value) => '#' + value.toString(16).padStart(6, '0');
+
+// Strings on one port, one entry per far port and type, manual ones marked
+function stringsAt(services, port) {
+  const groups = new Map();
+  for (const [list, type] of Object.entries(CUTTABLE)) {
+    for (const string of services[list] || []) {
+      const ends = [string.from, string.to];
+      const here = ends.findIndex((end) => end.module === port.module && end.index === port.index);
+      if (here < 0) continue;
+      const key = pairKey(string.from, string.to) + type;
+      const group = groups.get(key) || { type, from: string.from, to: string.to, far: ends[1 - here], count: 0, manual: !!string.manual };
+      group.count++;
+      groups.set(key, group);
+    }
+  }
+  return [...groups.values()];
+}
 const MASK_SIDES = 4; // facade mask bits, one per side
 const millimetres = (value) => (value === null || value === undefined ? COPY.none : `${value.toFixed(1)} mm`);
 const yesNo = (value) => (value ? COPY.yes : COPY.no);
@@ -260,13 +281,63 @@ export function createInspector(body, prefix = 'arco.inspector') {
     if (!placed) needs.append(node('p', 'hint', COPY.needsPlaced));
   }
 
-  function connectionsDrawer({ flows }, variant, placed) {
+  function connectionsDrawer({ flows, structure, wire }, variant, placed) {
     const connections = drawer('connections', COPY.connections);
     const ports = placed ? flows && flows.ports : variantMounts(variant).map((port) => ({ ...port, module: 0 }));
     const use = ports ? portUse(ports, placed ? flows.services : null, placed ? variant.id : 0) : null;
     if (!use) connections.append(node('p', 'hint', COPY.checking));
     else if (use.length === 0) connections.append(node('p', 'hint', COPY.noPorts));
     else connections.append(rows(use.map((row) => [COPY[PORT_COPY[row.type]] || row.type, `${row.used} ${COPY.of} ${row.capacity}`])));
+    if (placed && flows && wire) connections.append(portList(flows, structure, variant, wire));
+  }
+
+  // Each port with its strings, Cut per string, Connect from here while it has room
+  function portList(flows, structure, variant, wire) {
+    const list = node('ul', 'port-list');
+    const label = (id) => {
+      const instance = structure && structure.modules.find((entry) => entry.id === id);
+      return instance ? FAMILIES[instance.family].label : String(id);
+    };
+    const own = flows.ports.filter((port) => port.module === variant.id && port.active !== false && stringTypeOf(port.type));
+    const counts = new Map();
+    for (const port of own) {
+      const index = (counts.get(port.type) || 0) + 1;
+      counts.set(port.type, index);
+      const strings = stringsAt(flows.services, port);
+      const used = strings.reduce((sum, group) => sum + group.count, 0);
+      const item = node('li');
+      const head = node('div', 'port-head');
+      const name = node('span', '', `${COPY[PORT_COPY[port.type]] || port.type} ${index}`);
+      const dot = node('span', 'port-dot');
+      dot.style.background = hexColor(PORT_COLORS[port.type]);
+      name.prepend(dot);
+      head.append(name);
+      const room = node('span', 'hint', `${Math.min(used, port.capacity)} ${COPY.of} ${port.capacity}`);
+      head.append(room);
+      if (used < port.capacity) {
+        const start = node('button', 'plain', COPY.connectFromHere);
+        start.type = 'button';
+        start.addEventListener('click', () => wire.connectFrom({ module: port.module, index: port.index }));
+        head.append(start);
+      }
+      item.append(head);
+      if (strings.length > 0) {
+        const sub = node('ul', 'port-strings');
+        for (const group of strings) {
+          const row = node('li');
+          const what = node('span', '', `${COPY.wireTypes[group.type]} ${COPY.wireTo} ${label(group.far.module)}${group.count > 1 ? ` ×${group.count}` : ''}`);
+          if (group.manual) what.append(node('span', 'manual-tag', COPY.wireManual));
+          const cut = node('button', 'plain', COPY.wireCut);
+          cut.type = 'button';
+          cut.addEventListener('click', () => wire.cut(group));
+          row.append(what, cut);
+          sub.append(row);
+        }
+        item.append(sub);
+      }
+      list.append(item);
+    }
+    return list;
   }
 
   function walkingDrawer({ walking }, variant) {

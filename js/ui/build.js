@@ -31,7 +31,8 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   const growListeners = [];
   const copyListeners = [];
 
-  const active = () => app.mode === 'generate' || app.mode === 'puzzle';
+  // The wiring tool pauses placing, moving and module keys
+  const active = () => (app.mode === 'generate' || app.mode === 'puzzle') && app.tool !== 'wire';
   const cards = () => tray || entries;
 
   for (const value of [ALL, ...Object.keys(CATEGORY_COPY)]) {
@@ -103,6 +104,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
 
   function apply(only) {
     refreshButtons();
+    shownModules = build.modules;
     hooks.show(build.modules, { only });
     refreshGhost();
   }
@@ -134,10 +136,13 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     report(build.remove(app.selection));
   }
 
+  // An undo or redo that only changed the wiring re-routes strings without a rebuild
+  let shownModules = null;
   function step(moved) {
     if (!moved) return;
     status.textContent = '';
-    apply();
+    if (build.modules === shownModules && hooks.rewire) hooks.rewire();
+    else apply();
   }
 
   // Grow everything, or only inside a zone; replace clears roof clutter there first
@@ -208,9 +213,11 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (!active() || TYPING_TAGS.includes(event.target.tagName)) return;
     const key = event.key.toLowerCase();
     const command = event.ctrlKey || event.metaKey;
+    // Undo and redo still work while wiring
+    const wiringUndo = app.tool === 'wire' && command && (key === 'z' || key === 'y') && (app.mode === 'generate' || app.mode === 'puzzle');
+    if ((!active() && !wiringUndo) || TYPING_TAGS.includes(event.target.tagName)) return;
     // Undo while moving only puts the module back
     if (command && moving() !== null && (key === 'z' || key === 'y')) pick(null);
     else if (command && key === 'z' && !event.shiftKey) step(build.undo());
@@ -340,6 +347,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     adopt(modules, stream = null) {
       build.setStream(stream);
       build.replace(modules);
+      shownModules = build.modules;
       generated = { modules: modules.map((instance) => ({ ...instance })), stream };
       generatedButton.disabled = false;
       refreshButtons();
@@ -393,6 +401,17 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     },
     // True while a module or card is held
     holding: () => !!picked,
+    // Puts down whatever is held
+    cancel() {
+      if (picked) pick(null);
+    },
+    wiring: () => build.wiring,
+    // New wiring as one undo step; false when nothing changed
+    setWiring: (next) => build.setWiring(next),
+    // Takes back the last step, for a connection a planner refused
+    undo() {
+      build.undo();
+    },
     setTray,
     // Parks and brings back one whole build, history included
     snapshot: () => build.snapshot(),

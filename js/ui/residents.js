@@ -4,7 +4,8 @@ import { randomSeedText } from '../core/rng.js';
 import { makeFigure } from '../core/figure.js';
 
 // Resident state for the main view: records, homes, evaluations and scene marks
-export function setupResidents(app, { marks, scorer }) {
+// wiring: the build's manual connections and cuts now
+export function setupResidents(app, { marks, scorer, wiring = () => null }) {
   let records = [];
   let places = {};
   let evaluations = new Map();
@@ -61,7 +62,7 @@ export function setupResidents(app, { marks, scorer }) {
       return;
     }
     try {
-      const next = await scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records) });
+      const next = await scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records), wiring: wiring() });
       if (current !== token || app.structure !== structure) return;
       evaluations = new Map(next.evaluations.map((entry) => [entry.id, entry]));
       points = next.points;
@@ -138,7 +139,7 @@ export function setupResidents(app, { marks, scorer }) {
     preview(id, homes) {
       const structure = app.structure;
       if (!structure) return Promise.resolve(null);
-      return scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records), preview: { resident: id, homes } });
+      return scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records), wiring: wiring(), preview: { resident: id, homes } });
     },
     // A random resident with the puzzle rules; amenity wants name only amenities that stand here
     roll() {

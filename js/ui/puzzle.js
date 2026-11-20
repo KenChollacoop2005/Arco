@@ -7,6 +7,7 @@ import { PROGRESS_KEY, progressRecord, parseProgress, progressFor, restoreProgre
 import { assignmentsOf } from '../core/roster.js';
 import { easternDate } from '../core/daily.js';
 import { layoutModules, anchorIds } from '../core/puzzle.js';
+import { emptyWiring, parseWiring } from '../core/wiring.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
 import { variantKey } from '../core/grid.js';
@@ -24,9 +25,10 @@ function node(tag, className, text) {
   return element;
 }
 
-// Fresh build state for a puzzle: anchors locked, masks kept, pieces from 1000
-const startBuild = (puzzle, modules) => ({
+// Fresh build state for a puzzle: anchors locked, masks kept, pieces from 1000, wiring as stored
+const startBuild = (puzzle, modules, wiring = emptyWiring()) => ({
   modules,
+  wiring,
   undoStack: [],
   redoStack: [],
   cap: Infinity,
@@ -64,7 +66,8 @@ export function setupPuzzle(app, hooks) {
   function saveProgress() {
     const game = app.game;
     if (!game || app.showingPar || app.world !== game.kind) return;
-    const { layout } = layoutOf(hooks.builder.snapshot().modules, assignmentsOf(hooks.residents.list()), game.puzzle.site);
+    const build = hooks.builder.snapshot();
+    const { layout } = layoutOf(build.modules, assignmentsOf(hooks.residents.list()), game.puzzle.site, build.wiring);
     progress = { ...progress, [game.kind]: progressRecord(game, layout) };
     try {
       hooks.storage.setItem(PROGRESS_KEY, JSON.stringify(progress));
@@ -197,7 +200,7 @@ export function setupPuzzle(app, hooks) {
     const { game, modules, homes } = restoreProgress(record, layoutModules);
     games.set(game.kind, game);
     const records = puzzleStart(game.puzzle).records.map((entry) => ({ ...entry, home: homes[entry.id] === undefined ? null : homes[entry.id] }));
-    parked.set(game.kind, { build: startBuild(game.puzzle, modules), records, stream: game.puzzle.stream });
+    parked.set(game.kind, { build: startBuild(game.puzzle, modules, parseWiring(record.layout.wires) || emptyWiring()), records, stream: game.puzzle.stream });
     if (app.world === game.kind) apply(game.kind);
     prepareThumbs(game.puzzle);
   }

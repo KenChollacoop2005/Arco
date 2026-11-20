@@ -12,6 +12,9 @@ import { createStrings } from './render/strings.js';
 import { createPicker } from './render/picking.js';
 import { STATE_NORMAL, STATE_SELECTED, STATE_HIGHLIGHT, sharedUniforms } from './render/materials.js';
 import * as THREE from '../vendor/three/three.module.min.js';
+import { setupWiring } from './ui/wiring.js';
+import { withCut } from './core/wiring.js';
+import { createWireMarks } from './render/wiretool.js';
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
@@ -154,13 +157,16 @@ function refreshDuplicate() {
   button.disabled = !holding && !selectedModule();
 }
 
+// Connections drawer: Connect from here opens the wiring tool, Cut cuts that string
+const wireHooks = { connectFrom: (end) => wiringTool.startFrom(end), cut: (group) => cutFromInspector(group) };
 function showInspector() {
   const selected = selectedModule();
-  inspector.render({ anchored: !!selected && app.mode === 'puzzle' && builder.isLocked(selected.id), structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, lights: app.analysis && app.analysis.lights, printOf, socketsOf, fit: app.fit }, selected);
+  inspector.render({ anchored: !!selected && app.mode === 'puzzle' && builder.isLocked(selected.id), structure: app.structure, checks: app.checks, flows: app.analysis && app.analysis.flows, walking: app.analysis && app.analysis.walking, lights: app.analysis && app.analysis.lights, printOf, socketsOf, fit: app.fit, wire: app.mode === 'generate' || app.mode === 'puzzle' ? wireHooks : null }, selected);
   query('#saveModule').disabled = !selected;
   // Puzzle anchors can be looked at but not turned or returned
   const anchored = !!selected && app.mode === 'puzzle' && builder.isLocked(selected.id);
   for (const id of ['#buildRotate', '#buildDelete', '#buildReturn']) query(id).disabled = !selected || anchored;
+  query('#wireTool').disabled = !app.structure || app.structure.modules.length === 0;
   query('#actionNote').hidden = !anchored;
   query('#actionNote').textContent = anchored ? COPY.anchorNote : '';
   refreshDuplicate();
@@ -186,7 +192,7 @@ function select(id, extend) {
 
 const picker = createPicker(canvas, rig, modules, {
   onPick(id, extend, event) {
-    if (growTool.click(event) || residentPanel.click(id) || builder.click(event)) return;
+    if (wiringTool.click(event) || growTool.click(event) || residentPanel.click(id) || builder.click(event)) return;
     select(id, extend);
   },
   onDouble(id) {
@@ -220,7 +226,7 @@ app.structureListeners.push(async (result, phase) => {
   app.analysis = null;
   drawing.setServices(null);
   for (const listener of app.analysisListeners) listener(null, result);
-  const analysis = await analyst.call({ modules: result.modules, seed: result.seed }).catch(() => null);
+  const analysis = await analyst.call({ modules: result.modules, seed: result.seed, wiring: builder.wiring() }).catch(() => null);
   if (app.structure !== result || !analysis) return;
   app.analysis = freezeDeep(analysis);
   const flows = app.analysis.flows;
@@ -308,6 +314,7 @@ const builder = setupBuild(app, canvas, modules, collectionPanel, {
   rayAt: (event) => picker.rayAt(event),
   idAt: (event) => picker.idAt(event),
   moved: (id, instance) => residents.follow(id, instance),
+  rewire: () => rewire(),
 });
 setupSlideovers(app);
 const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.pointAt(event, back), zone: createZone(view), builder });
@@ -392,7 +399,8 @@ function refreshFlows() {
   const services = still ? app.analysis.flows.services : null;
   const { pipes, wires, lines, sheets, laundry, tarps } = services || {};
   strings.set(services ? { ports: drawnPorts(app.analysis.flows.ports, services), pipes, wires, lines, sheets, laundry, tarps } : {}, toggles.light);
-  strings.setShown(toggles.get('flows') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
+  // The wiring tool always shows the strings
+  strings.setShown((toggles.get('flows') || app.tool === 'wire') && app.mode !== 'drawing' && !query('#physicsToggle').checked);
 }
 bindToggle(toggles, query('#flowsToggle'), { id: 'flows', on: false });
 toggles.watch('flows', refreshFlows);
@@ -449,7 +457,7 @@ const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import
 async function scoreResidents(payload) {
   const puzzle = app.puzzle;
   if (!puzzle) return scorer.call({ kind: 'residents', ...payload });
-  const { layout, toLayout, fromLayout } = layoutOf(payload.modules, payload.assignments, puzzle.site);
+  const { layout, toLayout, fromLayout } = layoutOf(payload.modules, payload.assignments, puzzle.site, payload.wiring);
   const preview = payload.preview ? { resident: payload.preview.resident, homes: payload.preview.homes.map((home) => toLayout.get(home) || home) } : null;
   const report = await scorer.call({ kind: 'puzzle', puzzle, layout, preview });
   const back = (home) => (home === null ? null : fromLayout.get(home) || home);
@@ -457,7 +465,7 @@ async function scoreResidents(payload) {
   const evaluations = report.evaluations.map((entry) => ({ ...entry, home: back(entry.home) }));
   return { ...report, puzzle, layout, evaluations, previews, points: report.score ? report.score.points : 0, raw: report.score ? report.score.raw : 0 };
 }
-const residents = setupResidents(app, { marks: residentMarks, scorer: scoreResidents });
+const residents = setupResidents(app, { marks: residentMarks, scorer: scoreResidents, wiring: () => builder.wiring() });
 app.residents = residents;
 const ragdoll = createRagdoll(reducedMotion);
 const residentPanel = setupResidentPanel(app, residents, {
@@ -512,6 +520,11 @@ function pinAt(event) {
 canvas.addEventListener('contextmenu', (event) => {
   const start = rightDown;
   rightDown = null;
+  if (wiringTool.active()) {
+    wiringTool.cancel();
+    event.stopPropagation();
+    return;
+  }
   if (builder.holding() || residentPanel.placing() !== null || app.mode === 'drawing' || app.mode === 'collection') return;
   if (start && Math.hypot(event.clientX - start[0], event.clientY - start[1]) > RIGHT_CLICK_SLOP_PX) return;
   const pin = pinAt(event);
@@ -522,6 +535,64 @@ canvas.addEventListener('contextmenu', (event) => {
   const id = picker.idAt(event);
   if (id && builder.lift(id)) event.stopPropagation();
 });
+
+// Strings again after a wiring change: the worker keeps the structure's graphs, so only routing reruns
+let rewireToken = 0;
+async function rewire() {
+  const structure = app.structure;
+  if (!structure || !app.analysis) return;
+  const token = ++rewireToken;
+  const started = performance.now();
+  const report = await analyst.call({ kind: 'flows', modules: structure.modules, seed: structure.seed, wiring: builder.wiring() }).catch(() => null);
+  if (token !== rewireToken || app.structure !== structure || !report || !app.analysis) return;
+  app.rewireWorkerMs = Math.round(performance.now() - started);
+  app.rewireSolve = { ms: report.solveMs, reused: report.reused };
+  app.analysis = freezeDeep({ ...app.analysis, flows: { ...app.analysis.flows, services: report.services }, lights: report.lights });
+  const flows = app.analysis.flows;
+  const shown = new Set(drawnPorts(flows.ports, flows.services));
+  drawing.setServices(flows.services, flows.ports.filter((port) => port.active !== false && !shown.has(port)));
+  showInspector();
+  for (const listener of app.analysisListeners) listener(app.analysis, structure);
+  app.rewireMs = Math.round(performance.now() - started);
+}
+
+const wireMarks = createWireMarks(view);
+const wiringTool = setupWiring(app, {
+  canvas,
+  project: (point) => {
+    const projected = new THREE.Vector3(...point).project(rig.camera);
+    return [projected.x, projected.y];
+  },
+  marks: wireMarks,
+  flows: () => app.analysis && app.analysis.flows,
+  modules: () => (app.structure ? app.structure.modules : []),
+  wiring: () => builder.wiring(),
+  setWiring: (next) => (builder.setWiring(next) ? rewire() : Promise.resolve()),
+  revert: () => {
+    builder.undo();
+    rewire();
+  },
+  candidates: (from, wiring) => analyst.call({ kind: 'candidates', modules: app.structure.modules, from: { module: from.module, index: from.index }, wiring }),
+  // Refused routes light their blocker; null puts every module back
+  setStates: (map) => {
+    for (const instance of app.structure ? app.structure.modules : []) modules.setState(instance.id, map && map.has(instance.id) ? map.get(instance.id) : app.selection.includes(instance.id) ? STATE_SELECTED : STATE_NORMAL);
+  },
+  onToggle: (on) => {
+    app.tool = on ? 'wire' : null;
+    if (on) {
+      builder.cancel();
+      residentPanel.cancel();
+      modules.setGhost(null, false);
+    }
+    document.body.classList.toggle('wiring', on);
+    refreshFlows();
+  },
+});
+query('#wireDone').addEventListener('click', () => wiringTool.setActive(false));
+function cutFromInspector(group) {
+  if (builder.setWiring(withCut(builder.wiring(), group.from, group.to, group.type, group.manual))) rewire();
+}
+
 
 // Layer shaders compile while the first build animation plays
 let layersWarm = false;
