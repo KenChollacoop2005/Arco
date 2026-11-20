@@ -57,3 +57,32 @@ test('bad or blocked storage leaves a working empty store', () => {
   assert.equal(fresh.dailyStats('2026-11-19').played, 0);
   assert.equal(parseResults('not json'), null);
 });
+
+test('a layout in progress survives a reload: saved, read back and restored to the same modules and homes', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { parsePuzzle } = await import('../js/core/daily.js');
+  const { layoutModules } = await import('../js/core/puzzle.js');
+  const { layoutOf } = await import('../js/core/puzzleplay.js');
+  const { PROGRESS_KEY, progressRecord, parseProgress, progressFor, restoreProgress } = await import('../js/core/puzzlestore.js');
+  const puzzle = parsePuzzle(readFileSync(new URL('../puzzles/2026-12-18.json', import.meta.url), 'utf8'));
+  const game = { kind: 'daily', puzzle, ranked: true, date: '2026-12-18', seed: null, test: false };
+  const layout = puzzle.par.layout;
+  const storage = new Map();
+  storage.set(PROGRESS_KEY, JSON.stringify({ daily: progressRecord(game, layout), infinite: progressRecord({ kind: 'infinite', puzzle, ranked: false, seed: 'abc' }, { pieces: [], residents: {} }) }));
+  const progress = parseProgress(storage.get(PROGRESS_KEY));
+  // Ranked Dailies come back only on their own day; test and Infinite games always
+  assert.equal(progressFor(progress, 'daily', '2026-12-19'), null);
+  const record = progressFor(progress, 'daily', '2026-12-18');
+  const restored = restoreProgress(record, layoutModules);
+  assert.deepEqual(restored.game, game);
+  assert.deepEqual(restored.modules, layoutModules(puzzle, layout));
+  assert.deepEqual(restored.homes, Object.fromEntries(puzzle.residents.map((resident) => [resident.id, layout.residents[resident.id] ?? null])));
+  // Saving the restored build again gives the same layout
+  assert.deepEqual(layoutOf(restored.modules, restored.homes, puzzle.site).layout, layout);
+  assert.equal(progressFor(progress, 'infinite', '2030-01-01').seed, 'abc');
+  assert.ok(progressFor(parseProgress(JSON.stringify({ daily: { ...record, test: true, date: '2026-01-01' } })), 'daily', '2026-12-18'));
+  // Junk, other versions and broken layouts are dropped
+  assert.deepEqual(parseProgress('not json'), { daily: null, infinite: null });
+  assert.deepEqual(parseProgress(JSON.stringify({ daily: { ...record, v: 9 } })), { daily: null, infinite: null });
+  assert.deepEqual(parseProgress(JSON.stringify({ daily: { ...record, layout: { pieces: 'x', residents: {} } } })), { daily: null, infinite: null });
+});

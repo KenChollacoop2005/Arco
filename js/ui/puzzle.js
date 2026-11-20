@@ -2,7 +2,10 @@ import { PIECE_ID_BASE, DAILY_TEST_MODE } from '../config.js';
 import { COPY } from './copy.js';
 import { makeThumb } from './collection.js';
 import { confirmAt } from './confirm.js';
-import { puzzleStart, trayLeft, dailyNumber, submitStatus } from '../core/puzzleplay.js';
+import { puzzleStart, trayLeft, dailyNumber, submitStatus, layoutOf } from '../core/puzzleplay.js';
+import { PROGRESS_KEY, progressRecord, parseProgress, progressFor, restoreProgress } from '../core/puzzlestore.js';
+import { assignmentsOf } from '../core/roster.js';
+import { easternDate } from '../core/daily.js';
 import { layoutModules, anchorIds } from '../core/puzzle.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
@@ -31,7 +34,7 @@ const startBuild = (puzzle, modules) => ({
 const EMPTY_BUILD = { modules: [], undoStack: [], redoStack: [], cap: Infinity, stream: null, rules: { locked: new Set(), keepMasks: true, idBase: PIECE_ID_BASE } };
 
 // Puzzle tab: Daily and Infinite worlds parked beside the sandbox
-// hooks: builder, residents, moduleView, showBuild(list), loader({kind, seed}), readSetting, writeSetting
+// hooks: builder, residents, moduleView, showBuild(list), loader({kind, seed}), readSetting, writeSetting, storage, onEmptySandbox()
 export function setupPuzzle(app, hooks) {
   const query = (selector) => document.querySelector(selector);
   const intro = query('#puzzleIntro');
@@ -49,6 +52,24 @@ export function setupPuzzle(app, hooks) {
   app.showingPar = false;
 
   const kindNow = () => query('input[name="puzzleKind"]:checked').value;
+  // Layouts in progress, one per kind, kept across reloads
+  let progress = { daily: null, infinite: null };
+  try {
+    progress = parseProgress(hooks.storage.getItem(PROGRESS_KEY));
+  } catch {
+    progress = { daily: null, infinite: null };
+  }
+  function saveProgress() {
+    const game = app.game;
+    if (!game || app.showingPar || app.world !== game.kind) return;
+    const { layout } = layoutOf(hooks.builder.snapshot().modules, assignmentsOf(hooks.residents.list()), game.puzzle.site);
+    progress = { ...progress, [game.kind]: progressRecord(game, layout) };
+    try {
+      hooks.storage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    } catch {
+      // Storage full or blocked: the layout lasts until the page closes
+    }
+  }
   const saved = hooks.readSetting(KIND_SETTING, 'daily');
   if (KINDS.includes(saved)) query(`input[name="puzzleKind"][value="${saved}"]`).checked = true;
 
@@ -114,6 +135,8 @@ export function setupPuzzle(app, hooks) {
     renderIntro();
     renderSubmit();
     for (const listener of gameListeners) listener(app.game);
+    // A sandbox emptied by a reload straight into Puzzle gets a fresh opening
+    if (world === SANDBOX && state.build.modules.length === 0 && hooks.onEmptySandbox) hooks.onEmptySandbox();
   }
 
   // A par on show is dropped, never parked; the player's build is already parked
@@ -141,6 +164,24 @@ export function setupPuzzle(app, hooks) {
     renderSubmit();
   }
 
+  // Tray thumbnails come from the built parts
+  function prepareThumbs(puzzle) {
+    hooks.moduleView.prepare(puzzle.tray.map((entry) => entry.variant)).then(() => {
+      for (const entry of puzzle.tray) if (!thumbs.has(entry.key) && hooks.moduleView.partOf(entry.key)) thumbs.set(entry.key, makeThumb(hooks.moduleView.partOf(entry.key)));
+      if (app.puzzle === puzzle && app.structure) refreshTray(app.structure.modules);
+    }, () => {});
+  }
+
+  // A stored game and its layout, back as that world's build
+  function install(record) {
+    const { game, modules, homes } = restoreProgress(record, layoutModules);
+    games.set(game.kind, game);
+    const records = puzzleStart(game.puzzle).records.map((entry) => ({ ...entry, home: homes[entry.id] === undefined ? null : homes[entry.id] }));
+    parked.set(game.kind, { build: startBuild(game.puzzle, modules), records, stream: game.puzzle.stream });
+    if (app.world === game.kind) apply(game.kind);
+    prepareThumbs(game.puzzle);
+  }
+
   // Loads a puzzle in the worker; the start replaces that world's build
   async function load(kind, seed = null) {
     const token = (loading.get(kind) || 0) + 1;
@@ -155,13 +196,11 @@ export function setupPuzzle(app, hooks) {
       const start = puzzleStart(puzzle);
       parked.set(kind, { build: startBuild(puzzle, start.modules), records: start.records, stream: puzzle.stream });
       loading.delete(kind);
-      if (app.world === kind) apply(kind);
-      // Tray thumbnails come from the built parts
-      const variants = puzzle.tray.map((entry) => entry.variant);
-      hooks.moduleView.prepare(variants).then(() => {
-        for (const entry of puzzle.tray) if (!thumbs.has(entry.key) && hooks.moduleView.partOf(entry.key)) thumbs.set(entry.key, makeThumb(hooks.moduleView.partOf(entry.key)));
-        if (app.puzzle === puzzle && app.structure) refreshTray(app.structure.modules);
-      }, () => {});
+      if (app.world === kind) {
+        apply(kind);
+        saveProgress();
+      }
+      prepareThumbs(puzzle);
     } catch {
       if (loading.get(kind) !== token) return;
       loading.delete(kind);
@@ -180,7 +219,9 @@ export function setupPuzzle(app, hooks) {
     entered = true;
     const kind = kindNow();
     show(kind);
-    if (!games.has(kind) && !loading.has(kind)) load(kind, kind === 'infinite' || DAILY_TEST_MODE ? randomSeedText() : null);
+    const stored = !games.has(kind) && !loading.has(kind) ? progressFor(progress, kind, easternDate()) : null;
+    if (stored) install(stored);
+    else if (!games.has(kind) && !loading.has(kind)) load(kind, kind === 'infinite' || DAILY_TEST_MODE ? randomSeedText() : null);
   }
 
   app.modeListeners.push((mode) => {
@@ -203,8 +244,10 @@ export function setupPuzzle(app, hooks) {
   });
   app.structureListeners.push((result, phase) => {
     if (phase === 'start') refreshTray(result.modules);
+    if (phase === 'start') saveProgress();
   });
   hooks.residents.onChange(renderSubmit);
+  hooks.residents.onChange(saveProgress);
   renderIntro();
 
   return {
@@ -226,6 +269,7 @@ export function setupPuzzle(app, hooks) {
       const start = puzzleStart(game.puzzle);
       parked.set(game.kind, { build: startBuild(game.puzzle, start.modules), records: start.records, stream: game.puzzle.stream });
       apply(game.kind);
+      saveProgress();
     },
   };
 }

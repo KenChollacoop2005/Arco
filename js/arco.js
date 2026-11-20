@@ -37,6 +37,8 @@ import { createZone } from './render/zone.js';
 import { createShowroom } from './render/showroom.js';
 import { setupArchive } from './ui/archive.js';
 import { readSetting, writeSetting } from './ui/legend.js';
+import { openingOptions } from './core/generator.js';
+import { randomSeedText } from './core/rng.js';
 import { setupSlideovers } from './ui/slideover.js';
 import { createResidentMarks } from './render/residents.js';
 import { createHighlight } from './render/highlight.js';
@@ -77,6 +79,7 @@ rig.onChange(() => view.requestRender());
 setupLegend(query('#legend'));
 
 const MODES = ['generate', 'puzzle', 'collection', 'drawing']; // top bar tabs
+const MODE_SETTING = 'arco.mode'; // tab open at the last visit
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 
 const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
@@ -304,6 +307,7 @@ const growTool = setupGrowTool(app, canvas, { pointAt: (event, back) => picker.p
 export function setMode(next) {
   const mode = MODES.includes(next) ? next : 'generate';
   app.mode = mode;
+  writeSetting(MODE_SETTING, mode);
   document.body.dataset.mode = mode;
   for (const tab of document.querySelectorAll('.tabs button')) {
     tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
@@ -554,6 +558,8 @@ const puzzle = setupPuzzle(app, {
   loader: (payload) => puzzleWorker.call(payload),
   readSetting,
   writeSetting,
+  storage: browserStore,
+  onEmptySandbox: () => generateStructure(openingOptions(randomSeedText())),
 });
 app.puzzleUi = puzzle;
 
@@ -619,3 +625,7 @@ syncBudget(generatePanel.readBudget());
 app.structureListeners.push((result, phase) => {
   if (phase === 'ready') generatePanel.showCount(result.modules.length);
 });
+
+// Back to the tab of the last visit, unless a shared link names a structure
+const lastMode = readSetting(MODE_SETTING, 'generate');
+if (!location.search && lastMode !== 'generate' && MODES.includes(lastMode)) setMode(lastMode);

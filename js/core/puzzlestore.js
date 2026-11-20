@@ -75,3 +75,49 @@ export function createPuzzleStore(storage) {
     infiniteStats: () => ({ played: data.infinite.played, best: data.infinite.best }),
   };
 }
+
+export const PROGRESS_KEY = 'arco.puzzle.progress'; // storage key for layouts in progress
+const PROGRESS_VERSION = 1; // progress format
+const PROGRESS_KINDS = ['daily', 'infinite']; // one layout kept per kind
+
+// One game and its layout in progress, as stored
+export function progressRecord(game, layout) {
+  return { v: PROGRESS_VERSION, kind: game.kind, puzzle: game.puzzle, ranked: !!game.ranked, date: game.date || null, seed: game.seed || null, test: !!game.test, layout };
+}
+
+// Stored progress read back, kind by kind; anything unreadable is dropped
+export function parseProgress(text) {
+  const out = { daily: null, infinite: null };
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return out;
+  }
+  if (!data || typeof data !== 'object') return out;
+  for (const kind of PROGRESS_KINDS) {
+    const record = data[kind];
+    const ok = record && record.v === PROGRESS_VERSION && record.kind === kind && record.puzzle && Array.isArray(record.puzzle.site) && Array.isArray(record.puzzle.tray)
+      && Array.isArray(record.puzzle.residents) && record.puzzle.par && record.layout && Array.isArray(record.layout.pieces) && record.layout.residents && typeof record.layout.residents === 'object';
+    if (ok) out[kind] = record;
+  }
+  return out;
+}
+
+// The record to restore for a kind: a ranked Daily only on its own day
+export function progressFor(progress, kind, today) {
+  const record = progress[kind];
+  if (!record) return null;
+  if (kind === 'daily' && !record.test && record.date !== today) return null;
+  return record;
+}
+
+// Game, modules and resident homes from a record; modules use the layout's ids
+export function restoreProgress(record, layoutModules) {
+  const { puzzle, layout } = record;
+  return {
+    game: { kind: record.kind, puzzle, ranked: record.ranked, date: record.date, seed: record.seed, test: record.test },
+    modules: layoutModules(puzzle, layout),
+    homes: Object.fromEntries(puzzle.residents.map((resident) => [resident.id, layout.residents[resident.id] === undefined ? null : layout.residents[resident.id]])),
+  };
+}
