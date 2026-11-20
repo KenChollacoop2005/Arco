@@ -34,9 +34,15 @@
     <!-- Logo slot: swap this one element for a drawn logo -->
     <div class="logo-slot" id="logoSlot" aria-hidden="true">x</div>
     <!-- Score counter: takes the logo's place in puzzle mode -->
-    <div class="score-tab" id="scoreTab" role="status" aria-live="polite" hidden>
-      <strong class="score-points" id="scorePoints">0</strong>
+    <div class="score-tab" id="scoreTab" hidden>
+      <span class="score-label" data-copy="scoreTitle"></span>
+      <strong class="score-points" id="scorePoints" role="status" aria-live="polite">0%</strong>
       <span class="score-percent" id="scorePercent"></span>
+      <button type="button" class="score-help" id="scoreHelp" aria-expanded="false" aria-controls="scoreRules" data-copy-title="scoreHelp">?</button>
+      <div class="score-rules" id="scoreRules" hidden>
+        <p class="score-rules-title" data-copy="scoreRulesTitle"></p>
+        <ul id="scoreRuleList"></ul>
+      </div>
     </div>
     <div class="topbar-right">
       <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>

@@ -1,4 +1,5 @@
 import { COPY } from './copy.js';
+import { POINTS } from '../config.js';
 import { traitText } from './residentview.js';
 import { scoreChange } from '../core/puzzleplay.js';
 
@@ -21,20 +22,40 @@ export function causeText(cause, recordOf, nameOf) {
 
 const signed = (value) => (value > 0 ? `+${value}` : String(value));
 
-// Score counter in the logo slot: points large, share of par small
+// Score counter over the top bar: share of par large, points and par small, rules behind ?
 // hooks: recordOf(id), nameOf(id), screenOf(resident id) as [x, y] or null
 export function setupScoreTab(app, residents, hooks) {
   const tab = document.querySelector('#scoreTab');
   const pointsText = document.querySelector('#scorePoints');
   const percentText = document.querySelector('#scorePercent');
+  const help = document.querySelector('#scoreHelp');
+  const rules = document.querySelector('#scoreRules');
+  // Every way to gain and lose points, from the fixed table
+  document.querySelector('#scoreRuleList').replaceChildren(...Object.entries(COPY.scoreRules).map(([key, text]) => {
+    const item = document.createElement('li');
+    const value = document.createElement('span');
+    value.className = `score-rule-value ${POINTS[key] > 0 ? 'is-gain' : 'is-loss'}`;
+    value.textContent = signed(POINTS[key]);
+    item.append(value, ` ${text}`);
+    return item;
+  }));
+  const setHelp = (open) => {
+    rules.hidden = !open;
+    help.setAttribute('aria-expanded', String(open));
+  };
+  help.addEventListener('click', () => setHelp(rules.hidden));
+  document.addEventListener('pointerdown', (event) => {
+    if (!rules.hidden && !tab.contains(event.target)) setHelp(false);
+  });
   let shownPuzzle = null;
   let last = null;
   let value = 0;
   let frame = 0;
 
-  function setNumber(points) {
-    value = points;
-    pointsText.textContent = String(Math.round(points));
+  // The big number is the share of par
+  function setNumber(percent) {
+    value = percent;
+    pointsText.textContent = `${Math.round(percent)}%`;
   }
 
   // Number rolls from where it is to the target
@@ -102,18 +123,19 @@ export function setupScoreTab(app, residents, hooks) {
       if (shownPuzzle !== puzzle) {
         setNumber(0);
         percentText.textContent = '';
+        setHelp(false);
       }
       return;
     }
     const score = report.score;
-    percentText.textContent = `${score.percent}% ${COPY.scoreOfPar}`;
+    percentText.textContent = `${score.points} ${COPY.scorePts} · ${COPY.scorePar} ${puzzle.par.points}`;
     tab.classList.toggle('is-invalid', !report.valid);
     // A new puzzle shows its score without fanfare
     if (shownPuzzle !== puzzle || !last) {
       shownPuzzle = puzzle;
       last = score;
       cancelAnimationFrame(frame);
-      setNumber(score.points);
+      setNumber(score.percent);
       return;
     }
     const change = scoreChange(last, score);
@@ -121,7 +143,7 @@ export function setupScoreTab(app, residents, hooks) {
     if (change.total === 0 && change.changes.length === 0) return;
     if (change.total !== 0) {
       flash(change.total > 0);
-      roll(score.points);
+      roll(score.percent);
     }
     floatChanges(change.changes.filter((item) => item.delta !== 0));
   }
