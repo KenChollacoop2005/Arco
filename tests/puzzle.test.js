@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { POINTS, PUZZLE_RESIDENTS, PAR_START_SHARE, PIECE_ID_BASE } from '../js/config.js';
-import { normalizeVariant } from '../js/core/catalog.js';
+import { POINTS, PUZZLE_RESIDENTS, PAR_START_SHARE, PIECE_ID_BASE, PUZZLE_ANSWER, PUZZLE_MAX_PIECES, BRIDGE_FAMILIES } from '../js/config.js';
+import { normalizeVariant, FAMILIES } from '../js/core/catalog.js';
 import { variantKey } from '../js/core/grid.js';
+import { generate } from '../js/core/generator.js';
+import { traitsOf } from '../js/core/residents.js';
 import { scoreLayout, residentPoints, unusedPoints, percentOf } from '../js/core/scoring.js';
-import { validateLayout, scorePuzzleLayout, generatePuzzle } from '../js/core/puzzle.js';
+import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces } from '../js/core/puzzle.js';
 import { parsePuzzle, loadDaily, makeDaily, dailyId, easternDate, datesFrom } from '../js/core/daily.js';
 
 const PUZZLES = new URL('../puzzles/', import.meta.url);
@@ -110,6 +112,42 @@ test('the same seed gives the same puzzle and par, equal to its daily file', () 
   assert.deepEqual(first, second);
   assert.deepEqual(first, readPuzzle(FAST_DAY + '.json'));
   assert.notDeepEqual(copy(generatePuzzle('another-seed')).residents, first.residents);
+});
+
+test('generated puzzles: 3 to 4 residents, the site is the answer less 4 to 6 pieces, 5 to 9 tray cards, every named thing present, par meets every need', () => {
+  for (const seedText of ['size-a', 'size-b', 'size-c']) {
+    const puzzle = generatePuzzle(seedText);
+    const answer = generate({ seed: puzzle.seed, scale: 'block', ...PUZZLE_ANSWER, cap: PUZZLE_MAX_PIECES });
+    assert.ok(puzzle.residents.length >= 3 && puzzle.residents.length <= 4, `${seedText} residents`);
+    const removed = answer.modules.length - puzzle.site.length;
+    assert.ok(removed >= 4 && removed <= 6, `${seedText} removed ${removed}`);
+    assert.ok(puzzle.tray.length >= 5 && puzzle.tray.length <= 9, `${seedText} cards ${puzzle.tray.length}`);
+    // Whatever a trait names is on the site or in the tray
+    const families = new Set([...puzzle.site.map((instance) => instance.family), ...puzzle.tray.map((entry) => entry.variant.family)]);
+    for (const resident of puzzle.residents) {
+      for (const trait of traitsOf(resident)) {
+        const tagText = `${trait.kind}:${trait.id}`;
+        if (tagText === 'want:amenity') assert.ok([...families].some((id) => FAMILIES[id].amenity === trait.type), `${seedText} ${trait.type}`);
+        if (tagText === 'want:lit' || tagText === 'hate:dark') assert.ok(families.has('lamppost') || families.has('floodlight'), `${seedText} light`);
+        if (tagText === 'dream:market' || tagText === 'dream:garden') assert.ok(families.has(trait.id), `${seedText} ${trait.id}`);
+        if (tagText === 'dream:bridge') assert.ok(BRIDGE_FAMILIES.some((id) => families.has(id)), `${seedText} bridge`);
+      }
+    }
+    const par = scorePuzzleLayout(puzzle, puzzle.par.layout);
+    assert.equal(par.score.points, puzzle.par.points);
+    for (const result of par.evaluations) assert.ok(result.home !== null && result.needs.every((need) => need.met), `${seedText} ${result.id} needs`);
+  }
+});
+
+test('missing pieces: a named amenity, a market, a light and a bridge join the tray only when absent', () => {
+  const rng = { int: () => 7 };
+  const resident = { wants: [{ id: 'amenity', type: 'clinic', steps: 8 }, { id: 'lit' }], hates: [], dream: { id: 'bridge' } };
+  const added = missingPieces(rng, [resident], []).map((variant) => variant.family);
+  assert.deepEqual(added.slice(0, 2), ['clinic', 'lamppost']);
+  assert.ok(BRIDGE_FAMILIES.includes(added[2]));
+  const site = [{ family: 'clinic' }, { family: 'floodlight' }, { family: 'walkway' }];
+  assert.deepEqual(missingPieces(rng, [resident], site), []);
+  assert.deepEqual(missingPieces(rng, [{ wants: [], hates: [{ id: 'dark' }], dream: { id: 'market' } }], []).map((variant) => variant.family), ['lamppost', 'market']);
 });
 
 test('the loader reads today\'s file by the New York date, and generates live and unranked when it is missing', async () => {

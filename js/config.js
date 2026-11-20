@@ -316,13 +316,15 @@ export const POINTS = {
 
 // Puzzles: content rules, site split, tray, par search
 export const PUZZLE_FORMAT_VERSION = 1; // puzzle file format
-export const PUZZLE_GENERATOR_VERSION = 1; // puzzle generator rules
+export const PUZZLE_GENERATOR_VERSION = 2; // puzzle generator rules
 export const PUZZLE_MAX_PIECES = 25; // most modules in the answer
 export const PUZZLE_ANSWER = { density: 0, height: 1, daring: 1, theme: 1, services: 'high' }; // Generate choices for the answer
-export const PUZZLE_RESIDENTS = [3, 5]; // residents per puzzle
+export const PUZZLE_RESIDENTS = [3, 4]; // residents per puzzle
 export const PUZZLE_PRESET_RESIDENTS = [0, 2]; // residents already living in locked homes
-export const PUZZLE_SITE_SHARE = 0.5; // share of the answer pre-placed and locked
-export const PUZZLE_DECOYS = [2, 4]; // extra tray pieces beside the answer
+export const PUZZLE_REMOVED = [4, 6]; // answer pieces taken off the site into the tray
+export const PUZZLE_SPLIT_TRIES = 12; // removal picks tried until the site stands
+export const PUZZLE_TRAY_CARDS = [5, 9]; // tray cards, distinct pieces
+export const PUZZLE_DECOYS = [2, 3]; // extra tray pieces beside the answer
 export const PUZZLE_TRAIT_SHARE = [0.45, 0.85]; // share of traits the answer satisfies
 export const PUZZLE_TRAIT_TRIES = 12; // resident rolls tried per answer
 export const PUZZLE_REROLLS = 24; // seeds tried before giving up

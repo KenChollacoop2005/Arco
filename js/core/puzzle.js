@@ -1,11 +1,11 @@
 import {
-  PUZZLE_FORMAT_VERSION, PUZZLE_GENERATOR_VERSION, PUZZLE_MAX_PIECES, PUZZLE_ANSWER, PUZZLE_RESIDENTS, PUZZLE_PRESET_RESIDENTS, PUZZLE_SITE_SHARE,
-  PUZZLE_DECOYS, PUZZLE_TRAIT_SHARE, PUZZLE_TRAIT_TRIES, PUZZLE_REROLLS, PAR_STEPS, PAR_PIECE_SHARE, PAR_PLACE_TRIES, PAR_POINTS, PAR_START_SHARE,
-  PIECE_ID_BASE, SOURCE_FAMILIES, PUMP_KINDS,
+  PUZZLE_FORMAT_VERSION, PUZZLE_GENERATOR_VERSION, PUZZLE_MAX_PIECES, PUZZLE_ANSWER, PUZZLE_RESIDENTS, PUZZLE_PRESET_RESIDENTS, PUZZLE_REMOVED,
+  PUZZLE_SPLIT_TRIES, PUZZLE_TRAY_CARDS, PUZZLE_DECOYS, PUZZLE_TRAIT_SHARE, PUZZLE_TRAIT_TRIES, PUZZLE_REROLLS, PAR_STEPS, PAR_PIECE_SHARE, PAR_PLACE_TRIES,
+  PAR_POINTS, PAR_START_SHARE, PIECE_ID_BASE, SOURCE_FAMILIES, PUMP_KINDS, BRIDGE_FAMILIES,
 } from '../config.js';
 import { FAMILIES, FAMILY_IDS, hasPump, normalizeVariant, residentCapacity, categoryOn, CATEGORIES } from './catalog.js';
 import { variantKey, worldFromModules, toBody, plinthCells } from './grid.js';
-import { checkPlacement } from './placement.js';
+import { checkPlacement, supportsUnder } from './placement.js';
 import { checkStability } from './stability.js';
 import { streamFrom } from './stream.js';
 import { generate } from './generator.js';
@@ -17,6 +17,7 @@ import { scoreLayout } from './scoring.js';
 
 const PUZZLE_SALT = 0x9a221e; // keeps puzzle rolls apart from the generator
 const PAR_SALT = 0x9a2; // keeps par search rolls apart
+const ADDED_SALT = 0xadd; // keeps added piece seeds apart
 
 const isWaterSource = (instance) => !!SOURCE_FAMILIES[instance.family] || (!!PUMP_KINDS[instance.family] && hasPump(instance) && instance.family !== 'smallpump');
 const isPowerSource = (instance) => (powerRole(instance) || {}).kind === 'source';
@@ -99,14 +100,62 @@ export function scorePuzzleLayout(puzzle, layout, { cache = null, par = puzzle.p
   return { valid: true, problems: [], score, evaluations };
 }
 
-// Lowest modules first, while what is taken still stands alone
-function splitSite(modules) {
-  const ordered = [...modules].sort(byOrder);
-  for (let count = Math.round(ordered.length * PUZZLE_SITE_SHARE); count > 0; count--) {
-    const site = ordered.slice(0, count);
-    if (checkStability(site.map(toBody)).status === 'pass') return { site, rest: ordered.slice(count) };
+// Modules nothing else rests on
+function freeTops(modules) {
+  const world = worldFromModules(modules);
+  const carrying = new Set();
+  for (const instance of modules) for (const below of supportsUnder(world, instance)) if (below && below !== 'plinth') carrying.add(below.id);
+  return modules.filter((instance) => !carrying.has(instance.id));
+}
+
+// Site: the answer less a few pieces taken off the top, while the rest still stands
+function splitSite(rng, modules) {
+  for (let attempt = 0; attempt < PUZZLE_SPLIT_TRIES; attempt++) {
+    let site = [...modules];
+    const rest = [];
+    for (let count = rng.int(...PUZZLE_REMOVED); count > 0 && site.length > 1; count--) {
+      const taken = rng.pick(freeTops(site));
+      site = site.filter((instance) => instance !== taken);
+      rest.push(taken);
+    }
+    if (checkStability(site.map(toBody)).status === 'pass') return { site: site.sort(byOrder), rest: rest.sort(byOrder) };
   }
   return null;
+}
+
+// Amenity types and the family that brings each
+const AMENITY_FAMILY = Object.fromEntries(FAMILY_IDS.filter((id) => FAMILIES[id].amenity && !FAMILIES[id].disabled).reverse().map((id) => [FAMILIES[id].amenity, id]));
+export const AMENITY_TYPES = Object.keys(AMENITY_FAMILY).sort();
+const LIGHT_FAMILIES = ['floodlight', 'lamppost']; // the last is added for the dark or a lit area
+const OPEN_BRIDGES = BRIDGE_FAMILIES.filter((id) => FAMILIES[id] && !FAMILIES[id].disabled); // the last is added for a bridge dream
+
+// Families a trait names, any one of which will do
+function neededFamilies(residents) {
+  const needs = [];
+  for (const resident of residents) {
+    for (const trait of traitsOf(resident)) {
+      const tagText = `${trait.kind}:${trait.id}`;
+      if (tagText === 'want:amenity') needs.push([AMENITY_FAMILY[trait.type]]);
+      if (tagText === 'want:lit' || tagText === 'hate:dark') needs.push(LIGHT_FAMILIES);
+      if (tagText === 'dream:market') needs.push(['market']);
+      if (tagText === 'dream:garden') needs.push(['garden']);
+      if (tagText === 'dream:bridge') needs.push(OPEN_BRIDGES);
+    }
+  }
+  return needs;
+}
+
+// Pieces to add so every trait finds what it names in the puzzle
+export function missingPieces(rng, residents, modules) {
+  const present = new Set(modules.map((instance) => instance.family));
+  const added = [];
+  for (const need of neededFamilies(residents)) {
+    if (need.some((id) => present.has(id))) continue;
+    const family = FAMILIES[need[need.length - 1]];
+    present.add(family.id);
+    added.push(normalizeVariant({ family: family.id, fp: family.footprints[0], h: family.minStories, seed: rng.int(1, 0x7fffffff), mask: 15, roof: false }));
+  }
+  return added;
 }
 
 // Homes with room left, in id order
@@ -212,6 +261,9 @@ export function findPar(puzzle, start, cache = new Map()) {
   return best;
 }
 
+// Every resident housed with full water and power
+const needsMet = (evaluations) => evaluations.every((result) => result.home !== null && result.needs.every((need) => need.met));
+
 // One try at a puzzle from a seed: {puzzle} or {problems}
 function tryPuzzle(seed) {
   const rng = makeRng(mixSeed(hashString(seed), PUZZLE_SALT));
@@ -220,11 +272,11 @@ function tryPuzzle(seed) {
   const problems = answerProblems(answer.modules, count);
   if (problems.length > 0) return { problems };
   if (answer.modules.some((instance) => instance.id >= PIECE_ID_BASE)) return { problems: ['ids'] };
-  const split = splitSite(answer.modules);
+  const split = splitSite(rng, answer.modules);
   if (!split) return { problems: ['no-site'] };
   const siteIds = new Set(split.site.map((instance) => instance.id));
   const ids = Array.from({ length: count }, (unused, index) => `r${index + 1}`);
-  // Answer homes: preset residents in locked homes, the rest anywhere with room
+  // Answer homes: preset residents in site homes, the rest anywhere with room
   const assignments = {};
   const siteRoom = roomyHomes(split.site, {});
   const presets = Math.min(rng.int(...PUZZLE_PRESET_RESIDENTS), siteRoom.length);
@@ -233,32 +285,38 @@ function tryPuzzle(seed) {
     if (homes.length === 0) return { problems: ['too-few-homes'] };
     assignments[id] = rng.pick(homes);
   }
-  // Tray: the rest of the answer and a few decoys
-  const tray = [];
-  for (const instance of split.rest) addToTray(tray, instance);
-  for (let decoy = rng.int(...PUZZLE_DECOYS); decoy > 0; decoy--) addToTray(tray, decoyOf(rng, rng.pick(split.rest.length > 0 ? split.rest : split.site)));
+  const removed = [];
+  for (const instance of split.rest) addToTray(removed, instance);
   const pieceIds = new Map(split.rest.map((instance, index) => [instance.id, PIECE_ID_BASE + index]));
   const answerLayout = {
     pieces: split.rest.map((instance) => ({ key: variantKey(instance), cell: [instance.x, instance.y, instance.z], rot: instance.rot & 3 })),
     residents: Object.fromEntries(ids.map((id) => [id, siteIds.has(assignments[id]) ? assignments[id] : pieceIds.get(assignments[id])])),
   };
-  const base = { format: PUZZLE_FORMAT_VERSION, generator: PUZZLE_GENERATOR_VERSION, seed, site: split.site, stream: answer.stream, tray, residents: [] };
-  // Residents rolled until the answer meets a good share of their traits, not all
-  const amenities = [...new Set(answer.modules.map((instance) => FAMILIES[instance.family].amenity).filter(Boolean))];
+  const base = { format: PUZZLE_FORMAT_VERSION, generator: PUZZLE_GENERATOR_VERSION, seed, site: split.site, stream: answer.stream };
+  // Traits roll first from every amenity type; what they name joins the tray after
   const cache = new Map();
   let chosen = null;
   for (let attempt = 0; attempt < PUZZLE_TRAIT_TRIES && !chosen; attempt++) {
-    const residents = ids.map((id, index) => rollResident(mixSeed(hashString(seed), attempt), id, { amenities, others: ids.filter((other) => other !== id), start: index < presets ? answerLayout.residents[id] : null }));
-    const trial = { ...base, residents };
-    const scored = scorePuzzleLayout(trial, answerLayout, { cache, par: 0 });
+    const residents = ids.map((id, index) => rollResident(mixSeed(hashString(seed), attempt), id, { amenities: AMENITY_TYPES, others: ids.filter((other) => other !== id), start: index < presets ? answerLayout.residents[id] : null }));
+    if (!residents.every((resident) => traitsOf(resident).length > 0)) continue;
+    const added = missingPieces(makeRng(mixSeed(hashString(seed), attempt + ADDED_SALT)), residents, answer.modules);
+    if (removed.length + added.length > PUZZLE_TRAY_CARDS[1]) continue;
+    const scored = scorePuzzleLayout({ ...base, tray: removed, residents }, answerLayout, { cache, par: 0 });
     if (!scored.valid) return { problems: ['answer-invalid', ...scored.problems] };
     const share = traitShare(scored.evaluations);
-    if (share >= PUZZLE_TRAIT_SHARE[0] && share <= PUZZLE_TRAIT_SHARE[1] && residents.every((resident) => traitsOf(resident).length > 0)) chosen = residents;
+    if (share >= PUZZLE_TRAIT_SHARE[0] && share <= PUZZLE_TRAIT_SHARE[1]) chosen = { residents, added };
   }
   if (!chosen) return { problems: ['trait-share'] };
-  const puzzle = { ...base, residents: chosen };
+  // Tray: the removed pieces, what the traits name, then decoys inside the card limit
+  const tray = removed.map((entry) => ({ ...entry }));
+  for (const variant of chosen.added) addToTray(tray, variant);
+  const room = PUZZLE_TRAY_CARDS[1] - tray.length;
+  for (let decoy = Math.min(rng.int(...PUZZLE_DECOYS), room); decoy > 0; decoy--) addToTray(tray, decoyOf(rng, rng.pick(split.rest)));
+  if (tray.length < PUZZLE_TRAY_CARDS[0]) return { problems: ['tray-small'] };
+  const puzzle = { ...base, tray, residents: chosen.residents };
   const par = findPar(puzzle, answerLayout, cache);
-  const startLayout = { pieces: [], residents: Object.fromEntries(chosen.filter((resident) => resident.start !== null).map((resident) => [resident.id, resident.start])) };
+  if (!needsMet(scorePuzzleLayout(puzzle, par.layout, { cache, par: 0 }).evaluations)) return { problems: ['par-needs'] };
+  const startLayout = { pieces: [], residents: Object.fromEntries(chosen.residents.filter((resident) => resident.start !== null).map((resident) => [resident.id, resident.start])) };
   const startPoints = scorePuzzleLayout(puzzle, startLayout, { cache, par: 0 }).score.points;
   if (par.points < PAR_POINTS[0] || par.points > PAR_POINTS[1]) return { problems: ['par-range'] };
   if (startPoints > par.points * PAR_START_SHARE) return { problems: ['start-too-close'] };
