@@ -60,6 +60,8 @@
   --rarity-uncommon: #2f9e78;
   --rarity-rare: #2346c7;
   --rarity-legendary: #c08a00;
+  --score-tab-width: 104px; /* score counter tab */
+  --score-flash-ms: 700ms; /* gain or loss flash */
 }
 
 * { box-sizing: border-box; }
@@ -680,3 +682,57 @@ body[data-mode='puzzle'] .sandbox-only { display: none; }
 .puzzle-intro-title { font: 800 22px/1 var(--font-wordmark); letter-spacing: 0.04em; text-transform: uppercase; }
 .puzzle-intro-line { font: 11px/1.4 var(--font-mono); color: var(--ink-soft); }
 .puzzle-intro-note { margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); }
+
+/* Score counter hanging from the top bar */
+.topbar:has(.score-tab:not([hidden])) .logo-slot { visibility: hidden; }
+.score-tab {
+  position: absolute;
+  top: calc(var(--bar-height) - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  min-width: var(--score-tab-width);
+  padding: 2px 18px 7px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-top: 0;
+  z-index: 6;
+}
+.score-points { display: inline-block; font: 800 30px/1 var(--font-wordmark); letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
+.score-percent { font: 10px/1.3 var(--font-mono); color: var(--ink-soft); white-space: nowrap; }
+.score-tab.is-invalid .score-points { color: var(--ink-soft); }
+.score-tab.is-gain { animation: score-flash-gain var(--score-flash-ms) ease-out; }
+.score-tab.is-loss { animation: score-flash-loss var(--score-flash-ms) ease-out; }
+.score-tab.is-gain .score-points { animation: score-swell var(--score-flash-ms) ease-out; }
+.score-tab.is-loss .score-points { animation: score-shake var(--score-flash-ms) ease-out; }
+@keyframes score-flash-gain { 0%, 30% { color: var(--pass); border-color: var(--pass); background: #e6f3ea; } }
+@keyframes score-flash-loss { 0%, 30% { color: var(--fail); border-color: var(--fail); background: #f8e6e6; } }
+@keyframes score-swell { 0% { transform: scale(1); } 25% { transform: scale(1.22); } 100% { transform: scale(1); } }
+@keyframes score-shake { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-5px); } 30% { transform: translateX(5px); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-1px); } }
+.score-float {
+  position: fixed;
+  z-index: 9;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  background: var(--paper);
+  font: 600 12px var(--font-mono);
+  white-space: nowrap;
+  pointer-events: none;
+  animation-name: score-rise;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+.score-float.is-gain { color: var(--pass); }
+.score-float.is-loss { color: var(--fail); }
+@keyframes score-rise {
+  0% { opacity: 0; transform: translate(-50%, -60%); }
+  12%, 70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -320%); }
+}
+@keyframes score-fade { 0% { opacity: 0; } 12%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .score-tab.is-gain .score-points, .score-tab.is-loss .score-points { animation: none; }
+  .score-float { animation-name: score-fade; transform: translate(-50%, -100%); }
+}

@@ -33,6 +33,11 @@
     </div>
     <!-- Logo slot: swap this one element for a drawn logo -->
     <div class="logo-slot" id="logoSlot" aria-hidden="true">x</div>
+    <!-- Score counter: takes the logo's place in puzzle mode -->
+    <div class="score-tab" id="scoreTab" role="status" aria-live="polite" hidden>
+      <strong class="score-points" id="scorePoints">0</strong>
+      <span class="score-percent" id="scorePercent"></span>
+    </div>
     <div class="topbar-right">
       <label class="toggle"><input type="checkbox" id="physicsToggle"><span data-copy="physics"></span></label>
       <label class="toggle"><input type="checkbox" id="sectionToggle"><span data-copy="section"></span></label>

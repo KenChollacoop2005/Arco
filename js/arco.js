@@ -45,6 +45,7 @@ import { createRagdoll } from './ui/ragdoll.js';
 import { createResidentStore } from './core/roster.js';
 import { setupResidentArchive } from './ui/residentarchive.js';
 import { setupPuzzle } from './ui/puzzle.js';
+import { setupScoreTab } from './ui/scoretab.js';
 import { layoutOf } from './core/puzzleplay.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -537,6 +538,24 @@ const puzzle = setupPuzzle(app, {
   writeSetting,
 });
 app.puzzleUi = puzzle;
+
+// Screen point above a resident's home, for floating score changes
+function screenOfResident(id) {
+  const home = residents.homeOf(id);
+  const box = home ? modules.boxOf(home.id) : null;
+  if (!box) return null;
+  const point = box.getCenter(box.min.clone());
+  point.z = box.max.z;
+  point.project(rig.camera);
+  if (point.z > 1) return null;
+  const rect = canvas.getBoundingClientRect();
+  return [rect.left + ((point.x + 1) / 2) * rect.width, rect.top + ((1 - point.y) / 2) * rect.height];
+}
+setupScoreTab(app, residents, {
+  recordOf: (id) => residents.list().find((record) => record.id === id) || null,
+  nameOf: residentPanel.nameOf,
+  screenOf: screenOfResident,
+});
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
 // Budget: Build's cap and the module count follow the control
