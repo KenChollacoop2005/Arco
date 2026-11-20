@@ -308,7 +308,10 @@ export function evaluateResidents(modules, results, residents, assignments) {
 }
 
 // The existing passes a resident evaluation reads, services with the residents' extra demand
-export function structureResults(modules, seedText, extra = {}) {
-  const services = planServices(modules, seedText, { extra });
-  return { services, analysis: analyze(modules), walking: walkingNetwork(modules), lights: lightPlan(modules, services) };
+// wiring: manual connections and cuts; base: a serviceBase reused while the structure is the same
+export function structureResults(modules, seedText, extra = {}, { wiring = null, base = null } = {}) {
+  const services = planServices(modules, seedText, { extra, wiring, base });
+  if (base && !base.analysis) base.analysis = analyze(modules);
+  if (base && !base.walking) base.walking = walkingNetwork(modules);
+  return { services, analysis: base ? base.analysis : analyze(modules), walking: base ? base.walking : walkingNetwork(modules), lights: lightPlan(modules, services) };
 }

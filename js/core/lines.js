@@ -93,13 +93,25 @@ function hangLaundry(line, context, rng) {
 }
 
 // String lights between line hooks; the owner end takes power for the run
-function stringLights(hooks, context, rng, owners) {
+const cutOf = (cuts, first, second) => cuts.size > 0 && cuts.has([first.module + ':' + first.index, second.module + ':' + second.index].sort().join('|'));
+
+// Clothesline between two given hooks by the auto rules, sag at the middle of the range
+export function lineBetween(context, first, second) {
+  if (first.module === second.module) return { fail: 'same-part' };
+  if (Math.abs(first.position[2] - second.position[2]) > LINE_RISE_MM) return { fail: 'not-level' };
+  const length = distance(first.position, second.position);
+  const line = hangString(context, 'line', first, second, length * ((LINE_SAG[0] + LINE_SAG[1]) / 2), LINE_MAX_MM);
+  if (line.blocked) return { fail: line.blocked.reason === 'length' ? 'too-long' : 'blocked', line };
+  return { line };
+}
+
+function stringLights(hooks, context, rng, owners, cuts) {
   const runs = [];
   for (const first of rng.shuffle(hooks.slice())) {
     if (runs.length >= STRING_LIGHTS_MAX) break;
     if (first.left <= 0 || !rng.chance(STRING_LIGHTS_CHANCE)) continue;
     const options = hooks
-      .filter((hook) => hook.module !== first.module && hook.left > 0 && (owners.has(first.module) || owners.has(hook.module)) && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM)
+      .filter((hook) => hook.module !== first.module && hook.left > 0 && (owners.has(first.module) || owners.has(hook.module)) && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM && !cutOf(cuts, first, hook))
       .map((hook) => ({ hook, length: distance(hook.position, first.position) }))
       .filter((option) => option.length <= LINE_MAX_MM)
       .sort((optionA, optionB) => optionA.length - optionB.length || optionA.hook.module - optionB.hook.module || optionA.hook.index - optionB.hook.index);
@@ -116,9 +128,24 @@ function stringLights(hooks, context, rng, owners) {
 }
 
 // String lights, tarps, then clotheslines with laundry, on the line hooks; seeded, render only
-export function planLines(modules, seedText, { ports, context, owners = new Set() }) {
+// pinned: manual lines {a, b, line}, hung first; cuts: pair keys never auto-strung
+export function planLines(modules, seedText, { ports, context, owners = new Set(), pinned = [], cuts = new Set() }) {
   const hooks = ports.filter((port) => port.active && port.type === 'line').map((port) => ({ ...port, left: port.capacity }));
-  const lights = owners.size > 0 ? stringLights(hooks, context, makeRng(mixSeed(hashString(String(seedText)), LIGHTS_SEED)), owners) : [];
+  const manual = [];
+  const dropped = [];
+  const hookOf = (end) => hooks.find((hook) => hook.module === end.module && hook.index === end.index);
+  for (const pin of pinned) {
+    const first = hookOf(pin.a);
+    const second = hookOf(pin.b);
+    if (!first || !second || first.left <= 0 || second.left <= 0) {
+      dropped.push({ pin, reason: !first || !second ? 'missing-port' : 'port-full' });
+      continue;
+    }
+    first.left--;
+    second.left--;
+    manual.push({ ...pin.line, manual: true });
+  }
+  const lights = owners.size > 0 ? stringLights(hooks, context, makeRng(mixSeed(hashString(String(seedText)), LIGHTS_SEED)), owners, cuts) : [];
   const tarps = stringTarps(hooks, context, makeRng(mixSeed(hashString(String(seedText)), TARP_SEED)));
   const rng = makeRng(mixSeed(hashString(String(seedText)), LINE_SEED));
   const lines = [];
@@ -126,12 +153,13 @@ export function planLines(modules, seedText, { ports, context, owners = new Set(
   const strung = new Map();
   const pairCount = (hookA, hookB) => strung.get(pairKey(hookA, hookB)) || 0;
   const pairKey = (hookA, hookB) => [hookA.module + ':' + hookA.index, hookB.module + ':' + hookB.index].sort().join('-');
+  for (const line of manual) strung.set(pairKey(line.from, line.to), pairCount(line.from, line.to) + 1);
   for (const first of rng.shuffle(hooks.slice())) {
     if (lines.length >= CLOTHESLINES_MAX) break;
     if (first.left <= 0) continue;
     // Nearest free hook on another module, about level, with a clear line
     const options = hooks
-      .filter((hook) => hook.module !== first.module && hook.left > 0 && pairCount(first, hook) < MAX_LINES_PER_PAIR && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM)
+      .filter((hook) => hook.module !== first.module && hook.left > 0 && pairCount(first, hook) < MAX_LINES_PER_PAIR && Math.abs(hook.position[2] - first.position[2]) <= LINE_RISE_MM && !cutOf(cuts, first, hook))
       .map((hook) => ({ hook, length: distance(hook.position, first.position) }))
       .filter((option) => option.length <= LINE_MAX_MM)
       .sort((optionA, optionB) => optionA.length - optionB.length || optionA.hook.module - optionB.hook.module || optionA.hook.index - optionB.hook.index);
@@ -146,5 +174,5 @@ export function planLines(modules, seedText, { ports, context, owners = new Set(
       break;
     }
   }
-  return { lines, laundry, tarps, lights };
+  return { lines: [...manual, ...lines], laundry: laundry.map((piece) => ({ ...piece, line: piece.line + manual.length })), tarps, lights, dropped };
 }

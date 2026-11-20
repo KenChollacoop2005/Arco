@@ -5,6 +5,7 @@ import { planPower, powerRole } from './power.js';
 import { planLines } from './lines.js';
 import { PUMP_KINDS, LIGHT_DEMAND } from '../config.js';
 import { hasPump } from './catalog.js';
+import { checkWiring, wiringEmpty } from './wiring.js';
 
 const WHEEL_FAMILIES = ['wheelup']; // wheels driven by water passing through them
 
@@ -59,13 +60,18 @@ export function stringLightDemand(runs = []) {
 
 // Water, power and plain lines of a structure as strings, seeded and render only
 // extra: added demand per module id, {water, power}, for residents' wants
-export function planServices(modules, seedText, { mounts = structureMounts(modules), context = stringContext(modules), extra = {} } = {}) {
+// wiring: manual connections (pinned) and cuts; base: serviceBase of these modules, reused across calls
+export function planServices(modules, seedText, { base = null, mounts = base ? base.mounts : structureMounts(modules), context = base ? base.context : stringContext(modules), extra = {}, wiring = null } = {}) {
   const addWater = extra.water || {};
   const byKey = new Map(mounts.map((port) => [portKey(port.module, port.index), port]));
   const portOf = (end) => byKey.get(portKey(end.module, end.index));
+  const shared = base ? base.water : {};
+  const powerShared = base ? base.power : {};
+  const manual = wiringEmpty(wiring) ? null : checkWiring(base || { modules, mounts, context, water: shared, power: powerShared, inletSearches: new Map() }, wiring);
+  const pinned = manual ? manual.pinned : { power: [], water: [], line: [] };
+  const cuts = manual ? manual.cuts : new Set();
   // Gravity water, then power, then pumped water
-  const shared = {};
-  const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared, extra: addWater });
+  const gravity = planWater(modules, seedText, { ports: mounts, context, powered: new Set(), shared, extra: addWater, pinned: pinned.water, cuts });
   const wheels = {};
   for (const instance of modules) if (WHEEL_FAMILIES.includes(instance.family)) wheels[instance.id] = (gravity.solved.nodes[String(instance.id)] || { received: 0 }).received;
   // Lines first: string lights add demand to the module that feeds them
@@ -73,19 +79,31 @@ export function planServices(modules, seedText, { mounts = structureMounts(modul
     const role = powerRole(instance);
     return (!role || role.kind === 'consumer') && mounts.some((port) => port.module === instance.id && port.active && port.type === 'power' && !port.relay);
   }).map((instance) => instance.id));
-  const plain = planLines(modules, seedText, { ports: mounts, context, owners });
+  const plain = planLines(modules, seedText, { ports: mounts, context, owners, pinned: pinned.line, cuts });
   const lightExtra = stringLightDemand(plain.lights);
   for (const [id, amount] of Object.entries(extra.power || {})) lightExtra[id] = (lightExtra[id] || 0) + amount;
-  const power = planPower(modules, seedText, { ports: mounts, context, wheels, extra: lightExtra });
+  const power = planPower(modules, seedText, { ports: mounts, context, wheels, extra: lightExtra, shared: powerShared, pinned: pinned.power, cuts });
   const pumpsOn = new Set(modules.filter((instance) => PUMP_KINDS[instance.family] && hasPump(instance) && power.consumers[instance.id] && power.consumers[instance.id].status === 'full').map((instance) => instance.id));
-  const water = planWater(modules, seedText, { ports: mounts, context, powered: pumpsOn, shared, extra: addWater });
+  const water = planWater(modules, seedText, { ports: mounts, context, powered: pumpsOn, shared, extra: addWater, pinned: pinned.water, cuts });
   const pipes = water.links.map((link) => ({
     ...makeString('pipe', portOf(link.fromPort), portOf(link.toPort), link.points, { spans: link.spans, collars: solidEntries(context, link.points.slice(1, -1)) }),
     units: water.solved.links[link.id].units,
     link: link.id,
+    ...(link.manual ? { manual: true } : {}),
   }));
   const blockedPipes = water.blocked.map((attempt) => ({ ...makeString('pipe', attempt.from, attempt.to, attempt.points), blocked: attempt.blocked }));
   // Overflow sheets, basin to basin or down to the roof or plinth
   const sheets = water.solved.sheets.filter((sheet) => sheet.points).map((sheet) => ({ from: sheet.from, to: sheet.to, units: sheet.units, points: sheet.points }));
-  return { water: { ...water, pumps: water.pumps }, power: { links: power.links, powered: power.powered, consumers: power.consumers, nodes: power.nodes, totals: power.solved.totals }, pipes, sheets, wires: power.cables, lines: plain.lines, laundry: plain.laundry, tarps: plain.tarps, lights: plain.lights, blocked: [...blockedPipes, ...power.blocked] };
+  const result = { water: { ...water, pumps: water.pumps }, power: { links: power.links, powered: power.powered, consumers: power.consumers, nodes: power.nodes, totals: power.solved.totals }, pipes, sheets, wires: power.cables, lines: plain.lines, laundry: plain.laundry, tarps: plain.tarps, lights: plain.lights, blocked: [...blockedPipes, ...power.blocked] };
+  if (manual) result.manual = manualStatus(manual, [...water.dropped, ...power.dropped, ...plain.dropped]);
+  return result;
+}
+
+// Each manual connection: ok, or the reason the checks or a planner refused it
+function manualStatus(manual, dropped) {
+  const late = new Map(dropped.map(({ pin, reason }) => [pin.at, reason]));
+  return manual.connections.map((entry, at) => {
+    const { route, size, line, ...shown } = entry;
+    return late.has(at) ? { ...shown, ok: false, reason: late.get(at) } : shown;
+  });
 }

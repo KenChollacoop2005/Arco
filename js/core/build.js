@@ -1,3 +1,4 @@
+import { emptyWiring, keepWiring } from './wiring.js';
 import { CELL_MM, STORY_MM, MAX_MODULES } from '../config.js';
 import { columnTop, footprintCells, footprintSize, worldFromModules, worldHeight, instanceCells, instanceInZone, SIDES } from './grid.js';
 import { FAMILIES, isDocked, normalizeVariant } from './catalog.js';
@@ -101,6 +102,8 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
   let placeStream = stream;
   let undoStack = [];
   let redoStack = [];
+  // Manual connections and cuts, kept in the same history as the modules
+  let wiring = emptyWiring();
   // Puzzle rules: locked site ids, masks kept as given, ids from a base
   let rules = { locked: new Set(), keepMasks: false, idBase: 0 };
   // Module picked up to move; placement checks leave it out
@@ -109,11 +112,13 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
   const near = (list, changed, keepIds) => (rules.keepMasks ? list : reopenNear(list, changed, keepIds));
   const lockedIn = (ids) => ids.some((id) => rules.locked.has(id));
 
-  function commit(next) {
-    undoStack.push(modules);
+  // Wiring follows the modules it names; a strict keep also needs them unmoved
+  function commit(next, nextWiring = keepWiring(wiring, modules, next)) {
+    undoStack.push({ modules, wiring });
     if (undoStack.length > UNDO_LIMIT) undoStack.shift();
     redoStack = [];
     modules = next;
+    wiring = nextWiring;
   }
 
   const problemIds = (list) => new Set(validateStructure(worldFromModules(list)).map((problem) => problem.id));
@@ -134,6 +139,15 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
   return {
     get modules() {
       return modules;
+    },
+    get wiring() {
+      return wiring;
+    },
+    // New wiring as one undo step; false when nothing changed
+    setWiring(next) {
+      if (next === wiring) return false;
+      commit(modules, next);
+      return true;
     },
     // Most modules Build may place
     setCap(next) {
@@ -239,7 +253,7 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     // Swap in a whole structure as one step
     replace(list) {
       const copies = list.map((instance) => ({ ...instance }));
-      commit(rules.keepMasks ? copies : reopenSides(copies));
+      commit(rules.keepMasks ? copies : reopenSides(copies), keepWiring(wiring, modules, copies, true));
     },
     // Clears everything but locked modules
     clear() {
@@ -249,10 +263,11 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       return true;
     },
     // Whole state, to park one build while another is shown
-    snapshot: () => ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules }),
+    snapshot: () => ({ modules, wiring, undoStack, redoStack, cap: placeCap, stream: placeStream, rules }),
     restore(state) {
       lifted = null;
       ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules } = state);
+      wiring = state.wiring || emptyWiring();
     },
     // Puzzle rules; locked ids can be selected but never moved or removed
     setRules({ locked = [], keepMasks = false, idBase = 0 } = {}) {
@@ -262,15 +277,15 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
     undo() {
       lifted = null;
       if (undoStack.length === 0) return false;
-      redoStack.push(modules);
-      modules = undoStack.pop();
+      redoStack.push({ modules, wiring });
+      ({ modules, wiring } = undoStack.pop());
       return true;
     },
     redo() {
       lifted = null;
       if (redoStack.length === 0) return false;
-      undoStack.push(modules);
-      modules = redoStack.pop();
+      undoStack.push({ modules, wiring });
+      ({ modules, wiring } = redoStack.pop());
       return true;
     },
   };

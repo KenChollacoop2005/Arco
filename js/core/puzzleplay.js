@@ -1,7 +1,8 @@
 import { PIECE_ID_BASE } from '../config.js';
 import { variantKey } from './grid.js';
 import { residentRecord } from './roster.js';
-import { scorePuzzleLayout, layoutModules, unusedTrayPieces } from './puzzle.js';
+import { scorePuzzleLayout, layoutModules, unusedTrayPieces, layoutKey, structureKey } from './puzzle.js';
+import { mapWiring, wiringEmpty, baseFrom } from './wiring.js';
 import { residentExtras, structureResults, evaluateResidents } from './residents.js';
 import { scoreLayout } from './scoring.js';
 
@@ -47,8 +48,8 @@ export function trayLeft(puzzle, modules) {
   return entries.map((entry) => ({ ...entry, count: entry.total - (used.get(entry.key) || 0) }));
 }
 
-// Layout of a build: pieces renumbered 1000 up, homes mapped to match, site moves and returns noted
-export function layoutOf(modules, assignments, site = []) {
+// Layout of a build: pieces renumbered 1000 up, homes and wires mapped to match, site moves and returns noted
+export function layoutOf(modules, assignments, site = [], wiring = null) {
   const toLayout = new Map();
   const pieces = piecesOf(modules).map((instance, index) => {
     toLayout.set(instance.id, PIECE_ID_BASE + index);
@@ -67,6 +68,11 @@ export function layoutOf(modules, assignments, site = []) {
   const residents = Object.fromEntries(Object.entries(assignments).map(([id, home]) => [id, mapHome(home)]));
   const layout = { pieces, residents };
   if (Object.keys(moves).length > 0) layout.site = moves;
+  if (!wiringEmpty(wiring)) {
+    const mapModule = (id) => (!byId.has(id) ? null : id >= PIECE_ID_BASE ? toLayout.get(id) : id);
+    const wires = mapWiring(wiring, mapModule);
+    if (!wiringEmpty(wires)) layout.wires = wires;
+  }
   return { layout, toLayout, fromLayout };
 }
 
@@ -109,10 +115,10 @@ function looseScore(puzzle, layout, cache) {
   const modules = layoutModules(puzzle, layout);
   const assignments = Object.fromEntries(puzzle.residents.map((resident) => [resident.id, layout.residents[resident.id] === undefined ? null : layout.residents[resident.id]]));
   const extra = residentExtras(puzzle.residents, assignments);
-  const key = JSON.stringify([layout.pieces, layout.site || null, extra]);
+  const key = layoutKey(layout, extra);
   let results = cache.get(key);
   if (!results) {
-    results = structureResults(modules, puzzle.seed, extra);
+    results = structureResults(modules, puzzle.seed, extra, { wiring: layout.wires || null, base: layout.wires ? baseFrom(cache, structureKey(layout), modules) : null });
     cache.set(key, results);
   }
   const evaluations = evaluateResidents(modules, results, puzzle.residents, assignments);
@@ -135,7 +141,7 @@ export function playScore(puzzle, layout, { preview = null, cache = new Map() } 
 }
 
 // Problems in the order a player should fix them
-export const PROBLEM_ORDER = ['bad-layout', 'unknown-piece', 'anchor-moved', 'over-count', 'placement', 'site-broken', 'unstable', 'not-a-home', 'home-full', 'unknown-resident'];
+export const PROBLEM_ORDER = ['bad-layout', 'unknown-piece', 'anchor-moved', 'over-count', 'placement', 'site-broken', 'unstable', 'not-a-home', 'home-full', 'unknown-resident', 'bad-wire'];
 
 // Submit state from a live report: ready, or the one problem to show
 export function submitStatus(report) {

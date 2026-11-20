@@ -18,6 +18,7 @@ const SPILL_CLEAR_MM = 1; // sheet collision test stops this far above the landi
 const SPLIT_ROUNDS_MAX = 1000; // safety cap on split rounds
 const SEARCH_SLACK = 1e-6; // head slack when a search stops early
 const SHORT_REACH = 4; // shortfalls past this much head are reported without a number
+const SEARCHES_KEPT = 2000; // pipe searches kept per structure
 export const WATER_REASONS = ['out of head', 'no route', 'no wall route', 'source empty', 'no free port'];
 export const NO_FALL = 'no clear fall'; // overflow with no straight drop beside it
 const UNPOWERED_TANKS = ['pumptank']; // pumped tanks that drain by gravity when off
@@ -260,16 +261,37 @@ function spillOf(world, node, instances, consumerAt, context) {
 }
 
 // Water network of a structure: nodes, pipes, flows and diagnostics, seeded
-export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules), powered = null, shared = {}, extra = {} } = {}) {
-  const world = worldFromModules(modules);
-  const rng = makeRng(mixSeed(hashString(String(seedText)), WATER_SEED));
-  const byId = new Map(modules.map((instance) => [instance.id, instance]));
+// Active water ports grouped per module, with free capacity
+export function waterPortsOf(ports) {
   const portsOf = new Map();
   for (const port of ports) {
     if (!port.active || !port.type.startsWith('water')) continue;
     if (!portsOf.has(port.module)) portsOf.set(port.module, []);
     portsOf.get(port.module).push({ ...port, left: port.capacity });
   }
+  return portsOf;
+}
+
+// Pipe surface graph of a structure's water ports, kept in shared; ports get their node
+export function waterGraph(modules, ports, context, shared = {}) {
+  const waterPorts = [...waterPortsOf(ports).values()].flat();
+  if (!shared.graph) shared.graph = pipeGraph(modules, waterPorts, context);
+  waterPorts.forEach((port, index) => {
+    port.node = shared.graph.portNodes[index];
+  });
+  return { graph: shared.graph, waterPorts };
+}
+
+const portKeyOf = (port) => port.module + ':' + port.index;
+// One key for a port pair in either order
+export const pairKeyOf = (first, second) => [portKeyOf(first), portKeyOf(second)].sort().join('|');
+
+// pinned: manual pipes {out, in, route: {points, spans, length}, size}; cuts: pair keys never auto-routed
+export function planWater(modules, seedText, { ports = structureMounts(modules), context = stringContext(modules), powered = null, shared = {}, extra = {}, pinned = [], cuts = new Set() } = {}) {
+  const world = worldFromModules(modules);
+  const rng = makeRng(mixSeed(hashString(String(seedText)), WATER_SEED));
+  const byId = new Map(modules.map((instance) => [instance.id, instance]));
+  const portsOf = waterPortsOf(ports);
   // Main columns are one hub
   const mainOf = new Map();
   for (const instance of [...modules].sort((first, second) => first.z - second.z)) {
@@ -285,6 +307,8 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     port.node = graph.portNodes[index];
   });
   if (!shared.parts) shared.parts = graphParts(graph);
+  if (!shared.searches) shared.searches = new Map();
+  const kept = shared.searches;
   const parts = shared.parts;
   const nodes = [];
   const consumerAt = new Map();
@@ -356,7 +380,15 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     const searches = {};
     const searchFor = (gravity, bound) => {
       const key = gravity + ':' + bound;
-      if (!searches[key]) searches[key] = pipeSearch(graph, targets, gravity, bound);
+      if (!searches[key]) {
+        // Searches depend only on the graph, so later runs on this structure reuse them
+        const shareKey = key + ':' + targets.join(',');
+        if (!kept.has(shareKey)) {
+          if (kept.size >= SEARCHES_KEPT) kept.clear();
+          kept.set(shareKey, pipeSearch(graph, targets, gravity, bound));
+        }
+        searches[key] = kept.get(shareKey);
+      }
       return searches[key];
     };
     const bound = (gravity) => Math.max(...candidates.filter(({ from }) => estimate.get(from.id).gravity === gravity).map(({ from, out }) => estimate.get(from.id).head - mainRise(from, out) * HEAD_PER_STORY_UP)) + SEARCH_SLACK;
@@ -377,6 +409,7 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
       const size = { flat: head.flat, up: Math.round((head.up + mainRise(option.from, option.out)) * 1e6) / 1e6 };
       if (linkHead(estimate.get(option.from.id).head, estimate.get(option.from.id).gravity, size).left < 0) continue;
       const inlet = waterPorts[path.end];
+      if (cuts.size > 0 && cuts.has(pairKeyOf(option.out, inlet))) continue;
       return { ...option, inlet, size, route: { points: path.points, spans: path.spans, length: pathLength(path.points) }, need };
     }
     // Nothing runs: out of head when a wall route exists, else no wall route
@@ -413,6 +446,22 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
     option.out.left--;
     option.inlet.left--;
     links.push({ id: links.length, from: option.from.id, to: node.id, flat: option.size.flat, up: option.size.up, length: option.route.length, port: option.inlet.index, fromPort: { module: option.out.module, index: option.out.index }, toPort: { module: option.inlet.module, index: option.inlet.index }, points: option.route.points, spans: option.route.spans });
+  }
+  // Manual pipes first, as given; dropped ones say why
+  const dropped = [];
+  const byPort = new Map(waterPorts.map((port) => [portKeyOf(port), port]));
+  for (const pin of pinned) {
+    const out = byPort.get(portKeyOf(pin.out));
+    const inlet = byPort.get(portKeyOf(pin.in));
+    const from = out && nodes.find((node) => node.outs.includes(out));
+    const to = inlet && nodes.find((node) => node.ins.includes(inlet));
+    const reason = !from || !to ? 'not-water' : from === to ? 'same-part' : downstream(from.id, to.id) ? 'loop' : out.left <= 0 || inlet.left <= 0 ? 'port-full' : null;
+    if (reason) {
+      dropped.push({ pin, reason });
+      continue;
+    }
+    addLink({ from, out, inlet, size: pin.size, route: pin.route, need: to.kind === 'consumer' ? to.demand : Infinity }, to);
+    links[links.length - 1].manual = true;
   }
   // Hubs first, lowest first, then consumers in a seeded order
   const hubs = nodes.filter((node) => (node.kind === 'pump' || node.kind === 'main') && node.ins.length > 0).sort((first, second) => first.level - second.level || first.module - second.module);
@@ -454,5 +503,5 @@ export function planWater(modules, seedText, { ports = structureMounts(modules),
   // Pumps say whether they run
   const pumps = {};
   for (const node of nodes) if (node.row && PUMP_KINDS[byId.get(node.module).family]) pumps[node.module] = { runs: !node.pumpOff, row: node.row };
-  return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report, pumps };
+  return { blocked, nodes: nodes.map(({ id, module, members, kind, level, supply, demand, head, throughput }) => ({ id, module, members, kind, level, supply, demand: demand || 0, head, throughput })), links, solved, consumers: report, pumps, dropped };
 }

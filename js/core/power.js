@@ -18,6 +18,20 @@ const SEARCH_MM = (MAX_REACH + POWER_SHORT_REACH) * CELL_MM; // wire searches st
 const REACH_ROUND = 2; // shortfalls round up to half cells
 const OFFER_BATCH = 4; // waiting nodes a feeder offers to at a time
 const SLACK_TIGHTEN = 4; // halvings of a cable's slack before it is pulled taut
+const SEARCHES_KEPT = 2000; // wire searches kept per structure
+const BLOCKED_KEPT = 20000; // cable collision results kept per structure
+
+// Collision of a cable laid on a route, kept on the graph: it depends only on the route, slack and ends
+function blockedOn(graph, context, route, slack, ends) {
+  const corners = route.pieces.flatMap((piece) => [...piece.points[0], ...piece.points[piece.points.length - 1]]);
+  const key = [route.drape ? 1 : 0, route.length.toFixed(5), slack, ...ends, ...corners.map((value) => value.toFixed(4))].join(',');
+  if (!graph.blocked) graph.blocked = new Map();
+  if (graph.blocked.has(key)) return graph.blocked.get(key);
+  const hit = cableBlocked(context, layCable(route, slack), ends);
+  if (graph.blocked.size >= BLOCKED_KEPT) graph.blocked.clear();
+  graph.blocked.set(key, hit);
+  return hit;
+}
 export const POWER_REASONS = ['out of reach', 'no route', 'source empty', 'relay at throughput', 'no free port', 'blocked by module'];
 
 const toQuarters = (units) => Math.round(units * WATER_QUARTERS);
@@ -141,16 +155,54 @@ export function powerStatus(node, solved, links, fail) {
 const placeKey = (instance) => `${instance.family}:${instance.x},${instance.y},${instance.z}:${instance.rot}`;
 
 // Power network of a structure: a seeded branching tree of wires, flows and diagnostics
-export function planPower(modules, seedText, { ports, context, wheels = {}, pairCap = MAX_WIRES_PER_PAIR, shared = {}, extra = {} }) {
+// Wire surface graph of a structure's power ports, kept in shared; ports get their node and free capacity
+export function powerGraph(modules, ports, context, shared = {}) {
+  const live = ports.filter((port) => port.active && port.type === 'power').map((port) => ({ ...port, left: port.capacity }));
+  if (!shared.graph) shared.graph = wireGraph(modules, live, context);
+  live.forEach((port, index) => {
+    port.node = shared.graph.portNodes[index];
+  });
+  return { graph: shared.graph, live };
+}
+
+export const MANUAL_REACH = MAX_REACH; // longest manual wire, cells
+const portKeyOf = (port) => port.module + ':' + port.index;
+const pairKeyOf = (first, second) => [portKeyOf(first), portKeyOf(second)].sort().join('|');
+
+// Shortest clear wire between two given ports by the auto rules: {route, cells} or {fail, blocked}
+export function wireBetween(graph, context, from, to, limitMm = MANUAL_REACH * CELL_MM) {
+  const options = [];
+  if (from.node !== null && to.node !== null) {
+    const search = wireSearch(graph, context, [from.node], limitMm);
+    if (search.reached(to.node)) {
+      const path = wirePath(graph, search, to.node);
+      options.push({ pieces: [...path.pieces].reverse().map((piece) => ({ ...piece, points: [...piece.points].reverse() })), length: path.length });
+    }
+  }
+  options.push(drapeRoute(from, to));
+  options.sort((first, second) => first.length - second.length);
+  let blocked = null;
+  for (const route of options) {
+    if (route.length > limitMm + 1e-9) continue;
+    const hit = blockedOn(graph, context, route, 0, [from.module, to.module]);
+    if (hit) {
+      blocked = blocked || { route, hit };
+      continue;
+    }
+    return { route, cells: route.length / CELL_MM };
+  }
+  if (blocked) return { fail: 'blocked', blocked };
+  return { fail: 'too-long', blocked: { route: options[0], hit: null } };
+}
+
+// pinned: manual wires {a, b, route}; cuts: pair keys never auto-routed
+export function planPower(modules, seedText, { ports, context, wheels = {}, pairCap = MAX_WIRES_PER_PAIR, shared = {}, extra = {}, pinned = [], cuts = new Set() }) {
   const seed = mixSeed(hashString(String(seedText)), POWER_SEED);
   const localRng = (key) => makeRng(mixSeed(seed, hashString(key)));
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
-  const live = ports.filter((port) => port.active && port.type === 'power').map((port) => ({ ...port, left: port.capacity }));
-  if (!shared.graph) shared.graph = wireGraph(modules, live, context);
-  const graph = shared.graph;
-  live.forEach((port, index) => {
-    port.node = graph.portNodes[index];
-  });
+  const { graph, live } = powerGraph(modules, ports, context, shared);
+  if (!shared.searches) shared.searches = new Map();
+  const kept = shared.searches;
   // One node per module with a role; junction boxes are relays of their own
   const nodes = [];
   for (const instance of modules) {
@@ -180,7 +232,15 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     const bound = Math.min(SEARCH_MM, Math.ceil(reach) * CELL_MM);
     const known = searches.get(key);
     if (known && known.bound >= bound) return known;
-    const fresh = { free, bound, search: free.length > 0 ? wireSearch(graph, context, free.map((port) => port.node), bound) : null };
+    // Searches depend only on the graph, so later runs on this structure reuse them
+    const shareKey = free.map((port) => port.node).join(',');
+    const shared = kept.get(shareKey);
+    const search = free.length === 0 ? null : shared && shared.bound >= bound ? shared.search : wireSearch(graph, context, free.map((port) => port.node), bound);
+    if (search && !(shared && shared.bound >= bound)) {
+      if (kept.size >= SEARCHES_KEPT) kept.clear();
+      kept.set(shareKey, { bound, search });
+    }
+    const fresh = { free, bound: search && shared && shared.bound >= bound ? shared.bound : bound, search };
     searches.set(key, fresh);
     return fresh;
   };
@@ -215,8 +275,9 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
         const pieces = [...path.pieces].reverse().map((piece) => ({ ...piece, points: [...piece.points].reverse() }));
         route = { pieces, length: path.length };
       } else route = drapeRoute(fromPort, option.toPort);
+      if (cuts.size > 0 && cuts.has(pairKeyOf(fromPort, option.toPort))) continue;
       // A route counts when the cable pulled taut is clear; slack is fitted later
-      const hit = cableBlocked(context, layCable(route, 0), [from.module, to.module]);
+      const hit = blockedOn(graph, context, route, 0, [from.module, to.module]);
       if (hit) {
         blocked = blocked || { route, fromPort, toPort: option.toPort, hit };
         continue;
@@ -264,9 +325,12 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     if (from.pending <= 0) offer(from);
   };
   function connect(from, to, found) {
-    found.fromPort.left--;
-    found.toPort.left--;
-    const link = { id: links.length, from: from.id, to: to.id, length: roundReach(found.cells), port: found.toPort.module * 1000 + found.toPort.index, fromPort: found.fromPort, toPort: found.toPort, route: found.route };
+    if (!found.pin) {
+      found.fromPort.left--;
+      found.toPort.left--;
+    }
+    const link = { id: links.length, from: from.id, to: to.id, length: roundReach(found.cells), port: found.toPort.module * 1000 + found.toPort.index, fromPort: found.fromPort, toPort: found.toPort, route: found.route, ...(found.pin ? { manual: true } : {}) };
+    if (found.pin) found.pin.linked = true;
     links.push(link);
     from.out.push(link);
     to.in.push(link);
@@ -276,7 +340,35 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     const above = pools.get(from.id);
     pools.set(to.id, to.kind === 'relay' ? [...above, { spare: to.throughput }] : above);
     if (to.kind === 'consumer') for (const pool of above) pool.spare -= to.demand / POWER_OVERBOOK;
+    pinFrom(to);
     offer(to);
+  }
+  // Manual wires: ports held first; a wire carries power once either end has it, within reach
+  const nodeOfPort = (port) => nodes.find((node) => node.ports.includes(port)) || null;
+  const pins = [];
+  const dropped = [];
+  for (const pin of pinned) {
+    const first = live.find((port) => portKeyOf(port) === portKeyOf(pin.a));
+    const second = live.find((port) => portKeyOf(port) === portKeyOf(pin.b));
+    const ends = [first && nodeOfPort(first), second && nodeOfPort(second)];
+    const reason = !ends[0] || !ends[1] ? 'not-power' : ends[0] === ends[1] ? 'same-part' : first.left <= 0 || second.left <= 0 ? 'port-full' : null;
+    if (reason) {
+      dropped.push({ pin, reason });
+      continue;
+    }
+    first.left--;
+    second.left--;
+    pins.push({ ports: [first, second], ends, route: pin.route, cells: pin.route.length / CELL_MM, linked: false });
+  }
+  function pinFrom(node) {
+    for (const pin of pins) {
+      if (pin.linked) continue;
+      const side = pin.ends.indexOf(node);
+      if (side < 0) continue;
+      const other = pin.ends[1 - side];
+      if (other.kind === 'source' || other.connected || pin.cells > node.reachLeft + 1e-9 || !pools.get(node.id).every((pool) => pool.spare > 0)) continue;
+      connect(node, other, { fromPort: pin.ports[side], toPort: pin.ports[1 - side], route: pin.route, cells: pin.cells, pin });
+    }
   }
   for (const node of nodes) {
     if (node.kind !== 'source') continue;
@@ -285,6 +377,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     pools.set(node.id, [{ spare: node.supply }]);
   }
   for (const node of nodes) if (node.kind === 'relay') node.throughput = node.throughput || 0;
+  for (const node of nodes) if (node.kind === 'source') pinFrom(node);
   for (const node of nodes) if (node.kind === 'source') offer(node);
   // Cheapest link first; routes are found when an entry first comes up
   while (heap.size > 0) {
@@ -355,7 +448,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     for (const { from, route } of drapes) {
       const short = route.length / CELL_MM - from.reachLeft;
       if (short >= best) break;
-      if (!cableBlocked(context, layCable(route, 0), [from.module, node.module])) best = short;
+      if (!blockedOn(graph, context, route, 0, [from.module, node.module])) best = short;
     }
     return best;
   };
@@ -393,7 +486,14 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
   const cables = [];
   const perPair = new Map();
   const pairOf = (link) => [link.fromPort.module + ':' + link.fromPort.index, link.toPort.module + ':' + link.toPort.index].sort().join('|');
+  // Manual wires first, one cable each, so the pair cap counts them; unpowered ones hang too
+  const manualLinks = [...links.filter((link) => link.manual), ...pins.filter((pin) => !pin.linked).map((pin) => ({ id: -1, fromPort: pin.ports[0], toPort: pin.ports[1], route: pin.route, manual: true, idle: true }))];
+  for (const link of manualLinks) {
+    perPair.set(pairOf(link), (perPair.get(pairOf(link)) || 0) + 1);
+    cables.push({ link, laid: layCable(link.route, 0) });
+  }
   for (const link of links) {
+    if (link.manual) continue;
     const rng = localRng(nodes.find((node) => node.id === link.from).key + '~' + nodes.find((node) => node.id === link.to).key);
     const count = rng.int(WIRE_CABLES[0], WIRE_CABLES[1]);
     for (let cable = 0; cable < count; cable++) {
@@ -402,11 +502,11 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
       // Seeded slack, pulled tighter in halves until the cable hangs clear
       let slack = rng.range(WIRE_SLACK[0], WIRE_SLACK[1]);
       let laid = layCable(link.route, slack);
-      for (let tighten = 0; tighten < SLACK_TIGHTEN && cableBlocked(context, laid, ends); tighten++) {
+      for (let tighten = 0; tighten < SLACK_TIGHTEN && blockedOn(graph, context, link.route, slack, ends); tighten++) {
         slack = tighten === SLACK_TIGHTEN - 1 ? 0 : slack / 2;
         laid = layCable(link.route, slack);
       }
-      if (cableBlocked(context, laid, ends)) continue;
+      if (blockedOn(graph, context, link.route, slack, ends)) continue;
       perPair.set(pairOf(link), (perPair.get(pairOf(link)) || 0) + 1);
       cables.push({ link, laid });
     }
@@ -424,7 +524,7 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
   const strings = cables.map(({ link, laid }) => {
     const { points, spans } = cablePoints(laid);
     const pieces = laid.pieces.map(({ kind, points: piecePoints, cable }) => ({ kind, points: piecePoints, cable }));
-    return makeString('wire', link.fromPort, link.toPort, points, { spans, link: link.id, slack: laid.slack, total: laid.total, pieces, conduit: pieces.some((piece) => piece.kind === 'run') });
+    return makeString('wire', link.fromPort, link.toPort, points, { spans, link: link.id, slack: laid.slack, total: laid.total, pieces, conduit: pieces.some((piece) => piece.kind === 'run'), ...(link.manual ? { manual: true, idle: !!link.idle } : {}) });
   });
   const blocked = nodes.filter((node) => node.in.length === 0 && node.blocked).map((node) => ({ ...makeString('wire', node.blocked.fromPort, node.blocked.toPort, cablePoints(layCable(node.blocked.route, MID_SLACK)).points), blocked: node.blocked.hit }));
   const powered = [...new Set(nodes.filter((node) => (node.kind === 'source' && node.supply > 0) || (node.kind === 'relay' && solved.nodes[node.id].received > 0) || (node.kind === 'consumer' && report[node.module].status === 'full')).map((node) => node.module))].sort((first, second) => first - second);
@@ -436,5 +536,6 @@ export function planPower(modules, seedText, { ports, context, wheels = {}, pair
     cables: strings,
     powered,
     blocked,
+    dropped,
   };
 }

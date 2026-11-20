@@ -14,6 +14,7 @@ import { powerRole } from './power.js';
 import { makeRng, mixSeed, hashString } from './rng.js';
 import { rollResident, evaluateResidents, structureResults, residentExtras, traitsOf, isHome } from './residents.js';
 import { scoreLayout } from './scoring.js';
+import { parseWiring, wiringEmpty, wiringProblems, serviceBase, baseFrom } from './wiring.js';
 
 const PUZZLE_SALT = 0x9a221e; // keeps puzzle rolls apart from the generator
 const PAR_SALT = 0x9a2; // keeps par search rolls apart
@@ -94,9 +95,12 @@ export function layoutModules(puzzle, layout) {
 const cellOk = (entry) => Array.isArray(entry.cell) && entry.cell.length === 3 && entry.cell.every(Number.isInteger) && Number.isInteger(entry.rot);
 
 // Validity of a submitted layout: anchors kept, tray counts, placement, stability, homes with room
-export function validateLayout(puzzle, layout) {
+// baseOf: makes or finds the serviceBase of the layout's modules
+export function validateLayout(puzzle, layout, { baseOf = serviceBase } = {}) {
   const problems = [];
   if (!layout || !Array.isArray(layout.pieces) || !layout.residents || typeof layout.residents !== 'object') return { ok: false, problems: ['bad-layout'] };
+  const wiring = parseWiring(layout.wires);
+  if (!wiring) return { ok: false, problems: ['bad-layout'] };
   if (layout.site !== undefined && (!layout.site || typeof layout.site !== 'object')) return { ok: false, problems: ['bad-layout'] };
   const siteById = new Map(puzzle.site.map((instance) => [instance.id, instance]));
   const anchors = anchorIds(puzzle.site);
@@ -135,6 +139,8 @@ export function validateLayout(puzzle, layout) {
     count.set(home, (count.get(home) || 0) + 1);
     if (count.get(home) > residentCapacity(instance)) problems.push('home-full');
   }
+  // Manual strings re-checked by the same rules as automatic ones
+  if (!wiringEmpty(wiring) && wiringProblems(baseOf(modules), wiring).length > 0) problems.push('bad-wire');
   return { ok: problems.length === 0, problems: [...new Set(problems)] };
 }
 
@@ -143,20 +149,24 @@ const assignmentsOf = (puzzle, layout) => Object.fromEntries(puzzle.residents.ma
 const trayTotal = (puzzle) => puzzle.tray.reduce((sum, entry) => sum + entry.count, 0);
 
 // Cache key of a structure with its residents' extra demand
-export const layoutKey = (layout, extra) => JSON.stringify([layout.pieces, layout.site || null, extra]);
+export const layoutKey = (layout, extra) => JSON.stringify([layout.pieces, layout.site || null, extra, layout.wires || null]);
+// Cache key of the structure alone, for its service base
+export const structureKey = (layout) => JSON.stringify([layout.pieces, layout.site || null]);
 const keyOf = (puzzle, layout) => layoutKey(layout, residentExtras(puzzle.residents, assignmentsOf(puzzle, layout)));
 
 // Scores a layout; cache maps a structure and extras key to its results
 export function scorePuzzleLayout(puzzle, layout, { cache = null, par = puzzle.par ? puzzle.par.points : 0 } = {}) {
-  const validity = validateLayout(puzzle, layout);
+  const baseOf = (modules) => baseFrom(cache, structureKey(layout), modules);
+  const validity = validateLayout(puzzle, layout, { baseOf });
   if (!validity.ok) return { valid: false, problems: validity.problems, score: null, evaluations: [] };
   const modules = layoutModules(puzzle, layout);
+  const base = layout.wires ? baseOf(modules) : null;
   const assignments = assignmentsOf(puzzle, layout);
   const extra = residentExtras(puzzle.residents, assignments);
   const key = layoutKey(layout, extra);
   let results = cache && cache.get(key);
   if (!results) {
-    results = structureResults(modules, puzzle.seed, extra);
+    results = structureResults(modules, puzzle.seed, extra, { wiring: layout.wires || null, base });
     if (cache) cache.set(key, results);
   }
   const evaluations = evaluateResidents(modules, results, puzzle.residents, assignments);
