@@ -112,13 +112,13 @@ function partsInMetres(params, joints) {
     feature({ kind: 'capsule', a: add(c, [-R * 0.14, -R * 0.97, R * 0.13]), b: add(c, [R * 0.14, -R * 0.97, R * 0.13]), r: R * 0.04 });
   }
   if (params.feature === 'cap') {
-    feature({ kind: 'dome', c: add(c, [0, 0, R * 0.12]), r: R * 1.02, h: R * 0.95 }, 'item');
-    feature({ kind: 'box', c: add(c, [0, -R * 1.02, R * 0.16]), size: [R * 1.1, R * 0.75, R * 0.07] }, 'item');
+    feature({ kind: 'dome', c: add(c, [0, 0, R * 0.32]), r: R * 0.97, h: R * 0.78 }, 'item');
+    feature({ kind: 'box', c: add(c, [0, -R * 0.98, R * 0.36]), size: [R * 1.05, R * 0.7, R * 0.07] }, 'item');
   }
   if (params.feature === 'beanie') {
-    feature({ kind: 'dome', c: add(c, [0, 0, R * 0.22]), r: R * 1.04, h: R * 1.02 }, 'item');
-    feature({ kind: 'ring', c: add(c, [0, 0, R * 0.26]), r: R * 1.0, tube: R * 0.12, axis: [0, 0, 1] }, 'item');
-    feature({ kind: 'sphere', c: add(c, [0, 0, R * 1.3]), r: R * 0.2 }, 'item');
+    feature({ kind: 'dome', c: add(c, [0, 0, R * 0.3]), r: R * 1.0, h: R * 0.9 }, 'item');
+    feature({ kind: 'ring', c: add(c, [0, 0, R * 0.32]), r: R * 0.96, tube: R * 0.12, axis: [0, 0, 1] }, 'item');
+    feature({ kind: 'sphere', c: add(c, [0, 0, R * 1.26]), r: R * 0.2 }, 'item');
   }
   if (params.feature === 'bun') feature({ kind: 'sphere', c: add(c, [0, R * 0.5, R * 0.78]), r: R * 0.36 });
   if (params.feature === 'ponytail') {
