@@ -14,6 +14,7 @@ import { STATE_NORMAL, STATE_SELECTED, STATE_HIGHLIGHT, sharedUniforms } from '.
 import { createInspector } from './ui/inspector.js';
 import { setupExport } from './ui/exportpanel.js';
 import { setupCollection } from './ui/collection.js';
+import { confirmAt } from './ui/confirm.js';
 import { setupBuild } from './ui/build.js';
 import { setupPhysics } from './ui/physics.js';
 import { setupToggles, bindToggle } from './ui/toggles.js';
@@ -615,6 +616,13 @@ puzzle.submit.addEventListener('click', () => {
   results.open(report, game, saved.stored ? '' : COPY.resultsSaveFailed);
 });
 puzzle.onGame(() => results.close());
+// Reset puzzle: the starting site, tray and residents, after a confirm
+const resetButton = query('#buildReset');
+resetButton.addEventListener('click', async () => {
+  if (!app.game || !(await confirmAt(resetButton, COPY.confirmReset, COPY.resetPuzzle))) return;
+  residentPanel.cancel();
+  puzzle.restart();
+});
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
 // Budget: Build's cap and the module count follow the control

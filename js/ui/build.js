@@ -154,6 +154,15 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     if (build.modules.length === 0 || !(await confirmAt(clearButton, COPY.confirmClear, COPY.clear))) return;
     if (build.clear()) step(true);
   });
+  // Back to the last generated or grown structure, as one undo step
+  let generated = null;
+  const generatedButton = query('#buildGenerated');
+  generatedButton.addEventListener('click', () => {
+    if (!generated || tray) return;
+    build.setStream(generated.stream);
+    build.replace(generated.modules);
+    step(true);
+  });
   query('#buildRotate').addEventListener('click', rotate);
   query('#buildDelete').addEventListener('click', remove);
   query('#buildReturn').addEventListener('click', remove);
@@ -265,6 +274,8 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     adopt(modules, stream = null) {
       build.setStream(stream);
       build.replace(modules);
+      generated = { modules: modules.map((instance) => ({ ...instance })), stream };
+      generatedButton.disabled = false;
       refreshButtons();
     },
     // Picks up a copy of a placed module, not saved to the Collection
