@@ -4,6 +4,7 @@ import { normalizeVariant } from '../js/core/catalog.js';
 import { analyze } from '../js/core/analysis.js';
 import { walkingNetwork } from '../js/core/walking.js';
 import { evaluateResidents, residentExtras, rollResident, conflicting, traitsOf } from '../js/core/residents.js';
+import { NAME_EGGS } from '../js/core/names.js';
 
 // Hand-built structures through the real analysis and walking passes; solver and light reports by hand
 const part = (id, family, fp, h, x, y, z, rot = 0) => ({ ...normalizeVariant({ family, fp, h, seed: 3, mask: 15, roof: false }), id, x, y, z, rot });
@@ -160,7 +161,7 @@ test('the conflict table keeps contradictions off one resident', () => {
     assert.ok(resident.wants.length >= 1 && resident.wants.length <= 4 && resident.hates.length <= 2, `${seed} counts`);
     for (const [index, first] of traits.entries()) for (const second of traits.slice(index + 1)) assert.ok(!conflicting(first, second), `${seed} ${first.id} ${second.id}`);
     if (!preset) assert.ok(!resident.wants.some((trait) => trait.id === 'stay' || trait.id === 'move'), `${seed} stay or move without a start`);
-    assert.ok(typeof resident.name === 'string' && resident.name.includes(' '));
+    assert.ok(typeof resident.name === 'string' && (resident.name.includes(' ') || NAME_EGGS.includes(resident.name)));
   }
   assert.deepEqual(rollResident(5, 'r1', { amenities: ['gym'] }), rollResident(5, 'r1', { amenities: ['gym'] }));
 });

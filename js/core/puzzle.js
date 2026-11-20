@@ -388,7 +388,8 @@ function tryPuzzle(seed) {
   // Traits roll first from every amenity type; what they name joins the tray after
   let chosen = null;
   for (let attempt = 0; attempt < PUZZLE_TRAIT_TRIES && !chosen; attempt++) {
-    const residents = ids.map((id, index) => rollResident(mixSeed(hashString(seed), attempt), id, { amenities: AMENITY_TYPES, others: ids.filter((other) => other !== id), start: index < presets ? answerLayout.residents[id] : null }));
+    const residents = [];
+    for (const [index, id] of ids.entries()) residents.push(rollResident(mixSeed(hashString(seed), attempt), id, { amenities: AMENITY_TYPES, others: ids.filter((other) => other !== id), names: residents.map((resident) => resident.name), start: index < presets ? answerLayout.residents[id] : null }));
     if (!residents.every((resident) => traitsOf(resident).length > 0)) continue;
     const added = missingPieces(makeRng(mixSeed(hashString(seed), attempt + ADDED_SALT)), residents, answer.modules);
     if (removed.length + added.length > PUZZLE_TRAY_CARDS[1]) continue;

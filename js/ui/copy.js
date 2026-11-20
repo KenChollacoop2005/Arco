@@ -336,6 +336,8 @@ export const COPY = {
   residentHappy: 'Perfectly happy',
   residentMove: 'Move',
   residentSave: 'Save',
+  residentBack: 'Back to tray',
+  residentBackDone: 'is back in the Residents box.',
   residentSaved: 'Saved to the Collection.',
   residentAlreadySaved: 'Already in the Collection.',
   residentStoreFull: 'Could not write to browser storage (full or blocked). This resident stays until you close this page.',

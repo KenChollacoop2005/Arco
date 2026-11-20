@@ -108,7 +108,7 @@ export function rollSandboxResident(seedText, records, amenities) {
   while (taken.has(SANDBOX_PREFIX + count)) count++;
   const id = SANDBOX_PREFIX + count;
   const seed = mixSeed(hashString(String(seedText)), hashString(id));
-  return residentRecord(rollResident(seed, id, { amenities, others: records.map((record) => record.id), start: null }), null);
+  return residentRecord(rollResident(seed, id, { amenities, others: records.map((record) => record.id), names: records.map((record) => record.name), start: null }), null);
 }
 
 // Happiness meter: share of wants met, less triggered hates, plus the dream

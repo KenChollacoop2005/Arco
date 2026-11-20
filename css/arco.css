@@ -586,8 +586,8 @@ body[data-mode='collection'] .section-controls { display: none; }
 .resident-panel > .drawer-body { padding-top: 12px; }
 .resident-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px; font: 11px var(--font-mono); color: var(--ink-soft); }
 .resident-nav button { min-width: 30px; padding: 2px 8px; }
-.resident-head { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; }
-.resident-head .resident-portrait { width: 64px; height: 80px; object-fit: contain; }
+.resident-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; }
+.resident-head .resident-portrait { width: 100%; height: auto; aspect-ratio: 140 / 186; object-fit: contain; }
 .resident-title { display: grid; gap: 3px; min-width: 0; }
 .resident-big-name { margin: 0; font: 800 20px/1.05 var(--font-wordmark); letter-spacing: 0.03em; text-transform: uppercase; }
 .resident-where, .resident-points { margin: 0; font-size: 12px; color: var(--ink-soft); }
@@ -605,9 +605,9 @@ body[data-mode='collection'] .section-controls { display: none; }
 .need-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .need-chips .line-reason { flex-basis: 100%; }
 .resident-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.resident-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
-.resident-tools button { padding: 2px 8px; font-size: 11px; }
-.resident-tools .resident-nav { gap: 2px; }
+.resident-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.resident-tools button { padding: 4px 4px; font-size: 11px; white-space: nowrap; }
+.resident-panel .resident-nav { margin-bottom: 8px; }
 .resident-happy { margin: 0; padding: 4px 8px; border: 1px solid var(--pass); color: var(--pass); font-size: 12px; text-align: center; }
 .resident-detail { display: grid; gap: 12px; }
 .archive-residents { display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }

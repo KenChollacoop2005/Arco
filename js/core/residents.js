@@ -158,7 +158,7 @@ function rollTrait(rng, kind, setup, chosen) {
   return null;
 }
 
-// setup: {amenities, others (resident ids), start (home id or null), weights: {want: {id: weight}}}
+// setup: {amenities, others (resident ids), names (others' names), start (home id or null), weights: {want: {id: weight}}}
 export function rollResident(seed, id, setup = {}) {
   const rng = makeRng(mixSeed(seed >>> 0, hashString(String(id))));
   const chosen = [];
@@ -178,7 +178,7 @@ export function rollResident(seed, id, setup = {}) {
   const strip = ({ kind, ...rest }) => rest;
   return {
     id,
-    name: residentName(mixSeed(seed >>> 0, hashString('name:' + id))),
+    name: residentName(mixSeed(seed >>> 0, hashString('name:' + id)), setup.names || []),
     looks: mixSeed(seed >>> 0, LOOKS_SALT + hashString(String(id))),
     needs: ['water', 'power'],
     wants: wants.map(strip),

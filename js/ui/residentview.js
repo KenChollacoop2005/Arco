@@ -161,8 +161,8 @@ function traitLine(kind, trait, judged, nameOf, placed, index) {
 }
 
 // Full detail of one resident, compact; evaluation may be null when unplaced or still scoring
-// stored: a saved resident away from any structure, so no needs or home; top: elements beside the name
-export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null, stored = false, top = [] }) {
+// stored: a saved resident away from any structure, so no needs or home; actions: a row under the head
+export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null, stored = false, actions = null }) {
   body.replaceChildren();
   const placed = record.home !== null && !!evaluation && evaluation.home !== null;
   const head = node('div', 'resident-head');
@@ -170,14 +170,14 @@ export function renderResidentDetail(body, record, evaluation, { portrait, nameO
   image.alt = '';
   image.src = portrait(record);
   const title = node('div', 'resident-title');
-  const nameRow = node('div', 'resident-name-row');
-  nameRow.append(node('h3', 'resident-big-name', record.name), ...top);
-  title.append(nameRow);
-  const where = home ? `${FAMILIES[home.family].label}, ${COPY.residentLevel} ${home.z}` : COPY.residentNotPlaced;
-  if (!stored) title.append(node('p', 'resident-where', placed ? `${where} · ${evaluation.points} ${COPY.residentPoints}` : where));
+  title.append(node('h3', 'resident-big-name', record.name));
+  const where = home ? `${FAMILIES[home.family].label}, ${COPY.residentLevel.toLowerCase()} ${home.z}` : COPY.residentNotPlaced;
+  if (!stored) title.append(node('p', 'resident-where', where));
+  if (!stored && placed) title.append(node('p', 'resident-points', `${evaluation.points} ${COPY.residentPoints}`));
   if (!stored) title.append(meter(placed ? evaluation : null));
   head.append(image, title);
   body.append(head);
+  if (actions) body.append(actions);
   if (!stored) body.append(needChips(record, evaluation, placed));
   const items = node('ul', 'trait-list');
   record.wants.forEach((trait, index) => items.append(traitLine('want', trait, placed ? evaluation.wants[index] : {}, nameOf, placed, index)));

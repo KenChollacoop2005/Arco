@@ -276,13 +276,14 @@
     </section>
     <section class="panel resident-panel" id="residentPanel" aria-label="Resident" hidden>
       <div class="drawer-body">
+        <div class="resident-nav" id="residentNav">
+          <button type="button" class="plain" id="residentPrev" data-copy-title="residentPrev">&lsaquo;</button>
+          <span id="residentPage"></span>
+          <button type="button" class="plain" id="residentNext" data-copy-title="residentNext">&rsaquo;</button>
+        </div>
         <div class="resident-tools" id="residentTools">
-          <div class="resident-nav" id="residentNav" hidden>
-            <button type="button" class="plain" id="residentPrev" data-copy-title="residentPrev">&lsaquo;</button>
-            <span id="residentPage"></span>
-            <button type="button" class="plain" id="residentNext" data-copy-title="residentNext">&rsaquo;</button>
-          </div>
           <button type="button" class="plain" id="residentMove" data-copy="residentMove"></button>
+          <button type="button" class="plain" id="residentBack" data-copy="residentBack"></button>
           <button type="button" class="primary" id="residentSave" data-copy="residentSave"></button>
         </div>
         <div class="resident-detail" id="residentDetail"></div>

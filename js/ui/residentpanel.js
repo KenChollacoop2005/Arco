@@ -20,6 +20,7 @@ export function setupResidentPanel(app, residents, hooks) {
   const nav = query('#residentNav');
   const page = query('#residentPage');
   const moveButton = query('#residentMove');
+  const backButton = query('#residentBack');
   const status = query('#residentStatus');
   const tools = query('#residentTools');
   const records = () => residents.list();
@@ -53,10 +54,11 @@ export function setupResidentPanel(app, residents, hooks) {
     if (!record) return;
     const mates = housemates(record);
     const index = mates.findIndex((mate) => mate.id === record.id);
-    nav.hidden = mates.length < 2;
+    for (const button of nav.querySelectorAll('button')) button.disabled = mates.length < 2;
     page.textContent = `${index + 1} ${COPY.residentOf} ${mates.length}`;
-    renderResidentDetail(detail, record, residents.evaluation(record.id), { portrait, nameOf, home: residents.homeOf(record.id), top: [tools] });
+    renderResidentDetail(detail, record, residents.evaluation(record.id), { portrait, nameOf, home: residents.homeOf(record.id), actions: tools });
     moveButton.disabled = record.home === null || !!placing;
+    backButton.disabled = record.home === null || !!placing;
   }
 
   function render() {
@@ -188,6 +190,15 @@ export function setupResidentPanel(app, residents, hooks) {
     if (record) status.textContent = hooks.save(record);
   });
 
+  // Back to tray: unplaced again, in the Residents box
+  backButton.addEventListener('click', () => {
+    const record = recordOf(residents.selected());
+    if (!record || record.home === null || placing) return;
+    if (!residents.assign(record.id, null)) return;
+    status.textContent = '';
+    boxStatus.textContent = `${record.name} ${COPY.residentBackDone}`;
+    residents.select(record.id);
+  });
   moveButton.addEventListener('click', () => {
     const record = recordOf(residents.selected());
     if (record && record.home !== null) start(record, 'move');
