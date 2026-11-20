@@ -54,3 +54,18 @@ test('the figure mesh builds from the parts', async () => {
     assert.ok(Math.abs(box.max.z - figureTop(figure)) < 0.6, `${seed}: top ${box.max.z} against ${figureTop(figure)}`);
   }
 });
+
+test('the portrait sketch outlines every part', async () => {
+  const { sketchShapes } = await import('../js/ui/portrait.js');
+  for (const seed of SEEDS.slice(0, 60)) {
+    const figure = makeFigure(seed);
+    const shapes = sketchShapes(figure);
+    const rings = figure.parts.filter((part) => part.kind === 'ring').length;
+    assert.equal(shapes.length, figure.parts.length + rings);
+    for (const shape of shapes) {
+      assert.ok(shape.points.length >= 3);
+      for (const point of shape.points) assert.ok(point.every(Number.isFinite));
+    }
+    for (let index = 1; index < shapes.length; index++) assert.ok(shapes[index - 1].depth >= shapes[index].depth);
+  }
+});

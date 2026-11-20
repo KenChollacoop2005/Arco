@@ -148,7 +148,7 @@ function partsInMetres(params, joints) {
   sphere(joints.head, headR);
   // Hair shapes sit on the head
   const head = joints.head;
-  const cap = () => sphere(add(head, [0, headR * 0.2, headR * 0.22]), headR * 0.96, 'dark');
+  const cap = () => sphere(add(head, [0, headR * 0.18, headR * 0.34]), headR * 0.95, 'dark');
   if (params.hair === 'short') cap();
   if (params.hair === 'long') {
     cap();
