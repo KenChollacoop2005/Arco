@@ -6,14 +6,37 @@ const LIGHT = [0.35, -0.5, 0.79]; // light direction, toward the light
 const SHADE_BASE = 0.55; // brightness of unlit faces
 const SHADE_LIT = 0.5; // extra brightness facing the light
 const GAMMA = 1 / 2.2; // linear to display
+const GLOSS_STRENGTH = 0.45; // highlight strength on glossy parts
+const GLOSS_POWER = 28; // highlight tightness
+const LIGHT_UNIT = (() => {
+  const length = Math.hypot(...LIGHT);
+  return LIGHT.map((value) => value / length);
+})();
+
+// Camera vectors for a view: toward the viewer, screen right and up
+export function viewBasis({ azimuth = CAMERA_AZIMUTH_DEG, elevation = CAMERA_ELEVATION_DEG } = {}) {
+  const yaw = (azimuth * Math.PI) / 180;
+  const pitch = (elevation * Math.PI) / 180;
+  return {
+    toward: [Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch)],
+    right: [-Math.sin(yaw), Math.cos(yaw), 0],
+    up: [-Math.sin(pitch) * Math.cos(yaw), -Math.sin(pitch) * Math.sin(yaw), Math.cos(pitch)],
+  };
+}
+
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // Small shaded picture of a mesh, RGBA bytes
-export function rasterThumb(positions, index, colors, size) {
-  const azimuth = (CAMERA_AZIMUTH_DEG * Math.PI) / 180;
-  const elevation = (CAMERA_ELEVATION_DEG * Math.PI) / 180;
-  const toward = [Math.cos(elevation) * Math.cos(azimuth), Math.cos(elevation) * Math.sin(azimuth), Math.sin(elevation)];
-  const right = [-Math.sin(azimuth), Math.cos(azimuth), 0];
-  const up = [-Math.sin(elevation) * Math.cos(azimuth), -Math.sin(elevation) * Math.sin(azimuth), Math.cos(elevation)];
+// options: height (px), view {azimuth, elevation}, bounds {minX, maxX, minY, maxY} in view units,
+// normals (smooth shading), gloss (per vertex 0 or 1), pattern {uvs, mask, sample(u, v) linear rgb}
+export function rasterThumb(positions, index, colors, size, options = {}) {
+  const { toward, right, up } = viewBasis(options.view);
+  const width = size;
+  const height = options.height || size;
+  const half = [toward[0] + LIGHT_UNIT[0], toward[1] + LIGHT_UNIT[1], toward[2] + LIGHT_UNIT[2]];
+  const halfLength = Math.hypot(...half);
+  const halfway = half.map((value) => value / halfLength);
+  const { normals, gloss, pattern } = options;
   const count = positions.length / 3;
   const screen = new Float32Array(count * 3);
   let minX = Infinity;
@@ -34,17 +57,19 @@ export function rasterThumb(positions, index, colors, size) {
     minY = Math.min(minY, flatY);
     maxY = Math.max(maxY, flatY);
   }
-  const fine = size * SAMPLES;
-  const span = Math.max(maxX - minX, maxY - minY, 1e-6);
-  const scale = (fine * (1 - 2 * PADDING)) / span;
-  const shiftX = (fine - (maxX - minX) * scale) / 2;
-  const shiftY = (fine - (maxY - minY) * scale) / 2;
+  if (options.bounds) ({ minX, maxX, minY, maxY } = options.bounds);
+  const fineX = width * SAMPLES;
+  const fineY = height * SAMPLES;
+  const scale = Math.min((fineX * (1 - 2 * PADDING)) / Math.max(maxX - minX, 1e-6), (fineY * (1 - 2 * PADDING)) / Math.max(maxY - minY, 1e-6));
+  const shiftX = (fineX - (maxX - minX) * scale) / 2;
+  const shiftY = (fineY - (maxY - minY) * scale) / 2;
   for (let vertex = 0; vertex < count; vertex++) {
     screen[vertex * 3] = (screen[vertex * 3] - minX) * scale + shiftX;
-    screen[vertex * 3 + 1] = fine - ((screen[vertex * 3 + 1] - minY) * scale + shiftY);
+    screen[vertex * 3 + 1] = fineY - ((screen[vertex * 3 + 1] - minY) * scale + shiftY);
   }
-  const depth = new Float32Array(fine * fine).fill(-Infinity);
-  const paint = new Float32Array(fine * fine * 3);
+  const depth = new Float32Array(fineX * fineY).fill(-Infinity);
+  const paint = new Float32Array(fineX * fineY * 3);
+  const blend = (field, stride, corners, weights, channel) => field[corners[0] * stride + channel] * weights[0] + field[corners[1] * stride + channel] * weights[1] + field[corners[2] * stride + channel] * weights[2];
   for (let face = 0; face < index.length; face += 3) {
     const cornerA = index[face];
     const cornerB = index[face + 1];
@@ -57,6 +82,9 @@ export function rasterThumb(positions, index, colors, size) {
     const lit = Math.max(0, (normal[0] * LIGHT[0] + normal[1] * LIGHT[1] + normal[2] * LIGHT[2]) / length);
     const shade = SHADE_BASE + SHADE_LIT * lit;
     const tone = [0, 1, 2].map((channel) => ((colors[cornerA * 3 + channel] + colors[cornerB * 3 + channel] + colors[cornerC * 3 + channel]) / 3) * shade);
+    const corners = [cornerA, cornerB, cornerC];
+    const shiny = gloss && gloss[cornerA] > 0;
+    const patterned = pattern && pattern.mask[cornerA] > 0;
     const ax = screen[cornerA * 3];
     const ay = screen[cornerA * 3 + 1];
     const bx = screen[cornerB * 3];
@@ -66,9 +94,9 @@ export function rasterThumb(positions, index, colors, size) {
     const doubled = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     if (doubled === 0) continue;
     const fromX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
-    const toX = Math.min(fine - 1, Math.ceil(Math.max(ax, bx, cx)));
+    const toX = Math.min(fineX - 1, Math.ceil(Math.max(ax, bx, cx)));
     const fromY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
-    const toY = Math.min(fine - 1, Math.ceil(Math.max(ay, by, cy)));
+    const toY = Math.min(fineY - 1, Math.ceil(Math.max(ay, by, cy)));
     for (let pixelY = fromY; pixelY <= toY; pixelY++) {
       for (let pixelX = fromX; pixelX <= toX; pixelX++) {
         const sampleX = pixelX + 0.5;
@@ -78,30 +106,42 @@ export function rasterThumb(positions, index, colors, size) {
         const weightC = 1 - weightA - weightB;
         if (weightA < 0 || weightB < 0 || weightC < 0) continue;
         const near = weightA * screen[cornerA * 3 + 2] + weightB * screen[cornerB * 3 + 2] + weightC * screen[cornerC * 3 + 2];
-        const spot = pixelY * fine + pixelX;
+        const spot = pixelY * fineX + pixelX;
         if (near <= depth[spot]) continue;
         depth[spot] = near;
-        paint[spot * 3] = tone[0];
-        paint[spot * 3 + 1] = tone[1];
-        paint[spot * 3 + 2] = tone[2];
+        if (!normals) {
+          paint[spot * 3] = tone[0];
+          paint[spot * 3 + 1] = tone[1];
+          paint[spot * 3 + 2] = tone[2];
+          continue;
+        }
+        // Smooth shading from blended normals, a highlight on glossy parts
+        const weights = [weightA, weightB, weightC];
+        const smooth = [0, 1, 2].map((axis) => blend(normals, 3, corners, weights, axis));
+        const smoothLength = Math.hypot(...smooth) || 1;
+        const facing = smooth.map((value) => value / smoothLength);
+        const light = SHADE_BASE + SHADE_LIT * Math.max(0, dot(facing, LIGHT_UNIT));
+        const base = patterned ? pattern.sample(blend(pattern.uvs, 2, corners, weights, 0), blend(pattern.uvs, 2, corners, weights, 1)) : [0, 1, 2].map((channel) => blend(colors, 3, corners, weights, channel));
+        const highlight = shiny ? GLOSS_STRENGTH * Math.pow(Math.max(0, dot(facing, halfway)), GLOSS_POWER) : 0;
+        for (let channel = 0; channel < 3; channel++) paint[spot * 3 + channel] = base[channel] * light + highlight;
       }
     }
   }
-  const pixels = new Uint8ClampedArray(size * size * 4);
-  for (let pixelY = 0; pixelY < size; pixelY++) {
-    for (let pixelX = 0; pixelX < size; pixelX++) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let pixelY = 0; pixelY < height; pixelY++) {
+    for (let pixelX = 0; pixelX < width; pixelX++) {
       const sum = [0, 0, 0];
       let covered = 0;
       for (let stepY = 0; stepY < SAMPLES; stepY++) {
         for (let stepX = 0; stepX < SAMPLES; stepX++) {
-          const spot = (pixelY * SAMPLES + stepY) * fine + pixelX * SAMPLES + stepX;
+          const spot = (pixelY * SAMPLES + stepY) * fineX + pixelX * SAMPLES + stepX;
           if (depth[spot] === -Infinity) continue;
           covered++;
           for (let channel = 0; channel < 3; channel++) sum[channel] += paint[spot * 3 + channel];
         }
       }
       if (covered === 0) continue;
-      const out = (pixelY * size + pixelX) * 4;
+      const out = (pixelY * width + pixelX) * 4;
       for (let channel = 0; channel < 3; channel++) {
         pixels[out + channel] = 255 * Math.pow(Math.min(1, sum[channel] / covered), GAMMA);
       }

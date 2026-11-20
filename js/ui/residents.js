@@ -29,10 +29,9 @@ export function setupResidents(app, { marks, scorer }) {
     for (const listener of listeners) listener();
   }
 
-  // Pins for occupied homes, the figure for the selected resident
+  // Pins for occupied homes; the selected resident's pin pulses
   function refreshMarks() {
     const pins = [];
-    let stand = null;
     const homes = [...new Set(records.map((record) => record.home).filter((home) => home !== null))];
     for (const home of homes) {
       const instance = byId(home);
@@ -40,13 +39,10 @@ export function setupResidents(app, { marks, scorer }) {
       const living = occupantsOf(records, home).filter((record) => record.id !== hidden);
       living.forEach((record, slot) => {
         const spot = homeSpot(instance, app.analysis, slot, living.length);
-        pins.push({ point: spot.pin, color: figureOf(record).params.accent });
-        if (record.id === selected) stand = spot;
+        pins.push({ point: spot.pin, color: figureOf(record).params.accent, selected: record.id === selected });
       });
     }
     marks.setPins(pins);
-    const record = records.find((entry) => entry.id === selected);
-    marks.setFigure(record && stand && record.id !== hidden ? figureOf(record) : null, stand ? stand.stand : null, stand ? stand.facing : 0);
     marks.setShown(shown());
   }
 
@@ -142,7 +138,7 @@ export function setupResidents(app, { marks, scorer }) {
       setRecords([...records, record]);
       return record;
     },
-    // Hides one resident's pin and figure while they are carried
+    // Hides one resident's pin while they are carried
     hide(id) {
       hidden = id;
       refreshMarks();

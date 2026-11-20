@@ -133,8 +133,9 @@ export function createShowroom(canvas, reducedMotion) {
   function dropPiece() {
     if (!piece) return;
     scene.remove(piece);
-    piece.geometry.dispose();
+    if (piece.geometry) piece.geometry.dispose();
     if (piece.dispose) piece.dispose();
+    if (piece.userData.dispose) piece.userData.dispose();
     piece = null;
   }
 

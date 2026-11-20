@@ -1,60 +1,78 @@
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { FIGURE_BODY_COLOR, FIGURE_DARK_COLOR } from '../config.js';
+import { figureBatches, patternAt } from '../core/figuremesh.js';
 
-const LEAF_COLOR = 0x6f8f5e; // plant leaves
-const CAPSULE_SEGMENTS = [3, 8]; // cap and radial segments
-const SPHERE_SEGMENTS = [10, 8]; // width and height segments
-const CONE_SEGMENTS = 12; // cone and disc roundness
-const RING_SEGMENTS = [6, 20]; // tube and ring segments
-const ROUGHNESS = 1; // matte like a card model
-const UP = new THREE.Vector3(0, 1, 0);
+const MATTE_ROUGHNESS = 0.85; // painted wood body
+const GLOSS_ROUGHNESS = 0.28; // glossy head and hands
+const PATTERN_PX = 128; // pattern texture edge
 
-const vector = (point) => new THREE.Vector3(...point);
-
-// Geometry of one part, already in place
-function partGeometry(part) {
-  if (part.kind === 'sphere') return new THREE.SphereGeometry(part.r, ...SPHERE_SEGMENTS).translate(...part.c);
-  if (part.kind === 'box') return new THREE.BoxGeometry(...part.size).translate(...part.c);
-  if (part.kind === 'ring') {
-    const geometry = new THREE.TorusGeometry(part.r, part.tube, ...RING_SEGMENTS);
-    geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), vector(part.axis).normalize()));
-    return geometry.translate(...part.c);
-  }
-  const from = vector(part.a);
-  const to = vector(part.b);
-  const length = Math.max(1e-3, from.distanceTo(to));
-  const geometry = part.kind === 'capsule' ? new THREE.CapsuleGeometry(part.r, length, ...CAPSULE_SEGMENTS) : new THREE.CylinderGeometry(part.r2, part.r1, length, CONE_SEGMENTS);
-  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, to.clone().sub(from).normalize()));
-  return geometry.translate(...from.add(to).multiplyScalar(0.5).toArray());
+// Buffer geometry from one batch of triangles
+function batchGeometry(batch) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(batch.normals, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(batch.colors, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(batch.uvs, 2));
+  geometry.setIndex(batch.index);
+  geometry.computeBoundingSphere();
+  return geometry;
 }
 
-// One merged geometry with a vertex colour per part
-export function figureGeometry(figure) {
-  const colors = { body: new THREE.Color(FIGURE_BODY_COLOR), dark: new THREE.Color(FIGURE_DARK_COLOR), leaf: new THREE.Color(LEAF_COLOR), accent: new THREE.Color(figure.params.accent) };
-  const positions = [];
-  const normals = [];
-  const shades = [];
-  for (const part of figure.parts) {
-    const geometry = partGeometry(part).toNonIndexed();
-    const color = colors[part.color];
-    positions.push(...geometry.getAttribute('position').array);
-    normals.push(...geometry.getAttribute('normal').array);
-    for (let index = 0; index < geometry.getAttribute('position').count; index++) shades.push(color.r, color.g, color.b);
-    geometry.dispose();
+// Stripes or dots painted from the shared pattern rule
+function patternTexture(pattern) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = PATTERN_PX;
+  const context = canvas.getContext('2d');
+  const image = context.createImageData(PATTERN_PX, PATTERN_PX);
+  for (let y = 0; y < PATTERN_PX; y++) {
+    for (let x = 0; x < PATTERN_PX; x++) {
+      const hex = patternAt(pattern, pattern.base, (x + 0.5) / PATTERN_PX, 1 - (y + 0.5) / PATTERN_PX);
+      const spot = (y * PATTERN_PX + x) * 4;
+      image.data[spot] = (hex >> 16) & 255;
+      image.data[spot + 1] = (hex >> 8) & 255;
+      image.data[spot + 2] = hex & 255;
+      image.data[spot + 3] = 255;
+    }
   }
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  merged.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
-  merged.computeBoundingSphere();
-  return merged;
+  context.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
-export const figureMaterial = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: ROUGHNESS, metalness: 0 });
+export const figureMaterials = () => ({
+  matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: MATTE_ROUGHNESS, metalness: 0 }),
+  gloss: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: GLOSS_ROUGHNESS, metalness: 0 }),
+});
 
-// A figure mesh facing -y, feet at the origin
-export function figureMesh(figure, material = figureMaterial()) {
-  const mesh = new THREE.Mesh(figureGeometry(figure), material);
-  mesh.castShadow = true;
-  return mesh;
+// One group per bone (head, torso, hips, handL, handR), each with its meshes, in model mm
+export function figureBones(figure, materials = figureMaterials()) {
+  const { bones, pattern } = figureBatches(figure);
+  const patternMaterial = pattern ? new THREE.MeshStandardMaterial({ map: patternTexture(pattern), vertexColors: true, roughness: MATTE_ROUGHNESS, metalness: 0 }) : null;
+  const groups = {};
+  for (const [bone, batches] of Object.entries(bones)) {
+    const group = new THREE.Group();
+    for (const [key, batch] of Object.entries(batches)) {
+      if (batch.index.length === 0) continue;
+      const mesh = new THREE.Mesh(batchGeometry(batch), key === 'pattern' ? patternMaterial : materials[key]);
+      mesh.castShadow = true;
+      group.add(mesh);
+    }
+    groups[bone] = group;
+  }
+  return groups;
+}
+
+// A standing figure facing -y, feet at the origin
+export function figureMesh(figure, materials) {
+  const root = new THREE.Group();
+  for (const group of Object.values(figureBones(figure, materials))) root.add(group);
+  root.userData.dispose = () => root.traverse((child) => {
+    if (!child.isMesh) return;
+    child.geometry.dispose();
+    if (child.material.map) {
+      child.material.map.dispose();
+      child.material.dispose();
+    }
+  });
+  return root;
 }

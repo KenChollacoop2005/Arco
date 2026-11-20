@@ -433,8 +433,8 @@ app.analysisListeners.push(refreshParticles);
 app.modeListeners.push(refreshParticles);
 app.structureListeners.push(() => refreshParticles());
 
-// Residents: pins, the selected figure and scores from their own worker
-const residentMarks = createResidentMarks(view);
+// Residents: pins and scores from their own worker
+const residentMarks = createResidentMarks(view, reducedMotion);
 const traitHighlight = createHighlight(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 // In a puzzle the shared puzzle rules score the layout, ids mapped both ways
