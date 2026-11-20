@@ -317,6 +317,7 @@ export const POINTS = {
 // Puzzles: content rules, site split, tray, par search
 export const PUZZLE_FORMAT_VERSION = 1; // puzzle file format
 export const PUZZLE_GENERATOR_VERSION = 2; // puzzle generator rules
+export const DAILY_TEST_MODE = true; // Daily makes a fresh unranked puzzle each time
 export const PUZZLE_MAX_PIECES = 25; // most modules in the answer
 export const PUZZLE_ANSWER = { density: 0, height: 1, daring: 1, theme: 1, services: 'high' }; // Generate choices for the answer
 export const PUZZLE_RESIDENTS = [3, 4]; // residents per puzzle

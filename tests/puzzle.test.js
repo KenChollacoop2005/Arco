@@ -8,7 +8,8 @@ import { generate } from '../js/core/generator.js';
 import { traitsOf } from '../js/core/residents.js';
 import { scoreLayout, residentPoints, unusedPoints, percentOf } from '../js/core/scoring.js';
 import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces, anchorIds, unusedTrayPieces } from '../js/core/puzzle.js';
-import { parsePuzzle, loadDaily, makeDaily, dailyId, easternDate, datesFrom } from '../js/core/daily.js';
+import { parsePuzzle, loadDaily, makeDaily, dailyId, easternDate, datesFrom, dailyFor, TEST_PREFIX } from '../js/core/daily.js';
+import { DAILY_TEST_MODE } from '../js/config.js';
 
 const PUZZLES = new URL('../puzzles/', import.meta.url);
 const files = readdirSync(PUZZLES).filter((name) => name.endsWith('.json')).sort();
@@ -180,6 +181,20 @@ test('missing pieces: a named amenity, a market, a light and a bridge join the t
   const site = [{ family: 'clinic' }, { family: 'floodlight' }, { family: 'walkway' }];
   assert.deepEqual(missingPieces(rng, [resident], site), []);
   assert.deepEqual(missingPieces(rng, [{ wants: [], hates: [{ id: 'dark' }], dream: { id: 'market' } }], []).map((variant) => variant.family), ['lamppost', 'market']);
+});
+
+test('test mode Daily: a fresh unranked puzzle from the given seed, never reading the daily files', async () => {
+  assert.equal(DAILY_TEST_MODE, true);
+  let reads = 0;
+  const readText = async () => {
+    reads += 1;
+    throw new Error('not read in test mode');
+  };
+  const now = new Date('2026-12-19T03:00:00Z');
+  const first = await dailyFor(readText, 'tm-1', now);
+  assert.deepEqual([first.test, first.ranked, first.date, first.seed, first.puzzle.id, reads], [true, false, FAST_DAY, 'tm-1', TEST_PREFIX + 'tm-1', 0]);
+  const other = await dailyFor(readText, 'tm-2', now);
+  assert.notDeepEqual(other.puzzle.residents, first.puzzle.residents);
 });
 
 test('the loader reads today\'s file by the New York date, and generates live and unranked when it is missing', async () => {

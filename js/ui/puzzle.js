@@ -1,4 +1,4 @@
-import { PIECE_ID_BASE } from '../config.js';
+import { PIECE_ID_BASE, DAILY_TEST_MODE } from '../config.js';
 import { COPY } from './copy.js';
 import { makeThumb } from './collection.js';
 import { confirmAt } from './confirm.js';
@@ -65,14 +65,16 @@ export function setupPuzzle(app, hooks) {
     const kind = kindNow();
     const game = games.get(kind);
     intro.replaceChildren();
-    newButton.hidden = kind !== 'infinite' || loading.has(kind);
+    newButton.hidden = !(kind === 'infinite' || (kind === 'daily' && DAILY_TEST_MODE)) || loading.has(kind);
     if (loading.has(kind)) {
       intro.append(node('p', 'puzzle-intro-note', kind === 'daily' ? COPY.puzzleLoadingDaily : COPY.puzzleLoadingInfinite));
       return;
     }
     if (!game) return;
     const count = `${game.puzzle.residents.length} ${COPY.puzzleResidents}`;
-    if (kind === 'daily') {
+    if (kind === 'daily' && game.test) {
+      intro.append(node('strong', 'puzzle-intro-title', COPY.puzzleTest), node('span', 'puzzle-intro-line', `${COPY.puzzleSeed} ${game.seed}`), node('span', 'puzzle-intro-line', count), node('p', 'puzzle-intro-note', COPY.puzzleTestNote));
+    } else if (kind === 'daily') {
       const date = new Date(game.date + 'T00:00:00Z').toLocaleDateString('en-US', DATE_FORMAT);
       intro.append(node('strong', 'puzzle-intro-title', `${COPY.puzzleNumber} #${dailyNumber(game.date)}`), node('span', 'puzzle-intro-line', date), node('span', 'puzzle-intro-line', count));
       if (!game.ranked) intro.append(node('p', 'puzzle-intro-note', COPY.puzzleUnranked));
@@ -146,7 +148,7 @@ export function setupPuzzle(app, hooks) {
       const result = await hooks.loader({ kind, seed });
       if (loading.get(kind) !== token) return;
       const puzzle = result.puzzle;
-      games.set(kind, { kind, puzzle, ranked: result.ranked, date: result.date || null, seed: result.seed || null });
+      games.set(kind, { kind, puzzle, ranked: result.ranked, date: result.date || null, seed: result.seed || null, test: !!result.test });
       const start = puzzleStart(puzzle);
       parked.set(kind, { build: startBuild(puzzle, start.modules), records: start.records, stream: puzzle.stream });
       loading.delete(kind);
@@ -175,7 +177,7 @@ export function setupPuzzle(app, hooks) {
     entered = true;
     const kind = kindNow();
     show(kind);
-    if (!games.has(kind) && !loading.has(kind)) load(kind, kind === 'infinite' ? randomSeedText() : null);
+    if (!games.has(kind) && !loading.has(kind)) load(kind, kind === 'infinite' || DAILY_TEST_MODE ? randomSeedText() : null);
   }
 
   app.modeListeners.push((mode) => {
@@ -190,10 +192,11 @@ export function setupPuzzle(app, hooks) {
     });
   }
   newButton.addEventListener('click', async () => {
-    const game = games.get('infinite');
+    const kind = kindNow();
+    const game = games.get(kind);
     const started = game && app.structure && app.structure.modules.length > game.puzzle.site.length;
     if (started && !(await confirmAt(newButton, COPY.puzzleConfirmNew, COPY.puzzleNew))) return;
-    load('infinite', randomSeedText());
+    load(kind, randomSeedText());
   });
   app.structureListeners.push((result, phase) => {
     if (phase === 'start') refreshTray(result.modules);

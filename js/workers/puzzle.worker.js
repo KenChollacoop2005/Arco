@@ -1,4 +1,4 @@
-import { loadDaily, infinitePuzzle } from '../core/daily.js';
+import { dailyFor, infinitePuzzle } from '../core/daily.js';
 
 // Daily files sit two folders up from this worker
 const readText = async (path) => {
@@ -10,7 +10,7 @@ const readText = async (path) => {
 self.onmessage = async (event) => {
   const { id, kind, seed } = event.data;
   try {
-    const result = kind === 'infinite' ? infinitePuzzle(seed) : await loadDaily(readText);
+    const result = kind === 'infinite' ? infinitePuzzle(seed) : await dailyFor(readText, seed);
     self.postMessage({ id, done: true, result });
   } catch (error) {
     self.postMessage({ id, error: String(error && error.message ? error.message : error) });

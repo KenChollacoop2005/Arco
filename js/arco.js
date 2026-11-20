@@ -561,6 +561,7 @@ setupScoreTab(app, residents, { recordOf, nameOf: residentPanel.nameOf, screenOf
 const puzzleStore = createPuzzleStore(browserStore);
 puzzleStore.load();
 function puzzleStats(game) {
+  if (game.test) return [];
   if (game.kind === 'infinite') {
     const { played, best } = puzzleStore.infiniteStats();
     return [[COPY.resultsPlayed, played], [COPY.resultsBest, best ? `${best.percent}%` : '0%']];
@@ -584,7 +585,8 @@ puzzle.submit.addEventListener('click', () => {
   if (!app.game || !report || !report.valid || report.puzzle !== app.puzzle) return;
   residentPanel.cancel();
   const game = app.game;
-  const saved = game.kind === 'daily' ? puzzleStore.recordDaily(game.date, report.score, game.ranked) : puzzleStore.recordInfinite(game.seed, report.score);
+  // Test mode results are never kept, so streaks stay real
+  const saved = game.test ? { stored: true } : game.kind === 'daily' ? puzzleStore.recordDaily(game.date, report.score, game.ranked) : puzzleStore.recordInfinite(game.seed, report.score);
   results.open(report, game, saved.stored ? '' : COPY.resultsSaveFailed);
 });
 puzzle.onGame(() => results.close());

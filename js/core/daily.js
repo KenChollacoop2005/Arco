@@ -1,10 +1,11 @@
-import { PUZZLE_FORMAT_VERSION } from '../config.js';
+import { PUZZLE_FORMAT_VERSION, DAILY_TEST_MODE } from '../config.js';
 import { generatePuzzle } from './puzzle.js';
 import { randomSeedText } from './rng.js';
 
 export const DAILY_ZONE = 'America/New_York'; // days roll over at midnight here
 export const DAILY_PREFIX = 'arco-'; // puzzle id before the date
 export const INFINITE_PREFIX = 'infinite-'; // seed before a random Infinite seed
+export const TEST_PREFIX = 'arco-test-'; // seed before a test mode Daily seed
 export const PUZZLE_DIR = 'puzzles/'; // daily files, one per date
 const DAY_MS = 86400000; // one day in milliseconds
 
@@ -52,6 +53,14 @@ export async function loadDaily(readText, now = new Date()) {
   if (puzzle && puzzle.id === dailyId(date)) return { date, puzzle, ranked: true };
   return { date, puzzle: makeDaily(date), ranked: false };
 }
+
+// Test mode Daily: a fresh puzzle from a random seed, never ranked; committed files untouched
+export function testDaily(seed = randomSeedText(), now = new Date()) {
+  return { date: easternDate(now), seed, puzzle: generatePuzzle(TEST_PREFIX + seed, { id: TEST_PREFIX + seed }), ranked: false, test: true };
+}
+
+// The Daily as this build plays it: today's file, or a test puzzle in test mode
+export const dailyFor = (readText, seed, now = new Date()) => (DAILY_TEST_MODE ? Promise.resolve(testDaily(seed || undefined, now)) : loadDaily(readText, now));
 
 // Infinite mode: a live puzzle from a random or given seed, never ranked
 export function infinitePuzzle(seed = randomSeedText()) {

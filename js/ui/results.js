@@ -13,6 +13,7 @@ const signed = (value) => (value > 0 ? `+${value}` : String(value));
 
 // Title line of the share grid
 export function shareTitle(game) {
+  if (game.test) return COPY.resultsShareTest;
   return game.kind === 'daily' ? `${COPY.resultsShareTitle} ${COPY.puzzleDaily} #${dailyNumber(game.date)}` : `${COPY.resultsShareTitle} ${COPY.puzzleInfinite} ${game.seed}`;
 }
 
