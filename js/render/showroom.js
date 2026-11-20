@@ -21,6 +21,7 @@ const KEY_DIRECTION = [-0.45, -0.62, 0.92]; // key light direction, same as the 
 const ANIM_SIZE = 4; // floats per instance: start, state, height, tone
 const NEUTRAL_TONE = 0.5; // concrete tone of the showroom piece
 const MAX_PIXEL_RATIO = 2; // render scale cap
+const FIGURE_FILL = 0.55; // resident figure share of the view height
 
 // Radius that fits any footprint turned any way, in mm
 const largest = Math.max(...Object.keys(FOOTPRINTS).map((id) => Math.hypot(...footprintSize(id, 0)))) * CELL_MM;
@@ -63,12 +64,14 @@ export function createShowroom(canvas, reducedMotion) {
   let idleTimer = 0;
   let ease = null;
   let height = 0;
+  let homeZoom = 1;
+  const reach = Math.max(SHOWROOM_RADIUS_MM, MAX_MODULE_STORIES * STORY_MM * 0.6) * FRAME_PAD;
 
   // Default angle around the model's middle
   function home() {
     const target = new THREE.Vector3(0, 0, height / 2);
     const offset = new THREE.Vector3(Math.cos(VIEW_ELEVATION) * Math.cos(VIEW_AZIMUTH), Math.cos(VIEW_ELEVATION) * Math.sin(VIEW_AZIMUTH), Math.sin(VIEW_ELEVATION)).multiplyScalar(VIEW_DISTANCE_MM);
-    return { target, position: target.clone().add(offset), zoom: 1 };
+    return { target, position: target.clone().add(offset), zoom: homeZoom };
   }
 
   function fit() {
@@ -76,7 +79,6 @@ export function createShowroom(canvas, reducedMotion) {
     const tall = canvas.clientHeight;
     if (!width || !tall) return;
     renderer.setSize(width, tall, false);
-    const reach = Math.max(SHOWROOM_RADIUS_MM, MAX_MODULE_STORIES * STORY_MM * 0.6) * FRAME_PAD;
     const aspect = width / tall;
     camera.left = -reach * Math.max(1, aspect);
     camera.right = reach * Math.max(1, aspect);
@@ -132,7 +134,7 @@ export function createShowroom(canvas, reducedMotion) {
     if (!piece) return;
     scene.remove(piece);
     piece.geometry.dispose();
-    piece.dispose();
+    if (piece.dispose) piece.dispose();
     piece = null;
   }
 
@@ -140,6 +142,8 @@ export function createShowroom(canvas, reducedMotion) {
     // part from the module view cache, null to clear
     show(part, variant) {
       dropPiece();
+      homeZoom = 1;
+      controls.maxZoom = MAX_ZOOM;
       height = variant ? variant.h * STORY_MM : 0;
       if (part && variant) {
         const geometry = new THREE.BufferGeometry();
@@ -155,6 +159,20 @@ export function createShowroom(canvas, reducedMotion) {
         piece.frustumCulled = false;
         scene.add(piece);
       }
+      clearTimeout(idleTimer);
+      ease = null;
+      controls.autoRotate = !reducedMotion;
+      settle();
+    },
+    // A resident figure mesh, zoomed in to fill the stage
+    showFigure(mesh, figureHeight) {
+      dropPiece();
+      fit();
+      height = figureHeight;
+      homeZoom = (2 * reach * FIGURE_FILL) / figureHeight;
+      controls.maxZoom = Math.max(MAX_ZOOM, homeZoom * 2);
+      piece = mesh;
+      scene.add(piece);
       clearTimeout(idleTimer);
       ease = null;
       controls.autoRotate = !reducedMotion;

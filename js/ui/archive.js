@@ -24,7 +24,7 @@ const SORTS = {
 const asModules = (entries) => entries.map((entry, index) => ({ ...entry.variant, id: index + 1, x: index * EXPORT_SPACING_CELLS, y: 0, z: 0, rot: 0 }));
 
 // Collection page: inventory grid, showroom and the shared inspector
-export function setupArchive(app, { collectionPanel, moduleView, showroom, exporter, onPlace, readSetting, writeSetting }) {
+export function setupArchive(app, { collectionPanel, moduleView, showroom, exporter, onPlace, readSetting, writeSetting, residentCount = () => 0, onModule = () => {} }) {
   const query = (selector) => document.querySelector(selector);
   const list = query('#collectionList');
   const search = query('#archiveSearch');
@@ -75,8 +75,8 @@ export function setupArchive(app, { collectionPanel, moduleView, showroom, expor
 
   function render() {
     const shown = visible();
-    query('#archiveEmpty').hidden = entries.length > 0;
-    query('.archive-showroom').hidden = entries.length === 0;
+    query('#archiveEmpty').hidden = entries.length > 0 || residentCount() > 0;
+    query('.archive-showroom').hidden = entries.length === 0 && residentCount() === 0;
     query('#archiveCount').textContent = entries.length > 0 ? String(entries.length) : '';
     query('#archiveExport').disabled = selected.size === 0;
     query('#archiveExport').textContent = selected.size > 0 ? `${COPY.exportSelectedStl} (${selected.size})` : COPY.exportSelectedStl;
@@ -89,6 +89,7 @@ export function setupArchive(app, { collectionPanel, moduleView, showroom, expor
       if (selected.has(entry.key)) selected.delete(entry.key);
       else selected.add(entry.key);
     } else selected = new Set([entry.key]);
+    onModule();
     show(entry);
     render();
   }
@@ -128,6 +129,11 @@ export function setupArchive(app, { collectionPanel, moduleView, showroom, expor
   });
   app.modeListeners.push((mode) => {
     showroom.setActive(mode === 'collection');
-    if (mode === 'collection') show(shownEntry());
+    if (mode === 'collection' && query('#archive').dataset.shown !== 'resident') show(shownEntry());
   });
+  return {
+    render,
+    // Back to the shown module, after a resident was shown
+    reshow: () => show(shownEntry()),
+  };
 }

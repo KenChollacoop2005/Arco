@@ -139,7 +139,8 @@ function section(title, children) {
 }
 
 // Full detail of one resident; evaluation may be null when unplaced or still scoring
-export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null }) {
+// stored: a saved resident away from any structure, so no needs or home
+export function renderResidentDetail(body, record, evaluation, { portrait, nameOf, home = null, stored = false }) {
   body.replaceChildren();
   const placed = record.home !== null && !!evaluation && evaluation.home !== null;
   const head = node('div', 'resident-head');
@@ -149,9 +150,9 @@ export function renderResidentDetail(body, record, evaluation, { portrait, nameO
   const title = node('div', 'resident-title');
   title.append(node('h3', 'resident-big-name', record.name));
   const where = home ? `${FAMILIES[home.family].label}, ${COPY.residentLevel} ${home.z}` : COPY.residentNotPlaced;
-  title.append(node('p', 'resident-where', where));
+  if (!stored) title.append(node('p', 'resident-where', where));
   if (placed) title.append(node('p', 'resident-points', `${evaluation.points} ${COPY.residentPoints}`));
-  title.append(meter(placed ? evaluation : null));
+  if (!stored) title.append(meter(placed ? evaluation : null));
   head.append(image, title);
   body.append(head);
   const needs = record.needs.map((need, index) => {
@@ -163,7 +164,7 @@ export function renderResidentDetail(body, record, evaluation, { portrait, nameO
     if (judged) line.append(node('p', 'need-reason', reasonText(judged.reason)));
     return line;
   });
-  body.append(section(COPY.residentNeeds, needs));
+  if (!stored) body.append(section(COPY.residentNeeds, needs));
   const list = (kind, traits, judgedList) => {
     const items = node('ul', 'trait-list');
     traits.forEach((trait, index) => items.append(traitLine(kind, trait, judgedList ? judgedList[index] : {}, nameOf, placed)));

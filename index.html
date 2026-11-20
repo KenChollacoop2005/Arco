@@ -177,7 +177,10 @@
       <details class="panel build-panel" id="buildDrawer" data-drawer-key="arco.drawer.build">
         <summary data-copy="buildTitle"></summary>
         <div class="drawer-body">
-          <button type="button" class="plain" id="buildClear" data-copy="clear"></button>
+          <div class="button-grid">
+            <button type="button" class="plain" id="buildClear" data-copy="clear"></button>
+            <button type="button" class="plain" id="newResident" data-copy="newResident"></button>
+          </div>
           <div class="button-grid">
             <button type="button" class="plain" id="buildRotate" data-copy="rotate"></button>
             <button type="button" class="plain" id="buildDelete" data-copy="remove"></button>
@@ -289,6 +292,13 @@
         <p data-copy="archiveEmptyText"></p>
       </div>
       <ul class="cards archive-cards" id="collectionList"></ul>
+      <div class="archive-residents" id="archiveResidents" hidden>
+        <div class="archive-head">
+          <h3 class="archive-subtitle" data-copy="residentsCollection"></h3>
+          <span class="archive-count" id="archiveResidentCount"></span>
+        </div>
+        <ul class="resident-cards archive-resident-cards" id="residentList"></ul>
+      </div>
     </section>
     <section class="archive-showroom">
       <div class="showroom-stage"><canvas id="showroom" aria-label="Selected module"></canvas></div>
@@ -299,6 +309,7 @@
       </div>
       <p class="status archive-status" id="archiveStatus" role="status"></p>
       <div class="inspector" id="archiveInspector"></div>
+      <div class="resident-detail archive-resident" id="archiveResident" hidden></div>
     </section>
   </main>
 

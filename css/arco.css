@@ -589,6 +589,14 @@ body[data-mode='collection'] .section-controls { display: none; }
 .trait-line .need-reason { grid-column: 2 / 4; }
 .resident-happy { margin: 0; padding: 4px 8px; border: 1px solid var(--pass); color: var(--pass); font-size: 12px; text-align: center; }
 .resident-detail { display: grid; gap: 12px; }
+.resident-card { position: relative; }
+.archive-residents { display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.archive-subtitle { margin: 0; font: 800 22px/1 var(--font-wordmark); letter-spacing: 0.04em; text-transform: uppercase; }
+.archive-resident-cards { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.archive .resident-card { background: var(--field-bg); padding-right: 26px; }
+.archive .resident-card.is-shown { outline: 1px dashed var(--ink-soft); outline-offset: 2px; }
+.archive-resident { padding: 14px; }
+.archive[data-shown='resident'] .archive-actions, .archive[data-shown='resident'] #archiveInspector { display: none; }
 
 /* Placing and moving residents */
 .score-peek { position: fixed; z-index: 9; padding: 2px 7px; border: 1px solid var(--ink); background: var(--paper); font: 12px var(--font-mono); pointer-events: none; transform: translate(14px, -24px); }

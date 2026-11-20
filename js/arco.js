@@ -42,6 +42,8 @@ import { createResidentMarks } from './render/residents.js';
 import { setupResidents } from './ui/residents.js';
 import { setupResidentPanel } from './ui/residentpanel.js';
 import { createRagdoll } from './ui/ragdoll.js';
+import { createResidentStore } from './core/roster.js';
+import { setupResidentArchive } from './ui/residentarchive.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -436,6 +438,13 @@ const residentPanel = setupResidentPanel(app, residents, {
     residents.hide(null);
     ragdoll.stop();
   },
+  // Save resident: kept in the Collection's Residents section
+  save: (record) => {
+    const result = residentStore.add(record);
+    residentArchive.refresh();
+    if (!result.stored) return COPY.residentStoreFull;
+    return result.added ? COPY.residentSaved : COPY.residentAlreadySaved;
+  },
 });
 
 // Layer shaders compile while the first build animation plays
@@ -480,10 +489,15 @@ query('#duplicateModule').addEventListener('click', () => {
 builder.onDuplicate(refreshDuplicate);
 
 // Collection page; Place in Build picks the module up on the main screen
-setupArchive(app, {
+const showroom = createShowroom(query('#showroom'), reducedMotion);
+const residentStore = createResidentStore(browserStore);
+residentStore.load();
+const archive = setupArchive(app, {
   collectionPanel,
   moduleView: modules,
-  showroom: createShowroom(query('#showroom'), reducedMotion),
+  showroom,
+  residentCount: () => residentStore.list().length,
+  onModule: () => residentArchive.leave(),
   exporter,
   readSetting,
   writeSetting,
@@ -493,6 +507,8 @@ setupArchive(app, {
     return builder.pickKey(entry.key);
   },
 });
+const residentArchive = setupResidentArchive(app, { store: residentStore, showroom, archive });
+archive.render();
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
 // Budget: Build's cap and the module count follow the control

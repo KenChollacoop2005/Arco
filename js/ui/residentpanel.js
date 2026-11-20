@@ -8,7 +8,7 @@ import { COPY } from './copy.js';
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 
 // Residents box on the left, Resident drawer on the right
-// hooks: select(module id), face(module id), idAt(event), setState(id, state), canvas
+// hooks: select(module id), face(module id), idAt(event), setState(id, state), canvas, carry(record), drop(), save(record)
 export function setupResidentPanel(app, residents, hooks) {
   const query = (selector) => document.querySelector(selector);
   const box = query('#residentsDrawer');
@@ -171,6 +171,17 @@ export function setupResidentPanel(app, residents, hooks) {
     if (record.home !== null) return;
     start(record, 'place', true);
   }
+
+  // New resident from the Build drawer joins the box
+  query('#newResident').addEventListener('click', () => {
+    const record = residents.roll();
+    box.open = true;
+    boxStatus.textContent = `${record.name} ${COPY.newResidentAdded}`;
+  });
+  query('#residentSave').addEventListener('click', () => {
+    const record = recordOf(residents.selected());
+    if (record) status.textContent = hooks.save(record);
+  });
 
   moveButton.addEventListener('click', () => {
     const record = recordOf(residents.selected());

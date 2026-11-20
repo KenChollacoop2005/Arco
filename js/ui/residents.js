@@ -1,4 +1,6 @@
-import { homeSpot, keepHomes, assignmentsOf, occupantsOf, assignResident } from '../core/roster.js';
+import { homeSpot, keepHomes, assignmentsOf, occupantsOf, assignResident, rollSandboxResident } from '../core/roster.js';
+import { FAMILIES } from '../core/catalog.js';
+import { randomSeedText } from '../core/rng.js';
 import { makeFigure } from '../core/figure.js';
 
 // Resident state for the main view: records, homes, evaluations and scene marks
@@ -123,6 +125,13 @@ export function setupResidents(app, { marks, scorer }) {
       const structure = app.structure;
       if (!structure) return Promise.resolve(null);
       return scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records), preview: { resident: id, homes } });
+    },
+    // A random resident with the puzzle rules; amenity wants name only amenities that stand here
+    roll() {
+      const amenities = [...new Set(modulesNow().map((instance) => FAMILIES[instance.family].amenity).filter(Boolean))];
+      const record = rollSandboxResident(randomSeedText(), records, amenities);
+      setRecords([...records, record]);
+      return record;
     },
     // Hides one resident's pin and figure while they are carried
     hide(id) {

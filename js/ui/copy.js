@@ -333,6 +333,7 @@ export const COPY = {
   residentSave: 'Save resident',
   residentSaved: 'Saved to the Collection.',
   residentAlreadySaved: 'Already in the Collection.',
+  residentStoreFull: 'Could not write to browser storage (full or blocked). This resident stays until you close this page.',
   residentPlacing: 'Click a green home. Esc cancels.',
   residentMoving: 'Drop them on a green home. Esc puts them back.',
   residentNoRoom: 'That home has no room.',
