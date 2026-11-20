@@ -797,7 +797,6 @@ body[data-mode='puzzle'] .sandbox-only { display: none; }
 .results-line.is-loss .results-value { color: var(--fail); }
 .results-unused { display: flex; justify-content: space-between; font-size: 12px; }
 /* Par view: the breakdown only */
-.results[data-view='par'] #resultsStats, .results[data-view='par'] #resultsShare, .results[data-view='par'] #resultsCopy, .results[data-view='par'] #resultsPar, .results[data-view='mine'] #resultsMine, .results:not([data-view]) #resultsMine { display: none; }
 .results-share { margin: 0; padding: 10px 12px; background: var(--field-bg); border: 1px solid var(--hairline); font: 14px/1.5 var(--font-mono); white-space: pre-wrap; user-select: all; }
 .results .status:empty { display: none; }
 .par-bar { top: auto; bottom: var(--gap); }
