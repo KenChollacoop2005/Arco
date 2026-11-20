@@ -21,6 +21,7 @@ function reopenNear(modules, changed, keepIds = []) {
 const UNDO_LIMIT = 100; // most steps kept for undo
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
 const DISABLED_REASON = 'This part is switched off for now'; // draft UI copy
+const LOCKED_REASON = 'This part belongs to the site and stays put'; // draft UI copy
 
 // Footprint origin cell that centers it on a point
 export function snapOrigin(xMm, yMm, footprintId, rot) {
@@ -99,6 +100,10 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
   let placeStream = stream;
   let undoStack = [];
   let redoStack = [];
+  // Puzzle rules: locked site ids, masks kept as given, ids from a base
+  let rules = { locked: new Set(), keepMasks: false, idBase: 0 };
+  const near = (list, changed, keepIds) => (rules.keepMasks ? list : reopenNear(list, changed, keepIds));
+  const lockedIn = (ids) => ids.some((id) => rules.locked.has(id));
 
   function commit(next) {
     undoStack.push(modules);
@@ -152,22 +157,24 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       if (FAMILIES[instance.family].disabled) return { ok: false, reason: DISABLED_REASON };
       const result = check(instance);
       if (!result.ok) return { ok: false, reason: result.reason };
-      instance.id = Math.max(0, ...modules.map((placed) => placed.id)) + 1;
+      instance.id = Math.max(0, rules.idBase - 1, ...modules.map((placed) => placed.id)) + 1;
       // The placed module keeps its saved mask; neighbours adapt
-      commit(reopenNear([...modules, instance], [instance], [instance.id]));
+      commit(near([...modules, instance], [instance], [instance.id]));
       return { ok: true, reason: '', id: instance.id };
     },
     remove(ids) {
       const next = modules.filter((instance) => !ids.includes(instance.id));
       if (next.length === modules.length) return { ok: false, reason: '' };
+      if (lockedIn(ids)) return { ok: false, reason: LOCKED_REASON };
       if (breaksOthers(next, 0)) return { ok: false, reason: RESTS_REASON };
-      commit(reopenNear(next, modules.filter((instance) => ids.includes(instance.id))));
+      commit(near(next, modules.filter((instance) => ids.includes(instance.id))));
       return { ok: true, reason: '' };
     },
     // Quarter turn of a placed module, in place
     rotate(id) {
       const current = modules.find((instance) => instance.id === id);
       if (!current) return { ok: false, reason: '' };
+      if (lockedIn([id])) return { ok: false, reason: LOCKED_REASON };
       const turned = { ...current, rot: nextRot(current.rot) };
       const rest = modules.filter((instance) => instance.id !== id);
       // Turning keeps the count, so the cap never refuses it
@@ -175,18 +182,31 @@ export function createBuild(initial = [], { cap = MAX_MODULES, stream = null } =
       if (!result.ok) return { ok: false, reason: result.reason };
       const next = modules.map((instance) => (instance.id === id ? turned : instance));
       if (breaksOthers(next, id)) return { ok: false, reason: RESTS_REASON };
-      commit(reopenNear(next, [current, turned]));
+      commit(near(next, [current, turned]));
       return { ok: true, reason: '' };
     },
     // Swap in a whole structure as one step
     replace(list) {
-      commit(reopenSides(list.map((instance) => ({ ...instance }))));
+      const copies = list.map((instance) => ({ ...instance }));
+      commit(rules.keepMasks ? copies : reopenSides(copies));
     },
+    // Clears everything but locked modules
     clear() {
-      if (modules.length === 0) return false;
-      commit([]);
+      const next = modules.filter((instance) => rules.locked.has(instance.id));
+      if (next.length === modules.length) return false;
+      commit(next);
       return true;
     },
+    // Whole state, to park one build while another is shown
+    snapshot: () => ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules }),
+    restore(state) {
+      ({ modules, undoStack, redoStack, cap: placeCap, stream: placeStream, rules } = state);
+    },
+    // Puzzle rules; locked ids can be selected but never moved or removed
+    setRules({ locked = [], keepMasks = false, idBase = 0 } = {}) {
+      rules = { locked: new Set(locked), keepMasks, idBase };
+    },
+    isLocked: (id) => rules.locked.has(id),
     undo() {
       if (undoStack.length === 0) return false;
       redoStack.push(modules);

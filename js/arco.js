@@ -44,6 +44,8 @@ import { setupResidentPanel } from './ui/residentpanel.js';
 import { createRagdoll } from './ui/ragdoll.js';
 import { createResidentStore } from './core/roster.js';
 import { setupResidentArchive } from './ui/residentarchive.js';
+import { setupPuzzle } from './ui/puzzle.js';
+import { layoutOf } from './core/puzzleplay.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -69,7 +71,7 @@ rig.onChange(() => view.requestRender());
 
 setupLegend(query('#legend'));
 
-const MODES = ['generate', 'collection', 'drawing']; // top bar tabs
+const MODES = ['generate', 'puzzle', 'collection', 'drawing']; // top bar tabs
 const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']; // keys go to these instead
 
 const generator = createWorkerClient(new URL('./workers/generate.worker.js', import.meta.url));
@@ -259,7 +261,8 @@ async function generateStructure(options) {
 // Shows the hand edited build as the structure
 function showBuild(list, options = {}) {
   generateToken++;
-  const result = { modules: list, seed: COPY.buildSeed, options: null, capped: false, hash: structureHash(list), stream: app.stream || null };
+  // A puzzle's services follow its seed, as when it is scored
+  const result = { modules: list, seed: app.puzzle ? app.puzzle.seed : COPY.buildSeed, options: null, capped: false, hash: structureHash(list), stream: app.stream || null };
   showStructure(result, { only: options.only || new Set() });
 }
 
@@ -417,7 +420,19 @@ app.structureListeners.push(() => refreshParticles());
 // Residents: pins, the selected figure and scores from their own worker
 const residentMarks = createResidentMarks(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
-const residents = setupResidents(app, { marks: residentMarks, scorer: (payload) => scorer.call({ kind: 'residents', ...payload }) });
+// In a puzzle the shared puzzle rules score the layout, ids mapped both ways
+async function scoreResidents(payload) {
+  const puzzle = app.puzzle;
+  if (!puzzle) return scorer.call({ kind: 'residents', ...payload });
+  const { layout, toLayout, fromLayout } = layoutOf(payload.modules, payload.assignments);
+  const preview = payload.preview ? { resident: payload.preview.resident, homes: payload.preview.homes.map((home) => toLayout.get(home) || home) } : null;
+  const report = await scorer.call({ kind: 'puzzle', puzzle, layout, preview });
+  const back = (home) => (home === null ? null : fromLayout.get(home) || home);
+  const previews = Object.fromEntries(Object.entries(report.previews).map(([home, value]) => [back(Number(home)), value]));
+  const evaluations = report.evaluations.map((entry) => ({ ...entry, home: back(entry.home) }));
+  return { ...report, puzzle, layout, evaluations, previews, points: report.score ? report.score.points : 0, raw: report.score ? report.score.raw : 0 };
+}
+const residents = setupResidents(app, { marks: residentMarks, scorer: scoreResidents });
 app.residents = residents;
 const ragdoll = createRagdoll(reducedMotion);
 const residentPanel = setupResidentPanel(app, residents, {
@@ -483,7 +498,7 @@ query('#duplicateModule').addEventListener('click', () => {
   }
   const selected = selectedModule();
   if (!selected) return;
-  if (app.mode !== 'generate') setMode('generate');
+  if (app.mode !== 'generate' && app.mode !== 'puzzle') setMode(app.world === 'sandbox' ? 'generate' : 'puzzle');
   builder.duplicate(selected);
 });
 builder.onDuplicate(refreshDuplicate);
@@ -509,6 +524,19 @@ const archive = setupArchive(app, {
 });
 const residentArchive = setupResidentArchive(app, { store: residentStore, showroom, archive });
 archive.render();
+
+// Puzzle tab: daily files and live puzzles come from their own worker
+const puzzleWorker = createWorkerClient(new URL('./workers/puzzle.worker.js', import.meta.url));
+const puzzle = setupPuzzle(app, {
+  builder,
+  residents,
+  moduleView: modules,
+  showBuild,
+  loader: (payload) => puzzleWorker.call(payload),
+  readSetting,
+  writeSetting,
+});
+app.puzzleUi = puzzle;
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
 // Budget: Build's cap and the module count follow the control

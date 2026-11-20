@@ -22,11 +22,13 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   let turn = 0;
   let pointerEvent = null;
   let entries = [];
+  let tray = null;
   let growing = false;
   const growListeners = [];
   const copyListeners = [];
 
-  const active = () => app.mode === 'generate';
+  const active = () => app.mode === 'generate' || app.mode === 'puzzle';
+  const cards = () => tray || entries;
 
   for (const value of [ALL, ...Object.keys(CATEGORY_COPY)]) {
     const option = document.createElement('option');
@@ -42,7 +44,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   // Saved modules that pass the search and the category filter
   function shown() {
     const text = search.value.trim().toLowerCase();
-    return entries.filter((entry) => {
+    return cards().filter((entry) => {
       const family = FAMILIES[entry.variant.family];
       if (category.value !== ALL && family.category !== category.value) return false;
       return !text || family.label.toLowerCase().includes(text) || family.id.includes(text) || family.group.toLowerCase().includes(text);
@@ -50,7 +52,7 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   }
 
   function refreshPalette() {
-    query('#buildEmpty').hidden = entries.length > 0;
+    query('#buildEmpty').hidden = cards().length > 0;
     renderBuildCards(palette, shown(), { onPick: pick, onDrag: (entry) => pick(entry, true), pressedKey: picked ? picked.key : '' });
   }
 
@@ -195,6 +197,10 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     pointerEvent = event;
     const ghost = ghostAt(event);
     if (!ghost) return true;
+    if (picked.count <= 0) {
+      pick(null);
+      return true;
+    }
     const result = ghost.ok ? build.place(ghost.instance) : ghost;
     if (result.ok) apply(new Set([result.id]));
     else status.textContent = result.reason;
@@ -205,10 +211,22 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
   collectionPanel.onChange((list) => {
     // Switched off families stay out of the palette
     entries = list.filter((entry) => !FAMILIES[entry.variant.family].disabled).map((entry) => ({ ...entry, count: SANDBOX_COUNT }));
-    if (picked && !isCopy() && !entries.some((entry) => entry.key === picked.key)) picked = null;
+    if (!tray && picked && !isCopy() && !entries.some((entry) => entry.key === picked.key)) picked = null;
     refreshPalette();
     refreshGhost();
   });
+
+  // Puzzle tray in place of the saved modules, or null for the sandbox
+  function setTray(next) {
+    tray = next;
+    if (picked && !isCopy()) {
+      const same = cards().find((entry) => entry.key === picked.key);
+      picked = same && same.count > 0 ? same : null;
+      if (!picked) status.textContent = '';
+    }
+    refreshPalette();
+    refreshGhost();
+  }
   refreshButtons();
 
   return {
@@ -237,6 +255,18 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
     // Picks up a copy of a placed module, not saved to the Collection
     duplicate(instance) {
       const { id, x, y, z, rot, ...variant } = instance;
+      // In a puzzle a copy comes out of the tray, while any are left
+      if (tray) {
+        const entry = tray.find((candidate) => candidate.key === variantKey(variant));
+        if (!entry || entry.count <= 0) {
+          status.textContent = COPY.puzzleNoneLeft;
+          return;
+        }
+        pick(entry, true);
+        turn = rot & 3;
+        refreshGhost();
+        return;
+      }
       pick({ key: COPY_PREFIX + variantKey(variant), variant, count: SANDBOX_COUNT }, true);
       turn = rot & 3;
       refreshGhost();
@@ -252,5 +282,15 @@ export function setupBuild(app, canvas, moduleView, collectionPanel, hooks) {
       if (isCopy()) pick(null);
     },
     click: place,
+    setTray,
+    // Parks and brings back one whole build, history included
+    snapshot: () => build.snapshot(),
+    restore(state) {
+      pick(null);
+      build.restore(state);
+      refreshButtons();
+    },
+    setRules: (rules) => build.setRules(rules),
+    isLocked: (id) => build.isLocked(id),
   };
 }

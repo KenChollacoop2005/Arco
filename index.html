@@ -26,6 +26,7 @@
       <h1 class="wordmark" data-copy="wordmark">Arco</h1>
       <nav class="tabs" role="tablist" aria-label="Modes">
         <button role="tab" data-mode="generate" aria-selected="true" data-copy="tabGenerate"></button>
+        <button role="tab" data-mode="puzzle" aria-selected="false" data-copy="tabPuzzle"></button>
         <button role="tab" data-mode="collection" aria-selected="false" data-copy="tabCollection"></button>
         <button role="tab" data-mode="drawing" aria-selected="false" data-copy="tabDrawing"></button>
       </nav>
@@ -51,6 +52,20 @@
 
   <aside class="column column-left" id="leftColumn" aria-label="Tools">
     <div class="mode-pane" data-pane="generate">
+      <!-- Puzzle box: Submit first, then the intro card -->
+      <section class="panel puzzle-panel puzzle-only" id="puzzlePanel" aria-label="Puzzle">
+        <div class="drawer-body">
+          <button type="button" class="primary" id="puzzleSubmit" data-copy="puzzleSubmit" disabled></button>
+          <p class="status" id="puzzleCheck" role="status"></p>
+          <fieldset class="seg pair" aria-label="Puzzle type">
+            <label><input type="radio" name="puzzleKind" value="daily" checked><span data-copy="puzzleDaily"></span></label>
+            <label><input type="radio" name="puzzleKind" value="infinite"><span data-copy="puzzleInfinite"></span></label>
+          </fieldset>
+          <div class="puzzle-intro" id="puzzleIntro" aria-live="polite"></div>
+          <button type="button" class="plain" id="puzzleNew" data-copy="puzzleNew" hidden></button>
+        </div>
+      </section>
+
       <details class="panel" id="generateDrawer" data-drawer-key="arco.drawer.generate" data-drawer-default="open">
         <summary data-copy="generateTitle"></summary>
         <form class="drawer-body" id="generateForm">
@@ -179,7 +194,7 @@
         <div class="drawer-body">
           <div class="button-grid">
             <button type="button" class="plain" id="buildClear" data-copy="clear"></button>
-            <button type="button" class="plain" id="newResident" data-copy="newResident"></button>
+            <button type="button" class="plain sandbox-only" id="newResident" data-copy="newResident"></button>
           </div>
           <div class="button-grid">
             <button type="button" class="plain" id="buildRotate" data-copy="rotate"></button>

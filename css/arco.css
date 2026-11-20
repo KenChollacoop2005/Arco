@@ -154,6 +154,7 @@ body[data-time='night']:not([data-mode='drawing']) .stage {
 
 .mode-pane { display: none; flex-direction: column; gap: var(--panel-gap); }
 body[data-mode='generate'] [data-pane='generate'],
+body[data-mode='puzzle'] [data-pane='generate'],
 body[data-mode='collection'] [data-pane='collection'],
 body[data-mode='drawing'] [data-pane='drawing'] { display: flex; }
 
@@ -233,6 +234,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 1px; }
 .seg.wide { grid-template-columns: repeat(3, auto); }
 .seg.tight { grid-template-columns: repeat(2, auto); }
+.seg.pair { grid-template-columns: 1fr 1fr; }
 .seg.tight span { padding: 6px 10px; }
 
 .field { display: grid; }
@@ -452,7 +454,8 @@ body.grow-here #scene { cursor: crosshair; }
 .legend dt { color: var(--ink); }
 .legend dd { margin: 0; text-align: right; color: var(--ink-soft); }
 .legend .build-only { display: none; }
-body[data-mode='generate'] .legend .build-only { display: block; }
+body[data-mode='generate'] .legend .build-only,
+body[data-mode='puzzle'] .legend .build-only { display: block; }
 
 /* Drawing title block */
 .title-block {
@@ -663,3 +666,17 @@ body[data-mode='collection'] .section-controls { display: none; }
   .tabs button, .plain, .primary, .seg span { transition: background-color 120ms, border-color 120ms, color 120ms; }
   .column { transition: transform 180ms ease-out, visibility 180ms; }
 }
+
+/* Puzzle mode: Generate and Grow hide, the puzzle box leads */
+body:not([data-mode='puzzle']) .puzzle-only,
+body[data-mode='puzzle'] #generateDrawer,
+body[data-mode='puzzle'] #growDrawer,
+body[data-mode='puzzle'] .sandbox-only { display: none; }
+.puzzle-panel > .drawer-body { display: grid; gap: 10px; padding: 12px 14px 14px; }
+.puzzle-panel #puzzleSubmit { width: 100%; }
+.puzzle-panel .status:empty { display: none; }
+.puzzle-intro { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--hairline); background: var(--field-bg); }
+.puzzle-intro:empty { display: none; }
+.puzzle-intro-title { font: 800 22px/1 var(--font-wordmark); letter-spacing: 0.04em; text-transform: uppercase; }
+.puzzle-intro-line { font: 11px/1.4 var(--font-mono); color: var(--ink-soft); }
+.puzzle-intro-note { margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); }

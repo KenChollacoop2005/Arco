@@ -9,6 +9,7 @@ export function setupResidents(app, { marks, scorer }) {
   let places = {};
   let evaluations = new Map();
   let points = 0;
+  let report = null;
   let selected = null;
   let hidden = null;
   let token = 0;
@@ -56,24 +57,29 @@ export function setupResidents(app, { marks, scorer }) {
     if (!structure || records.length === 0) {
       evaluations = new Map();
       points = 0;
+      report = null;
       notify();
       return;
     }
     try {
-      const report = await scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records) });
-      if (current !== token) return;
-      evaluations = new Map(report.evaluations.map((entry) => [entry.id, entry]));
-      points = report.points;
+      const next = await scorer({ modules: structure.modules, seed: structure.seed, residents: records, assignments: assignmentsOf(records) });
+      if (current !== token || app.structure !== structure) return;
+      evaluations = new Map(next.evaluations.map((entry) => [entry.id, entry]));
+      points = next.points;
+      report = next;
     } catch {
       if (current !== token) return;
       evaluations = new Map();
+      report = null;
     }
     notify();
   }
 
-  function setRecords(next) {
+  // Modules given when the records belong to a structure about to be shown
+  function setRecords(next, modules = null) {
     records = next;
-    places = Object.fromEntries(records.filter((record) => record.home !== null).map((record) => [record.id, byId(record.home)]));
+    const find = modules ? (id) => modules.find((instance) => instance.id === id) || null : byId;
+    places = Object.fromEntries(records.filter((record) => record.home !== null).map((record) => [record.id, find(record.home)]));
     refreshMarks();
     notify();
     evaluate();
@@ -86,6 +92,7 @@ export function setupResidents(app, { marks, scorer }) {
     records = kept;
     places = Object.fromEntries(records.filter((record) => record.home !== null).map((record) => [record.id, byId(record.home)]));
     evaluations = new Map();
+    report = null;
     refreshMarks();
     notify();
   });
@@ -101,6 +108,8 @@ export function setupResidents(app, { marks, scorer }) {
     list: () => records,
     evaluation: (id) => evaluations.get(id) || null,
     points: () => points,
+    // Last full score report from the scorer
+    report: () => report,
     figureOf,
     homeOf: (id) => {
       const record = records.find((entry) => entry.id === id);

@@ -55,5 +55,5 @@ export async function loadDaily(readText, now = new Date()) {
 
 // Infinite mode: a live puzzle from a random or given seed, never ranked
 export function infinitePuzzle(seed = randomSeedText()) {
-  return { puzzle: generatePuzzle(INFINITE_PREFIX + seed), ranked: false };
+  return { seed, puzzle: generatePuzzle(INFINITE_PREFIX + seed), ranked: false };
 }

@@ -8,6 +8,16 @@ import { lightPlan } from '../core/lights.js';
 import { particleEmitters } from '../core/emitters.js';
 import { residentExtras, structureResults, evaluateResidents } from '../core/residents.js';
 import { scoreLayout } from '../core/scoring.js';
+import { playScore } from '../core/puzzleplay.js';
+
+const PLAY_CACHE_MAX = 400; // structure results kept for one puzzle
+let playCache = { id: null, entries: new Map() };
+
+// Puzzle play scores share one cache per puzzle
+function puzzleReport({ puzzle, layout, preview }) {
+  if (playCache.id !== puzzle.id || playCache.entries.size > PLAY_CACHE_MAX) playCache = { id: puzzle.id, entries: new Map() };
+  return playScore(puzzle, layout, { preview, cache: playCache.entries });
+}
 
 // Active string ports, only what the renderer and inspector need
 const portView = (port) => ({ module: port.module, index: port.index, type: port.type, capacity: port.capacity, position: port.position, normal: port.normal, ...(port.relay ? { relay: true } : {}) });
@@ -33,9 +43,9 @@ function residentReport({ modules, seed, residents, assignments, preview }) {
 
 self.onmessage = (event) => {
   const { id, modules, seed } = event.data;
-  if (event.data.kind === 'residents') {
+  if (event.data.kind === 'residents' || event.data.kind === 'puzzle') {
     try {
-      self.postMessage({ id, done: true, result: residentReport(event.data) });
+      self.postMessage({ id, done: true, result: event.data.kind === 'puzzle' ? puzzleReport(event.data) : residentReport(event.data) });
     } catch (error) {
       self.postMessage({ id, error: String(error && error.message ? error.message : error) });
     }
