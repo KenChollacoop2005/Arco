@@ -66,3 +66,19 @@ test('stretch keeps the volume', () => {
     assert.ok(Math.abs(first * second * along - 1) < 1e-12);
   }
 });
+
+test('soft limits push back before the outer range, even in a hard shake', () => {
+  const ranges = [CARRY.maxTorso, CARRY.maxWaist, CARRY.maxStretch, CARRY.maxYaw, CARRY.maxHand, CARRY.maxHand];
+  for (const amplitude of [100, 300]) {
+    const carry = makeCarry([0, 0]);
+    let comfortPassed = false;
+    for (let frame = 1; frame <= 600; frame++) {
+      stepCarry(carry, [Math.sin(frame / 4) * amplitude, Math.cos(frame / 5) * amplitude * 0.5], FRAME);
+      angles(carry).forEach((part, index) => {
+        assert.ok(Math.abs(part.angle) < ranges[index] * 0.95, `part ${index} at ${part.angle} of ${ranges[index]}`);
+        if (Math.abs(part.angle) > ranges[index] * CARRY.comfort) comfortPassed = true;
+      });
+    }
+    assert.ok(comfortPassed, 'the shake reaches past the comfort range');
+  }
+});
