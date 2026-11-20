@@ -1,4 +1,4 @@
-import { FIGURE_HEIGHT_M, FIGURE_STORY_M, FIGURE_ACCENTS, FIGURE_BOTTOMS, FIGURE_ITEM_COLORS, FIGURE_PATTERN_COLORS, FIGURE_PATTERN_SHARE, FIGURE_FEATURE_NONE_SHARE, FIGURE_ACCESSORY_NONE_SHARE, STORY_MM } from '../config.js';
+import { FIGURE_HEIGHT_M, FIGURE_STORY_M, FIGURE_ACCENTS, FIGURE_BOTTOMS, FIGURE_ITEM_COLORS, FIGURE_PATTERN_COLORS, FIGURE_PATTERN_SHARE, FIGURE_FEATURE_NONE_SHARE, FIGURE_FEATURE_WEIGHTS, FIGURE_ACCESSORY_NONE_SHARE, STORY_MM } from '../config.js';
 import { makeRng } from './rng.js';
 
 export const PROFILES = { shoulders: [0.17, 0.12], base: [0.11, 0.19], straight: [0.145, 0.145] }; // body radius at top and base, share of height
@@ -21,10 +21,13 @@ const HAND_Z = 0.36; // hand height
 const HAND_OUT = 0.075; // hand gap outside the body
 const SHOULDER_DROP = 0.05; // shoulder pivot under the body top
 const SIDES = [-1, 1]; // left and right
+const FEATURE_GAP = 0.02; // features clear the head by this, share of its radius
 
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const pickOr = (rng, noneShare, options) => (rng.chance(noneShare) ? 'none' : rng.pick(options));
+const weightedOr = (rng, noneShare, weights) => (rng.chance(noneShare) ? 'none' : rng.weighted(Object.entries(weights)));
+const unit = (a) => scale(a, 1 / Math.hypot(...a));
 
 // Seeded look of one resident; looks is the record's looks seed
 export function figureParams(looks) {
@@ -36,7 +39,7 @@ export function figureParams(looks) {
   const headSize = rng.pick(HEAD_SIZES);
   const accent = rng.pick(FIGURE_ACCENTS);
   const bottom = rng.pick(FIGURE_BOTTOMS);
-  const feature = pickOr(rng, FIGURE_FEATURE_NONE_SHARE, FEATURES);
+  const feature = weightedOr(rng, FIGURE_FEATURE_NONE_SHARE, FIGURE_FEATURE_WEIGHTS);
   const accessory = pickOr(rng, FIGURE_ACCESSORY_NONE_SHARE, ACCESSORIES);
   const item = rng.pick(FIGURE_ITEM_COLORS);
   const patterned = rng.chance(FIGURE_PATTERN_SHARE);
@@ -103,32 +106,39 @@ function partsInMetres(params, joints) {
   // One head feature
   const c = joints.head;
   const feature = (part, color = 'dark', extra = {}) => put(part, 'head', color, { role: 'feature', ...extra });
+  const gap = FEATURE_GAP;
+  // Point on a ray from the head centre, lift past the surface in head radii
+  const onHead = (direction, lift) => add(c, scale(unit(direction), R * (1 + lift)));
+  // Ring radius whose tube clears the head at a height above its centre
+  const clearRing = (height, tube) => R * Math.sqrt((1 + tube + gap) ** 2 - height ** 2);
   if (params.feature === 'glasses' || params.feature === 'sunglasses') {
     for (const sign of SIDES) {
-      const lens = add(c, [sign * R * 0.38, -R * 0.9, R * 0.1]);
-      if (params.feature === 'glasses') feature({ kind: 'ring', c: lens, r: R * 0.24, tube: R * 0.05, axis: [0, 1, 0] });
-      else feature({ kind: 'sphere', c: lens, r: R * 0.27, squash: [1, 0.3, 0.8] }, 'dark', { gloss: true });
+      const toward = unit([sign * 0.36, -0.92, 0.1]);
+      if (params.feature === 'glasses') feature({ kind: 'ring', c: onHead(toward, 0.05 + gap), r: R * 0.24, tube: R * 0.05, axis: toward });
+      else feature({ kind: 'sphere', c: onHead(toward, 0.135 + gap), r: R * 0.27, squash: [1, 0.3, 0.8] }, 'dark', { gloss: true });
     }
-    feature({ kind: 'capsule', a: add(c, [-R * 0.14, -R * 0.97, R * 0.13]), b: add(c, [R * 0.14, -R * 0.97, R * 0.13]), r: R * 0.04 });
+    const bridgeLift = params.feature === 'glasses' ? 0.08 : 0.16;
+    feature({ kind: 'capsule', a: onHead([-0.14, -0.98, 0.12], bridgeLift + gap), b: onHead([0.14, -0.98, 0.12], bridgeLift + gap), r: R * 0.04 });
   }
   if (params.feature === 'cap') {
     feature({ kind: 'dome', c: add(c, [0, 0, R * 0.32]), r: R * 0.97, h: R * 0.78 }, 'item');
-    feature({ kind: 'box', c: add(c, [0, -R * 0.98, R * 0.36]), size: [R * 1.05, R * 0.7, R * 0.07] }, 'item');
+    feature({ kind: 'box', c: add(c, [0, -R * (0.92 + gap + 0.25), R * 0.36]), size: [R * 0.8, R * 0.5, R * 0.07] }, 'item');
   }
   if (params.feature === 'beanie') {
     feature({ kind: 'dome', c: add(c, [0, 0, R * 0.3]), r: R * 1.0, h: R * 0.9 }, 'item');
-    feature({ kind: 'ring', c: add(c, [0, 0, R * 0.32]), r: R * 0.96, tube: R * 0.12, axis: [0, 0, 1] }, 'item');
+    feature({ kind: 'ring', c: add(c, [0, 0, R * 0.32]), r: clearRing(0.32, 0.12), tube: R * 0.12, axis: [0, 0, 1] }, 'item');
     feature({ kind: 'sphere', c: add(c, [0, 0, R * 1.26]), r: R * 0.2 }, 'item');
   }
-  if (params.feature === 'bun') feature({ kind: 'sphere', c: add(c, [0, R * 0.5, R * 0.78]), r: R * 0.36 });
+  if (params.feature === 'bun') feature({ kind: 'sphere', c: onHead([0, 0.5, 0.78], 0.36 + gap), r: R * 0.36 });
   if (params.feature === 'ponytail') {
-    feature({ kind: 'sphere', c: add(c, [0, R * 0.92, R * 0.3]), r: R * 0.2 });
-    feature({ kind: 'capsule', a: add(c, [0, R * 1.02, R * 0.2]), b: add(c, [0, R * 1.12, -R * 0.55]), r: R * 0.16 });
+    feature({ kind: 'sphere', c: onHead([0, 0.92, 0.3], 0.2 + gap), r: R * 0.2 });
+    feature({ kind: 'capsule', a: add(c, [0, R * 1.19, R * 0.25]), b: add(c, [0, R * 1.26, -R * 0.5]), r: R * 0.16 });
   }
-  if (params.feature === 'headband') feature({ kind: 'ring', c: add(c, [0, 0, R * 0.4]), r: R * 0.93, tube: R * 0.09, axis: [0, 0, 1] }, 'item');
+  if (params.feature === 'headband') feature({ kind: 'ring', c: add(c, [0, 0, R * 0.4]), r: clearRing(0.4, 0.09), tube: R * 0.09, axis: [0, 0, 1] }, 'item');
   if (params.feature === 'headphones') {
     feature({ kind: 'ring', c, r: R * 1.1, tube: R * 0.07, axis: [0, 1, 0], start: Math.PI, arc: Math.PI });
-    for (const sign of SIDES) feature({ kind: 'cone', a: add(c, [sign * R * 0.92, 0, 0]), b: add(c, [sign * R * 1.16, 0, 0]), r1: R * 0.34, r2: R * 0.3 }, 'item');
+    const cupIn = 1 + gap;
+    for (const sign of SIDES) feature({ kind: 'cone', a: add(c, [sign * R * cupIn, 0, 0]), b: add(c, [sign * R * (cupIn + 0.24), 0, 0]), r1: R * 0.34, r2: R * 0.3 }, 'item');
   }
   // One accessory
   const sign = params.side;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { figureParams, makeFigure, figureTop, partTop, PROFILES, FEATURES, ACCESSORIES, PATTERNS, BONES } from '../js/core/figure.js';
 import { figureBatches, figurePortrait, patternAt, cardFrame } from '../js/core/figuremesh.js';
-import { FIGURE_HEIGHT_M, FIGURE_STORY_M, STORY_MM, FIGURE_PATTERN_SHARE, FIGURE_FEATURE_NONE_SHARE, FIGURE_ACCESSORY_NONE_SHARE } from '../js/config.js';
+import { FIGURE_HEIGHT_M, FIGURE_STORY_M, STORY_MM, FIGURE_PATTERN_SHARE, FIGURE_FEATURE_NONE_SHARE, FIGURE_FEATURE_WEIGHTS, FIGURE_ACCESSORY_NONE_SHARE } from '../js/config.js';
 
 const SEEDS = Array.from({ length: 300 }, (unused, index) => (index * 2654435761) >>> 0);
 const ROLLS = 10000; // seeds for the frequency checks
@@ -39,7 +39,9 @@ test('feature, accessory and pattern frequencies over 10,000 seeds sit near thei
   }
   const near = (count, share, label) => assert.ok(Math.abs(count / ROLLS - share) <= SHARE_SLACK, `${label}: ${count / ROLLS} against ${share}`);
   near(counts.feature.none, FIGURE_FEATURE_NONE_SHARE, 'no feature');
-  for (const feature of FEATURES) near(counts.feature[feature], (1 - FIGURE_FEATURE_NONE_SHARE) / FEATURES.length, feature);
+  const weightTotal = FEATURES.reduce((sum, feature) => sum + FIGURE_FEATURE_WEIGHTS[feature], 0);
+  for (const feature of FEATURES) near(counts.feature[feature], ((1 - FIGURE_FEATURE_NONE_SHARE) * FIGURE_FEATURE_WEIGHTS[feature]) / weightTotal, feature);
+  assert.ok(FIGURE_FEATURE_WEIGHTS.glasses < FIGURE_FEATURE_WEIGHTS.cap && FIGURE_FEATURE_WEIGHTS.sunglasses < FIGURE_FEATURE_WEIGHTS.cap);
   near(counts.accessory.none, FIGURE_ACCESSORY_NONE_SHARE, 'no accessory');
   for (const accessory of ACCESSORIES) near(counts.accessory[accessory], (1 - FIGURE_ACCESSORY_NONE_SHARE) / ACCESSORIES.length, accessory);
   near(counts.pattern, FIGURE_PATTERN_SHARE, 'patterned');
@@ -150,4 +152,22 @@ test('patterns are stripes or dots on the shared rule', () => {
   for (let index = 0; index < 400; index++) if (patternAt(dots, 0, (index % 20) / 20, Math.floor(index / 20) / 20) === 1) hits++;
   assert.ok(hits > 20 && hits < 200, `dots cover ${hits} of 400`);
   assert.equal(patternAt(null, 7, 0.5, 0.5), 7);
+});
+
+test('no head feature reaches inside the head on 1,000 seeds', () => {
+  const tolerance = 0.005; // share of the head radius
+  for (let index = 0; index < 1000; index++) {
+    const figure = makeFigure((index * 2654435761 + 777) >>> 0);
+    const head = figure.parts.find((part) => part.name === 'head');
+    for (const part of figure.parts.filter((item) => item.role === 'feature')) {
+      for (const batches of Object.values(figureBatches({ ...figure, parts: [part] }).bones)) {
+        for (const batch of Object.values(batches)) {
+          for (let at = 0; at < batch.positions.length; at += 3) {
+            const reach = Math.hypot(batch.positions[at] - head.c[0], batch.positions[at + 1] - head.c[1], batch.positions[at + 2] - head.c[2]);
+            assert.ok(reach >= head.r * (1 - tolerance), `${figure.params.feature} ${part.kind} at ${(reach / head.r).toFixed(3)} of the head radius`);
+          }
+        }
+      }
+    }
+  }
 });

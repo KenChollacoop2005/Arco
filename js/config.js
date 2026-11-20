@@ -301,6 +301,7 @@ export const FIGURE_ITEM_COLORS = [0xc8553d, 0x2a7ab0, 0xd9a400, 0x3f8f5a, 0x8e5
 export const FIGURE_PATTERN_COLORS = [0xf3efe6, 0x2e2d2b, 0xe7c36a]; // stripe and dot colours
 export const FIGURE_PATTERN_SHARE = 0.4; // share of residents with a patterned body
 export const FIGURE_FEATURE_NONE_SHARE = 0.15; // share with no head feature
+export const FIGURE_FEATURE_WEIGHTS = { glasses: 0.45, sunglasses: 0.45, cap: 1, beanie: 1, bun: 1, ponytail: 1, headband: 1, headphones: 1 }; // head feature odds, glasses rarer
 export const FIGURE_ACCESSORY_NONE_SHARE = 0.15; // share with no accessory
 export const PIN_RISE_MM = 9; // pin height above a home's top
 export const PIN_SPREAD_MM = 6; // gap between pins on one home
