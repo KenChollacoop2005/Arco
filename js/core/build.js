@@ -21,7 +21,7 @@ function reopenNear(modules, changed, keepIds = []) {
 const UNDO_LIMIT = 100; // most steps kept for undo
 const RESTS_REASON = 'Something rests on this part'; // draft UI copy
 const DISABLED_REASON = 'This part is switched off for now'; // draft UI copy
-const LOCKED_REASON = 'This part belongs to the site and stays put'; // draft UI copy
+const LOCKED_REASON = 'This part anchors the site and stays put'; // draft UI copy
 
 // Footprint origin cell that centers it on a point
 export function snapOrigin(xMm, yMm, footprintId, rot) {

@@ -3,7 +3,7 @@ import { COPY } from './copy.js';
 import { makeThumb } from './collection.js';
 import { confirmAt } from './confirm.js';
 import { puzzleStart, trayLeft, dailyNumber } from '../core/puzzleplay.js';
-import { layoutModules } from '../core/puzzle.js';
+import { layoutModules, anchorIds } from '../core/puzzle.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
 
@@ -19,14 +19,14 @@ function node(tag, className, text) {
   return element;
 }
 
-// Fresh build state for a puzzle: the site locked, masks kept, pieces from 1000
+// Fresh build state for a puzzle: anchors locked, masks kept, pieces from 1000
 const startBuild = (puzzle, modules) => ({
   modules,
   undoStack: [],
   redoStack: [],
   cap: Infinity,
   stream: streamFrom(puzzle.stream),
-  rules: { locked: new Set(puzzle.site.map((instance) => instance.id)), keepMasks: true, idBase: PIECE_ID_BASE },
+  rules: { locked: new Set(anchorIds(puzzle.site)), keepMasks: true, idBase: PIECE_ID_BASE },
 });
 const EMPTY_BUILD = { modules: [], undoStack: [], redoStack: [], cap: Infinity, stream: null, rules: { locked: new Set(), keepMasks: true, idBase: PIECE_ID_BASE } };
 

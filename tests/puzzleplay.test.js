@@ -6,6 +6,8 @@ import { parsePuzzle } from '../js/core/daily.js';
 import { createBuild } from '../js/core/build.js';
 import { streamFrom } from '../js/core/stream.js';
 import { assignmentsOf } from '../js/core/roster.js';
+import { anchorIds, unusedTrayPieces } from '../js/core/puzzle.js';
+import { variantKey } from '../js/core/grid.js';
 import { dailyNumber, puzzleStart, trayLeft, layoutOf, scoreChange, shareText, playScore, SHARE_MARKS } from '../js/core/puzzleplay.js';
 
 const FAST_DAY = '2026-12-18'; // a daily that needed no reroll
@@ -91,6 +93,31 @@ test('locked site modules cannot be removed or turned, and Clear keeps them', ()
   build.restore(parked);
   assert.equal(build.undo(), true);
   assert.equal(build.modules.length, puzzle.site.length + puzzle.par.layout.pieces.length);
+});
+
+test('with anchors locked, a movable site piece returns to the tray and the layout notes it', () => {
+  const start = puzzleStart(puzzle);
+  const anchors = anchorIds(puzzle.site);
+  const build = createBuild(start.modules, { stream: streamFrom(puzzle.stream) });
+  build.setRules({ locked: [...anchors], keepMasks: true, idBase: PIECE_ID_BASE });
+  build.setCap(Infinity);
+  const anchor = puzzle.site.find((instance) => anchors.has(instance.id));
+  assert.equal(build.remove([anchor.id]).ok, false);
+  const carrying = new Set(puzzle.site.flatMap((instance) => puzzle.site.filter((other) => other.z === instance.z + instance.h && other.x === instance.x && other.y === instance.y).map(() => instance.id)));
+  const free = puzzle.site.find((instance) => !anchors.has(instance.id) && !carrying.has(instance.id) && build.remove([instance.id]).ok);
+  assert.ok(free, 'a movable site piece with nothing on it');
+  const { layout } = layoutOf(build.modules, {}, puzzle.site);
+  assert.deepEqual(layout.site, { [free.id]: null });
+  const left = trayLeft(puzzle, build.modules);
+  assert.equal(left.reduce((sum, entry) => sum + entry.count, 0), puzzle.tray.reduce((sum, entry) => sum + entry.count, 0) + 1);
+  assert.ok(left.some((entry) => entry.key === variantKey(free) && entry.count >= 1));
+  // Placed back where it was, it counts as a piece from the tray pool
+  const placed = build.place({ ...free, rot: free.rot });
+  assert.equal(placed.ok, true, placed.reason);
+  const back = layoutOf(build.modules, {}, puzzle.site).layout;
+  assert.deepEqual([back.site, back.pieces.length], [{ [free.id]: null }, 1]);
+  assert.equal(playScore(puzzle, back).valid, true);
+  assert.equal(unusedTrayPieces(puzzle, back), puzzle.tray.reduce((sum, entry) => sum + entry.count, 0));
 });
 
 test('a layout that does not stand still scores live but is not valid', () => {

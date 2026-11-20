@@ -428,7 +428,7 @@ const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import
 async function scoreResidents(payload) {
   const puzzle = app.puzzle;
   if (!puzzle) return scorer.call({ kind: 'residents', ...payload });
-  const { layout, toLayout, fromLayout } = layoutOf(payload.modules, payload.assignments);
+  const { layout, toLayout, fromLayout } = layoutOf(payload.modules, payload.assignments, puzzle.site);
   const preview = payload.preview ? { resident: payload.preview.resident, homes: payload.preview.homes.map((home) => toLayout.get(home) || home) } : null;
   const report = await scorer.call({ kind: 'puzzle', puzzle, layout, preview });
   const back = (home) => (home === null ? null : fromLayout.get(home) || home);

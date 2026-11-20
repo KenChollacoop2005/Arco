@@ -7,7 +7,7 @@ import { variantKey } from '../js/core/grid.js';
 import { generate } from '../js/core/generator.js';
 import { traitsOf } from '../js/core/residents.js';
 import { scoreLayout, residentPoints, unusedPoints, percentOf } from '../js/core/scoring.js';
-import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces } from '../js/core/puzzle.js';
+import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces, anchorIds, unusedTrayPieces } from '../js/core/puzzle.js';
 import { parsePuzzle, loadDaily, makeDaily, dailyId, easternDate, datesFrom } from '../js/core/daily.js';
 
 const PUZZLES = new URL('../puzzles/', import.meta.url);
@@ -104,6 +104,38 @@ test('validity: a layout that does not pass the static check is refused', () => 
   assert.deepEqual(validateLayout(puzzle, layout).problems, ['unstable']);
   assert.ok(validateLayout(puzzle, { pieces: [{ key: variantKey(rider), cell: [0, 0, 1], rot: 0 }], residents: {} }).ok);
   assert.equal(PIECE_ID_BASE, 1000);
+});
+
+// A small site: a stack with a core on top, and a lone stack beside it
+const unit = (id, family, x, y, z, h = 1) => ({ ...normalizeVariant({ family, fp: '1x1', h, seed: 5, mask: 15, roof: false }), id, x, y, z, rot: 0 });
+const SMALL_SITE = [unit(1, 'housing', 0, 0, 0), unit(2, 'housing', 0, 0, 1), unit(3, 'core', 0, 0, 2), unit(4, 'housing', 3, 0, 0), unit(5, 'housing', 3, 0, 1), unit(6, 'housing', -3, 0, 0, 2)];
+const SPARE = normalizeVariant({ family: 'housing', fp: '1x1', h: 1, seed: 9, mask: 15, roof: false });
+const SMALL_PUZZLE = { seed: 'small', site: SMALL_SITE, stream: null, residents: [], tray: [{ key: variantKey(SPARE), variant: SPARE, count: 2 }], par: { points: 0 } };
+
+test('anchors: cores, ground-floor modules and what holds an anchor up', () => {
+  assert.deepEqual([...anchorIds(SMALL_SITE)].sort(), [1, 2, 3, 4, 6]);
+});
+
+test('movable site: pieces move, turn or return to the tray; anchors stay; returned pieces join the tray', () => {
+  const base = { pieces: [], residents: {} };
+  assert.ok(validateLayout(SMALL_PUZZLE, { ...base, site: { 5: { cell: [3, 3, 0], rot: 1 } } }).ok);
+  assert.deepEqual(validateLayout(SMALL_PUZZLE, { ...base, site: { 6: { cell: [2, 2, 0], rot: 0 } } }).problems, ['anchor-moved']);
+  assert.deepEqual(validateLayout(SMALL_PUZZLE, { ...base, site: { 3: null } }).problems, ['anchor-moved']);
+  assert.deepEqual(validateLayout(SMALL_PUZZLE, { ...base, site: { 99: null } }).problems, ['unknown-piece']);
+  // Returned, then placed again from the tray as a piece of its own key
+  const key5 = variantKey(SMALL_SITE[4]);
+  const again = { pieces: [{ key: key5, cell: [0, 3, 0], rot: 0 }], residents: {}, site: { 5: null } };
+  assert.ok(validateLayout(SMALL_PUZZLE, again).ok);
+  assert.ok(validateLayout(SMALL_PUZZLE, { ...again, pieces: [...again.pieces, { key: key5, cell: [0, -3, 0], rot: 0 }] }).problems.includes('over-count'));
+  assert.deepEqual(validateLayout(SMALL_PUZZLE, { pieces: [{ key: key5, cell: [0, 3, 0], rot: 0 }], residents: {} }).problems, ['unknown-piece']);
+  // A moved piece that lands on another breaks placement
+  assert.deepEqual(validateLayout(SMALL_PUZZLE, { ...base, site: { 5: { cell: [-3, 0, 0], rot: 0 } } }).problems, ['placement']);
+  // Unused bonus: only pieces that started in the tray
+  assert.equal(unusedTrayPieces(SMALL_PUZZLE, base), 2);
+  assert.equal(unusedTrayPieces(SMALL_PUZZLE, { ...base, site: { 5: null } }), 2);
+  assert.equal(unusedTrayPieces(SMALL_PUZZLE, again), 2);
+  assert.equal(unusedTrayPieces(SMALL_PUZZLE, { pieces: [{ key: variantKey(SPARE), cell: [0, 3, 0], rot: 0 }], residents: {} }), 1);
+  assert.equal(scorePuzzleLayout(SMALL_PUZZLE, { ...base, site: { 5: null } }).score.points, unusedPoints(2));
 });
 
 test('the same seed gives the same puzzle and par, equal to its daily file', () => {

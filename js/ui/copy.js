@@ -369,14 +369,15 @@ export const COPY = {
   puzzleScoring: 'Scoring.',
   puzzleReady: 'Ready to submit.',
   puzzleNoneLeft: 'None of these are left in the tray.',
-  puzzleLockedHint: 'The site is locked. Build on it with the tray.',
+  puzzleLockedHint: 'Anchors stay put. Move, turn or return the rest.',
   // Why Submit is off
   puzzleProblems: {
     'bad-layout': 'The layout could not be read.',
     'unknown-piece': 'A piece is not from the tray.',
-    'over-count': 'More pieces used than the tray holds.',
+    'over-count': 'Too many of one piece.',
+    'anchor-moved': 'An anchor was moved.',
     placement: 'A piece does not fit where it is.',
-    'site-broken': 'The site was changed.',
+    'site-broken': 'A site piece lost its footing.',
     unstable: 'The structure does not stand.',
     'not-a-home': 'A resident is not in a home.',
     'home-full': 'A home has too many residents.',

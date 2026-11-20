@@ -1,7 +1,7 @@
 import { PIECE_ID_BASE } from '../config.js';
 import { variantKey } from './grid.js';
 import { residentRecord } from './roster.js';
-import { scorePuzzleLayout, layoutModules } from './puzzle.js';
+import { scorePuzzleLayout, layoutModules, unusedTrayPieces } from './puzzle.js';
 import { residentExtras, structureResults, evaluateResidents } from './residents.js';
 import { scoreLayout } from './scoring.js';
 
@@ -23,25 +23,50 @@ export function puzzleStart(puzzle) {
 // Placed tray pieces of a build, in placement order
 const piecesOf = (modules) => modules.filter((instance) => instance.id >= PIECE_ID_BASE).sort((first, second) => first.id - second.id);
 
-// Tray entries with what is left after the pieces placed
+// Site pieces no longer in the build, by key
+function returnedOf(puzzle, modules) {
+  const present = new Set(modules.map((instance) => instance.id));
+  return puzzle.site.filter((instance) => !present.has(instance.id));
+}
+
+// Tray entries with what is left after the pieces placed; returned site pieces join their key
 export function trayLeft(puzzle, modules) {
   const used = new Map();
   for (const instance of piecesOf(modules)) used.set(variantKey(instance), (used.get(variantKey(instance)) || 0) + 1);
-  return puzzle.tray.map((entry) => ({ key: entry.key, variant: entry.variant, total: entry.count, count: entry.count - (used.get(entry.key) || 0) }));
+  const entries = puzzle.tray.map((entry) => ({ key: entry.key, variant: entry.variant, total: entry.count }));
+  for (const instance of returnedOf(puzzle, modules)) {
+    const key = variantKey(instance);
+    const entry = entries.find((item) => item.key === key);
+    if (entry) entry.total += 1;
+    else {
+      const { id, x, y, z, rot, ...variant } = instance;
+      entries.push({ key, variant, total: 1 });
+    }
+  }
+  return entries.map((entry) => ({ ...entry, count: entry.total - (used.get(entry.key) || 0) }));
 }
 
-// Layout of a build: pieces renumbered 1000 up, homes mapped to match
-export function layoutOf(modules, assignments) {
+// Layout of a build: pieces renumbered 1000 up, homes mapped to match, site moves and returns noted
+export function layoutOf(modules, assignments, site = []) {
   const toLayout = new Map();
   const pieces = piecesOf(modules).map((instance, index) => {
     toLayout.set(instance.id, PIECE_ID_BASE + index);
     return { key: variantKey(instance), cell: [instance.x, instance.y, instance.z], rot: instance.rot & 3 };
   });
   const fromLayout = new Map([...toLayout].map(([buildId, layoutId]) => [layoutId, buildId]));
-  // A home that is not a placed piece keeps its site id; a removed piece means no home
-  const mapHome = (home) => (home === null || home === undefined ? null : home >= PIECE_ID_BASE ? toLayout.get(home) || null : home);
+  const byId = new Map(modules.map((instance) => [instance.id, instance]));
+  const moves = {};
+  for (const instance of site) {
+    const now = byId.get(instance.id);
+    if (!now) moves[instance.id] = null;
+    else if (now.x !== instance.x || now.y !== instance.y || now.z !== instance.z || (now.rot & 3) !== (instance.rot & 3)) moves[instance.id] = { cell: [now.x, now.y, now.z], rot: now.rot & 3 };
+  }
+  // A home that is not a placed piece keeps its site id; a removed piece or site piece means no home
+  const mapHome = (home) => (home === null || home === undefined ? null : home >= PIECE_ID_BASE ? toLayout.get(home) || null : moves[home] === null ? null : home);
   const residents = Object.fromEntries(Object.entries(assignments).map(([id, home]) => [id, mapHome(home)]));
-  return { layout: { pieces, residents }, toLayout, fromLayout };
+  const layout = { pieces, residents };
+  if (Object.keys(moves).length > 0) layout.site = moves;
+  return { layout, toLayout, fromLayout };
 }
 
 // Contribution key, so the same item before and after lines up
@@ -76,7 +101,6 @@ export function shareText({ title, residents, evaluations, score, par }) {
   return [title, ...rows, `${score.points} / ${par} (${score.percent}%)`].join('\n');
 }
 
-const trayTotal = (puzzle) => puzzle.tray.reduce((sum, entry) => sum + entry.count, 0);
 const BLOCKING = ['bad-layout', 'unknown-piece']; // problems that leave nothing to score
 
 // Score without the validity rules, so the counter moves while a layout is not valid yet
@@ -84,14 +108,14 @@ function looseScore(puzzle, layout, cache) {
   const modules = layoutModules(puzzle, layout);
   const assignments = Object.fromEntries(puzzle.residents.map((resident) => [resident.id, layout.residents[resident.id] === undefined ? null : layout.residents[resident.id]]));
   const extra = residentExtras(puzzle.residents, assignments);
-  const key = JSON.stringify([layout.pieces, extra]);
+  const key = JSON.stringify([layout.pieces, layout.site || null, extra]);
   let results = cache.get(key);
   if (!results) {
     results = structureResults(modules, puzzle.seed, extra);
     cache.set(key, results);
   }
   const evaluations = evaluateResidents(modules, results, puzzle.residents, assignments);
-  return { score: scoreLayout(evaluations, { unused: trayTotal(puzzle) - layout.pieces.length, par: puzzle.par.points }), evaluations };
+  return { score: scoreLayout(evaluations, { unused: unusedTrayPieces(puzzle, layout), par: puzzle.par.points }), evaluations };
 }
 
 // Live score for play: validity, score, evaluations, and raw points per candidate home

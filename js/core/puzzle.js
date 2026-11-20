@@ -35,31 +35,91 @@ export function answerProblems(modules, residents) {
   return problems;
 }
 
-// Modules of a layout: the locked site, then placed tray pieces
-export function layoutModules(puzzle, layout) {
-  const variants = new Map(puzzle.tray.map((entry) => [entry.key, entry.variant]));
-  const pieces = layout.pieces.map((piece, index) => ({ ...variants.get(piece.key), id: PIECE_ID_BASE + index, x: piece.cell[0], y: piece.cell[1], z: piece.cell[2], rot: piece.rot & 3 }));
-  return [...puzzle.site, ...pieces].sort(byOrder);
+const variantOf = (instance) => {
+  const { id, x, y, z, rot, ...variant } = instance;
+  return variant;
+};
+
+// Anchors: cores, ground-floor modules, and whatever holds one up; never moved
+const anchorCache = new WeakMap();
+export function anchorIds(site) {
+  if (anchorCache.has(site)) return anchorCache.get(site);
+  const world = worldFromModules(site);
+  const byId = new Map(site.map((instance) => [instance.id, instance]));
+  const anchors = new Set(site.filter((instance) => instance.z === 0 || instance.family === 'core').map((instance) => instance.id));
+  const queue = [...anchors];
+  while (queue.length > 0) {
+    for (const below of supportsUnder(world, byId.get(queue.pop()))) {
+      if (!below || below === 'plinth' || anchors.has(below.id)) continue;
+      anchors.add(below.id);
+      queue.push(below.id);
+    }
+  }
+  anchorCache.set(site, anchors);
+  return anchors;
 }
 
-// Validity of a submitted layout: tray counts, placement, stability, homes with room
+// Site pieces the layout returned to the tray, by key
+function returnedKeys(puzzle, layout) {
+  const counts = new Map();
+  for (const instance of puzzle.site) if (layout.site && layout.site[instance.id] === null) counts.set(variantKey(instance), (counts.get(variantKey(instance)) || 0) + 1);
+  return counts;
+}
+
+// Tray pieces left unused; placed pieces count first against returned site pieces of their key
+export function unusedTrayPieces(puzzle, layout) {
+  const returned = returnedKeys(puzzle, layout);
+  const placed = new Map();
+  for (const piece of layout.pieces) placed.set(piece.key, (placed.get(piece.key) || 0) + 1);
+  let fromTray = 0;
+  for (const [key, count] of placed) fromTray += Math.max(0, count - (returned.get(key) || 0));
+  return trayTotal(puzzle) - fromTray;
+}
+
+// Modules of a layout: the site with its moves and returns, then placed pieces
+export function layoutModules(puzzle, layout) {
+  const variants = new Map(puzzle.tray.map((entry) => [entry.key, entry.variant]));
+  for (const instance of puzzle.site) if (!variants.has(variantKey(instance))) variants.set(variantKey(instance), variantOf(instance));
+  const moves = layout.site || {};
+  const site = [];
+  for (const instance of puzzle.site) {
+    const move = moves[instance.id];
+    if (move === null) continue;
+    site.push(move ? { ...instance, x: move.cell[0], y: move.cell[1], z: move.cell[2], rot: move.rot & 3 } : instance);
+  }
+  const pieces = layout.pieces.map((piece, index) => ({ ...variants.get(piece.key), id: PIECE_ID_BASE + index, x: piece.cell[0], y: piece.cell[1], z: piece.cell[2], rot: piece.rot & 3 }));
+  return [...site, ...pieces].sort(byOrder);
+}
+
+const cellOk = (entry) => Array.isArray(entry.cell) && entry.cell.length === 3 && entry.cell.every(Number.isInteger) && Number.isInteger(entry.rot);
+
+// Validity of a submitted layout: anchors kept, tray counts, placement, stability, homes with room
 export function validateLayout(puzzle, layout) {
   const problems = [];
   if (!layout || !Array.isArray(layout.pieces) || !layout.residents || typeof layout.residents !== 'object') return { ok: false, problems: ['bad-layout'] };
+  if (layout.site !== undefined && (!layout.site || typeof layout.site !== 'object')) return { ok: false, problems: ['bad-layout'] };
+  const siteById = new Map(puzzle.site.map((instance) => [instance.id, instance]));
+  const anchors = anchorIds(puzzle.site);
+  for (const [id, move] of Object.entries(layout.site || {})) {
+    if (!siteById.has(Number(id)) || (move !== null && !cellOk(move))) return { ok: false, problems: ['unknown-piece'] };
+    if (anchors.has(Number(id))) problems.push('anchor-moved');
+  }
+  // Pieces returned from the site join the tray
   const left = new Map(puzzle.tray.map((entry) => [entry.key, entry.count]));
+  for (const [key, count] of returnedKeys(puzzle, layout)) left.set(key, (left.get(key) || 0) + count);
   for (const piece of layout.pieces) {
-    const cellOk = Array.isArray(piece.cell) && piece.cell.length === 3 && piece.cell.every(Number.isInteger) && Number.isInteger(piece.rot);
-    if (!cellOk || !left.has(piece.key)) return { ok: false, problems: ['unknown-piece'] };
+    if (!cellOk(piece) || !left.has(piece.key)) return { ok: false, problems: ['unknown-piece'] };
     left.set(piece.key, left.get(piece.key) - 1);
     if (left.get(piece.key) < 0) problems.push('over-count');
   }
   const modules = layoutModules(puzzle, layout);
   const world = worldFromModules(modules);
   const stream = streamFrom(puzzle.stream);
-  // Pieces first, so an overlap is the piece's fault; then the site, which only a piece can break
-  const ordered = [...modules.filter((instance) => instance.id >= PIECE_ID_BASE), ...modules.filter((instance) => instance.id < PIECE_ID_BASE)];
+  // Pieces and moved site pieces first, so an overlap is theirs; then the rest of the site
+  const moved = (instance) => instance.id >= PIECE_ID_BASE || !!(layout.site && layout.site[instance.id]);
+  const ordered = [...modules.filter(moved), ...modules.filter((instance) => !moved(instance))];
   const broken = ordered.find((instance) => !checkPlacement(world, instance, { stream, ignoreCap: true }).ok);
-  if (broken) problems.push(broken.id >= PIECE_ID_BASE ? 'placement' : 'site-broken');
+  if (broken) problems.push(moved(broken) ? 'placement' : 'site-broken');
   if (problems.length === 0 && checkStability(modules.map(toBody)).status !== 'pass') problems.push('unstable');
   const byId = new Map(modules.map((instance) => [instance.id, instance]));
   const known = new Set(puzzle.residents.map((resident) => resident.id));
@@ -89,14 +149,14 @@ export function scorePuzzleLayout(puzzle, layout, { cache = null, par = puzzle.p
   const modules = layoutModules(puzzle, layout);
   const assignments = assignmentsOf(puzzle, layout);
   const extra = residentExtras(puzzle.residents, assignments);
-  const key = JSON.stringify([layout.pieces, extra]);
+  const key = JSON.stringify([layout.pieces, layout.site || null, extra]);
   let results = cache && cache.get(key);
   if (!results) {
     results = structureResults(modules, puzzle.seed, extra);
     if (cache) cache.set(key, results);
   }
   const evaluations = evaluateResidents(modules, results, puzzle.residents, assignments);
-  const score = scoreLayout(evaluations, { unused: trayTotal(puzzle) - layout.pieces.length, par });
+  const score = scoreLayout(evaluations, { unused: unusedTrayPieces(puzzle, layout), par });
   return { valid: true, problems: [], score, evaluations };
 }
 
@@ -195,9 +255,10 @@ function traitShare(evaluations) {
   return total > 0 ? good / total : 0;
 }
 
-// One step of the par search: a resident moves, or a tray piece is added, moved or taken away
+// One step of the par search: a resident moves, a piece is added, moved or taken away, or a site piece goes back to the tray
 function mutate(rng, puzzle, layout) {
   const next = { pieces: layout.pieces.map((piece) => ({ ...piece, cell: [...piece.cell] })), residents: { ...layout.residents } };
+  if (layout.site) next.site = { ...layout.site };
   if (!rng.chance(PAR_PIECE_SHARE)) {
     const modules = layoutModules(puzzle, next);
     const resident = rng.pick(puzzle.residents).id;
@@ -206,10 +267,22 @@ function mutate(rng, puzzle, layout) {
     next.residents[resident] = rng.pick(homes);
     return next;
   }
+  const choice = rng.int(0, 3);
+  // A movable site piece returns; anything resting on it makes the step fail its checks
+  if (choice === 3) {
+    const anchors = anchorIds(puzzle.site);
+    const movable = puzzle.site.filter((instance) => !anchors.has(instance.id) && !(next.site && next.site[instance.id] === null));
+    if (movable.length === 0) return null;
+    const gone = rng.pick(movable).id;
+    next.site = { ...(next.site || {}), [gone]: null };
+    for (const [resident, home] of Object.entries(next.residents)) if (home === gone) next.residents[resident] = null;
+    return next;
+  }
+  const pool = new Map(puzzle.tray.map((entry) => [entry.key, entry.count]));
+  for (const [key, count] of returnedKeys(puzzle, next)) pool.set(key, (pool.get(key) || 0) + count);
   const used = new Map();
   for (const piece of next.pieces) used.set(piece.key, (used.get(piece.key) || 0) + 1);
-  const spare = puzzle.tray.filter((entry) => (used.get(entry.key) || 0) < entry.count);
-  const choice = rng.int(0, 2);
+  const spare = [...pool].filter(([key, count]) => (used.get(key) || 0) < count).map(([key]) => ({ key }));
   // Taking a piece away moves later pieces down one id, so homes follow
   const dropPiece = (index) => {
     const goneId = PIECE_ID_BASE + index;
@@ -232,7 +305,8 @@ function mutate(rng, puzzle, layout) {
     key = rng.pick(spare).key;
   }
   if (!key) return null;
-  const variant = puzzle.tray.find((entry) => entry.key === key).variant;
+  const trayEntry = puzzle.tray.find((entry) => entry.key === key);
+  const variant = trayEntry ? trayEntry.variant : variantOf(puzzle.site.find((instance) => variantKey(instance) === key));
   const world = worldFromModules(layoutModules(puzzle, next));
   const stream = streamFrom(puzzle.stream);
   const cells = plinthCells();
