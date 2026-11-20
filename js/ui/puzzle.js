@@ -12,6 +12,7 @@ import { randomSeedText } from '../core/rng.js';
 
 const KINDS = ['daily', 'infinite']; // puzzle worlds beside the sandbox
 const KIND_SETTING = 'arco.puzzle.kind'; // remembered puzzle type
+const SPARE_DELAY_MS = 4000; // wait after boot before making spare puzzles
 const SANDBOX = 'sandbox'; // the Generate world
 const DATE_FORMAT = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }; // intro card date
 
@@ -183,13 +184,27 @@ export function setupPuzzle(app, hooks) {
   }
 
   // Loads a puzzle in the worker; the start replaces that world's build
+  // A spare puzzle made in the background, so the next one is ready at once
+  const spares = new Map();
+  const randomKind = (kind) => kind === 'infinite' || DAILY_TEST_MODE;
+  function makeSpare(kind) {
+    if (!randomKind(kind) || spares.has(kind)) return;
+    spares.set(kind, hooks.loader({ kind, seed: randomSeedText() }).catch(() => null));
+  }
+  async function takeSpare(kind, seed) {
+    const spare = spares.get(kind);
+    spares.delete(kind);
+    const result = spare ? await spare : null;
+    return result || hooks.loader({ kind, seed });
+  }
+
   async function load(kind, seed = null) {
     const token = (loading.get(kind) || 0) + 1;
     loading.set(kind, token);
     renderIntro();
     renderSubmit();
     try {
-      const result = await hooks.loader({ kind, seed });
+      const result = randomKind(kind) ? await takeSpare(kind, seed) : await hooks.loader({ kind, seed });
       if (loading.get(kind) !== token) return;
       const puzzle = result.puzzle;
       games.set(kind, { kind, puzzle, ranked: result.ranked, date: result.date || null, seed: result.seed || null, test: !!result.test });
@@ -201,6 +216,7 @@ export function setupPuzzle(app, hooks) {
         saveProgress();
       }
       prepareThumbs(puzzle);
+      makeSpare(kind);
     } catch {
       if (loading.get(kind) !== token) return;
       loading.delete(kind);
@@ -220,7 +236,10 @@ export function setupPuzzle(app, hooks) {
     const kind = kindNow();
     show(kind);
     const stored = !games.has(kind) && !loading.has(kind) ? progressFor(progress, kind, easternDate()) : null;
-    if (stored) install(stored);
+    if (stored) {
+      install(stored);
+      makeSpare(kind);
+    }
     else if (!games.has(kind) && !loading.has(kind)) load(kind, kind === 'infinite' || DAILY_TEST_MODE ? randomSeedText() : null);
   }
 
@@ -248,6 +267,11 @@ export function setupPuzzle(app, hooks) {
   });
   hooks.residents.onChange(renderSubmit);
   hooks.residents.onChange(saveProgress);
+  // Spares start once the opening structure has had the machine to itself
+  setTimeout(() => {
+    makeSpare('infinite');
+    makeSpare('daily');
+  }, SPARE_DELAY_MS);
   renderIntro();
 
   return {

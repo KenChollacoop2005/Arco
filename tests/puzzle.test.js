@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { POINTS, PUZZLE_RESIDENTS, PAR_START_SHARE, PIECE_ID_BASE, PUZZLE_ANSWER, PUZZLE_MAX_PIECES, BRIDGE_FAMILIES } from '../js/config.js';
+import { POINTS, PUZZLE_RESIDENTS, PAR_START_SHARE, PIECE_ID_BASE, PUZZLE_ANSWER, PUZZLE_MAX_PIECES, BRIDGE_FAMILIES, PAR_MAX_BUILDS } from '../js/config.js';
 import { normalizeVariant, FAMILIES } from '../js/core/catalog.js';
 import { variantKey } from '../js/core/grid.js';
 import { generate } from '../js/core/generator.js';
 import { traitsOf } from '../js/core/residents.js';
 import { scoreLayout, residentPoints, unusedPoints, percentOf } from '../js/core/scoring.js';
-import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces, anchorIds, unusedTrayPieces } from '../js/core/puzzle.js';
+import { validateLayout, scorePuzzleLayout, generatePuzzle, missingPieces, anchorIds, unusedTrayPieces, findPar } from '../js/core/puzzle.js';
 import { parsePuzzle, loadDaily, makeDaily, dailyId, easternDate, datesFrom, dailyFor, TEST_PREFIX } from '../js/core/daily.js';
 import { DAILY_TEST_MODE } from '../js/config.js';
 
@@ -137,6 +137,18 @@ test('movable site: pieces move, turn or return to the tray; anchors stay; retur
   assert.equal(unusedTrayPieces(SMALL_PUZZLE, again), 2);
   assert.equal(unusedTrayPieces(SMALL_PUZZLE, { pieces: [{ key: variantKey(SPARE), cell: [0, 3, 0], rot: 0 }], residents: {} }), 1);
   assert.equal(scorePuzzleLayout(SMALL_PUZZLE, { ...base, site: { 5: null } }).score.points, unusedPoints(2));
+});
+
+test('the par climb scores at most PAR_MAX_BUILDS new structures', () => {
+  const puzzle = readPuzzle(FAST_DAY + '.json');
+  const start = { pieces: [], residents: {} };
+  const cache = new Map();
+  scorePuzzleLayout(puzzle, start, { cache, par: 0 });
+  const before = cache.size;
+  const best = findPar(puzzle, start, cache);
+  assert.ok(cache.size - before <= PAR_MAX_BUILDS, `${cache.size - before} new structures`);
+  assert.ok(best.points >= scorePuzzleLayout(puzzle, start, { cache, par: 0 }).score.points);
+  assert.equal(scorePuzzleLayout(puzzle, best.layout, { par: 0 }).valid, true);
 });
 
 test('the same seed gives the same puzzle and par, equal to its daily file', () => {

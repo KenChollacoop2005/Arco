@@ -1,6 +1,6 @@
 import {
   PUZZLE_FORMAT_VERSION, PUZZLE_GENERATOR_VERSION, PUZZLE_MAX_PIECES, PUZZLE_ANSWER, PUZZLE_RESIDENTS, PUZZLE_PRESET_RESIDENTS, PUZZLE_REMOVED,
-  PUZZLE_SPLIT_TRIES, PUZZLE_TRAY_CARDS, PUZZLE_DECOYS, PUZZLE_TRAIT_SHARE, PUZZLE_TRAIT_TRIES, PUZZLE_REROLLS, PAR_STEPS, PAR_PIECE_SHARE, PAR_PLACE_TRIES,
+  PUZZLE_SPLIT_TRIES, PUZZLE_TRAY_CARDS, PUZZLE_DECOYS, PUZZLE_TRAIT_SHARE, PUZZLE_TRAIT_TRIES, PUZZLE_REROLLS, PAR_STEPS, PAR_MAX_BUILDS, PAR_PIECE_SHARE, PAR_PLACE_TRIES,
   PAR_POINTS, PAR_START_SHARE, PIECE_ID_BASE, SOURCE_FAMILIES, PUMP_KINDS, BRIDGE_FAMILIES,
 } from '../config.js';
 import { FAMILIES, FAMILY_IDS, hasPump, normalizeVariant, residentCapacity, categoryOn, CATEGORIES } from './catalog.js';
@@ -142,6 +142,10 @@ export function validateLayout(puzzle, layout) {
 const assignmentsOf = (puzzle, layout) => Object.fromEntries(puzzle.residents.map((resident) => [resident.id, layout.residents[resident.id] === undefined ? null : layout.residents[resident.id]]));
 const trayTotal = (puzzle) => puzzle.tray.reduce((sum, entry) => sum + entry.count, 0);
 
+// Cache key of a structure with its residents' extra demand
+export const layoutKey = (layout, extra) => JSON.stringify([layout.pieces, layout.site || null, extra]);
+const keyOf = (puzzle, layout) => layoutKey(layout, residentExtras(puzzle.residents, assignmentsOf(puzzle, layout)));
+
 // Scores a layout; cache maps a structure and extras key to its results
 export function scorePuzzleLayout(puzzle, layout, { cache = null, par = puzzle.par ? puzzle.par.points : 0 } = {}) {
   const validity = validateLayout(puzzle, layout);
@@ -149,7 +153,7 @@ export function scorePuzzleLayout(puzzle, layout, { cache = null, par = puzzle.p
   const modules = layoutModules(puzzle, layout);
   const assignments = assignmentsOf(puzzle, layout);
   const extra = residentExtras(puzzle.residents, assignments);
-  const key = JSON.stringify([layout.pieces, layout.site || null, extra]);
+  const key = layoutKey(layout, extra);
   let results = cache && cache.get(key);
   if (!results) {
     results = structureResults(modules, puzzle.seed, extra);
@@ -322,13 +326,18 @@ function mutate(rng, puzzle, layout) {
   return null;
 }
 
-// Par: the answer improved by a short seeded hill-climb
+// Par: the answer improved by a short seeded hill-climb; only so many new structures are scored
 export function findPar(puzzle, start, cache = new Map()) {
   const rng = makeRng(mixSeed(hashString(puzzle.seed), PAR_SALT));
   let best = { layout: start, points: scorePuzzleLayout(puzzle, start, { cache, par: 0 }).score.points };
+  let builds = 0;
   for (let step = 0; step < PAR_STEPS; step++) {
     const candidate = mutate(rng, puzzle, best.layout);
     if (!candidate) continue;
+    if (!cache.has(keyOf(puzzle, candidate))) {
+      if (builds >= PAR_MAX_BUILDS || !validateLayout(puzzle, candidate).ok) continue;
+      builds += 1;
+    }
     const scored = scorePuzzleLayout(puzzle, candidate, { cache, par: 0 });
     if (scored.valid && scored.score.points > best.points) best = { layout: candidate, points: scored.score.points };
   }
@@ -343,32 +352,40 @@ function tryPuzzle(seed) {
   const rng = makeRng(mixSeed(hashString(seed), PUZZLE_SALT));
   const count = rng.int(...PUZZLE_RESIDENTS);
   const answer = generate({ seed, scale: 'block', ...PUZZLE_ANSWER, cap: PUZZLE_MAX_PIECES });
-  const problems = answerProblems(answer.modules, count);
+  const problems = answerProblems(answer.modules, PUZZLE_RESIDENTS[0]);
   if (problems.length > 0) return { problems };
   if (answer.modules.some((instance) => instance.id >= PIECE_ID_BASE)) return { problems: ['ids'] };
   const split = splitSite(rng, answer.modules);
   if (!split) return { problems: ['no-site'] };
   const siteIds = new Set(split.site.map((instance) => instance.id));
-  const ids = Array.from({ length: count }, (unused, index) => `r${index + 1}`);
-  // Answer homes: preset residents in site homes, the rest anywhere with room
-  const assignments = {};
-  const siteRoom = roomyHomes(split.site, {});
-  const presets = Math.min(rng.int(...PUZZLE_PRESET_RESIDENTS), siteRoom.length);
-  for (const [index, id] of ids.entries()) {
-    const homes = index < presets ? roomyHomes(answer.modules, assignments, siteIds) : roomyHomes(answer.modules, assignments);
-    if (homes.length === 0) return { problems: ['too-few-homes'] };
-    assignments[id] = rng.pick(homes);
-  }
   const removed = [];
   for (const instance of split.rest) addToTray(removed, instance);
   const pieceIds = new Map(split.rest.map((instance, index) => [instance.id, PIECE_ID_BASE + index]));
-  const answerLayout = {
-    pieces: split.rest.map((instance) => ({ key: variantKey(instance), cell: [instance.x, instance.y, instance.z], rot: instance.rot & 3 })),
-    residents: Object.fromEntries(ids.map((id) => [id, siteIds.has(assignments[id]) ? assignments[id] : pieceIds.get(assignments[id])])),
-  };
+  const layoutId = (id) => (siteIds.has(id) ? id : pieceIds.get(id));
+  const pieces = split.rest.map((instance) => ({ key: variantKey(instance), cell: [instance.x, instance.y, instance.z], rot: instance.rot & 3 }));
+  // The answer's own services, scored once and kept for every later score of it
+  const cache = new Map();
+  const plain = { pieces, residents: {} };
+  const served = structureResults(layoutModules({ site: split.site, tray: removed }, plain), seed, {});
+  cache.set(layoutKey(plain, residentExtras([], {})), served);
+  const fullyServed = (id) => ['water', 'power'].every((need) => ((served.services[need] && served.services[need].consumers) || {})[layoutId(id)]?.status === 'full');
+  const servedIds = new Set(answer.modules.filter((instance) => fullyServed(instance.id)).map((instance) => instance.id));
+  // As many residents as the served homes hold, never under the minimum
+  const servedRoom = answer.modules.filter((instance) => servedIds.has(instance.id)).reduce((sum, instance) => sum + residentCapacity(instance), 0);
+  if (servedRoom < PUZZLE_RESIDENTS[0]) return { problems: ['too-few-homes'] };
+  const ids = Array.from({ length: Math.min(count, servedRoom) }, (unused, index) => `r${index + 1}`);
+  // Answer homes, all with full water and power: preset residents in site homes, the rest anywhere with room
+  const assignments = {};
+  const siteRoom = roomyHomes(split.site, {}, servedIds);
+  const presets = Math.min(rng.int(...PUZZLE_PRESET_RESIDENTS), siteRoom.length);
+  for (const [index, id] of ids.entries()) {
+    const homes = roomyHomes(answer.modules, assignments, index < presets ? new Set([...siteIds].filter((siteId) => servedIds.has(siteId))) : servedIds);
+    if (homes.length === 0) return { problems: ['too-few-homes'] };
+    assignments[id] = rng.pick(homes);
+  }
+  const answerLayout = { pieces, residents: Object.fromEntries(ids.map((id) => [id, layoutId(assignments[id])])) };
   const base = { format: PUZZLE_FORMAT_VERSION, generator: PUZZLE_GENERATOR_VERSION, seed, site: split.site, stream: answer.stream };
   // Traits roll first from every amenity type; what they name joins the tray after
-  const cache = new Map();
   let chosen = null;
   for (let attempt = 0; attempt < PUZZLE_TRAIT_TRIES && !chosen; attempt++) {
     const residents = ids.map((id, index) => rollResident(mixSeed(hashString(seed), attempt), id, { amenities: AMENITY_TYPES, others: ids.filter((other) => other !== id), start: index < presets ? answerLayout.residents[id] : null }));
