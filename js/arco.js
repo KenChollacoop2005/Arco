@@ -41,6 +41,7 @@ import { setupSlideovers } from './ui/slideover.js';
 import { createResidentMarks } from './render/residents.js';
 import { setupResidents } from './ui/residents.js';
 import { setupResidentPanel } from './ui/residentpanel.js';
+import { createRagdoll } from './ui/ragdoll.js';
 
 const query = (selector) => document.querySelector(selector);
 
@@ -416,6 +417,7 @@ const residentMarks = createResidentMarks(view);
 const scorer = createWorkerClient(new URL('./workers/analysis.worker.js', import.meta.url));
 const residents = setupResidents(app, { marks: residentMarks, scorer: (payload) => scorer.call({ kind: 'residents', ...payload }) });
 app.residents = residents;
+const ragdoll = createRagdoll(reducedMotion);
 const residentPanel = setupResidentPanel(app, residents, {
   select: (id) => select(id, false),
   face: (id) => {
@@ -425,6 +427,15 @@ const residentPanel = setupResidentPanel(app, residents, {
   idAt: (event) => picker.idAt(event),
   setState: (id, state) => modules.setState(id, state),
   canvas,
+  // Move resident: the pin hides and the figure hangs from the cursor
+  carry: (record) => {
+    residents.hide(record.id);
+    ragdoll.start(residents.figureOf(record), record.looks);
+  },
+  drop: () => {
+    residents.hide(null);
+    ragdoll.stop();
+  },
 });
 
 // Layer shaders compile while the first build animation plays
