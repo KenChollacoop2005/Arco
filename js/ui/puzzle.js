@@ -3,6 +3,7 @@ import { COPY } from './copy.js';
 import { makeThumb } from './collection.js';
 import { confirmAt } from './confirm.js';
 import { puzzleStart, trayLeft, dailyNumber } from '../core/puzzleplay.js';
+import { layoutModules } from '../core/puzzle.js';
 import { streamFrom } from '../core/stream.js';
 import { randomSeedText } from '../core/rng.js';
 
@@ -45,6 +46,7 @@ export function setupPuzzle(app, hooks) {
   app.world = SANDBOX;
   app.puzzle = null;
   app.game = null;
+  app.showingPar = false;
 
   const kindNow = () => query('input[name="puzzleKind"]:checked').value;
   const saved = hooks.readSetting(KIND_SETTING, 'daily');
@@ -52,7 +54,7 @@ export function setupPuzzle(app, hooks) {
 
   // Tray cards with counts left and thumbnails once built
   function refreshTray(modules) {
-    if (!app.puzzle) {
+    if (!app.puzzle || app.showingPar) {
       hooks.builder.setTray(app.world === SANDBOX ? null : []);
       return;
     }
@@ -83,8 +85,8 @@ export function setupPuzzle(app, hooks) {
   function renderSubmit() {
     const report = hooks.residents.report();
     const current = !!app.puzzle && !!report && report.puzzle === app.puzzle;
-    submit.disabled = !current || !report.valid;
-    if (!app.puzzle) check.textContent = '';
+    submit.disabled = !current || !report.valid || app.showingPar;
+    if (!app.puzzle || app.showingPar) check.textContent = '';
     else if (!current) check.textContent = loading.has(app.world) ? '' : COPY.puzzleScoring;
     else check.textContent = report.valid ? COPY.puzzleReady : report.problems.map((problem) => COPY.puzzleProblems[problem] || problem).join(' ');
   }
@@ -109,10 +111,29 @@ export function setupPuzzle(app, hooks) {
     for (const listener of gameListeners) listener(app.game);
   }
 
+  // A par on show is dropped, never parked; the player's build is already parked
   function show(world) {
-    if (world === app.world) return;
-    park();
+    if (app.showingPar) app.showingPar = false;
+    else if (world === app.world) return;
+    else park();
     apply(world);
+  }
+
+  // Par layout builds in on top of the site, every piece locked
+  function showPar() {
+    const game = app.game;
+    if (!game || app.showingPar) return;
+    park();
+    app.showingPar = true;
+    const puzzle = game.puzzle;
+    const modules = layoutModules(puzzle, puzzle.par.layout);
+    const records = puzzleStart(puzzle).records.map((record) => ({ ...record, home: puzzle.par.layout.residents[record.id] === undefined ? null : puzzle.par.layout.residents[record.id] }));
+    hooks.builder.restore({ ...startBuild(puzzle, modules), rules: { locked: new Set(modules.map((instance) => instance.id)), keepMasks: true, idBase: PIECE_ID_BASE } });
+    app.stream = puzzle.stream;
+    refreshTray(modules);
+    hooks.residents.setRecords(records, modules);
+    hooks.showBuild(modules, { only: new Set(modules.filter((instance) => instance.id >= PIECE_ID_BASE).map((instance) => instance.id)) });
+    renderSubmit();
   }
 
   // Loads a puzzle in the worker; the start replaces that world's build
@@ -183,6 +204,11 @@ export function setupPuzzle(app, hooks) {
   return {
     submit,
     renderSubmit,
+    showPar,
+    // Back to the player's own layout
+    hidePar() {
+      if (app.showingPar) show(app.world);
+    },
     // Listener gets the game on show, or null in the sandbox
     onGame(listener) {
       gameListeners.push(listener);

@@ -401,7 +401,6 @@ export const COPY = {
   resultsPlayed: 'Played',
   resultsSaveFailed: 'Could not write to browser storage, so this result is not kept.',
   resultsShareTitle: 'Arco',
-  resultsBoard: "Today's top 10 shows here once accounts exist.",
   resultsUnusedLine: 'Unused pieces',
   // Trait labels; {name} marks a parameter
   traits: {

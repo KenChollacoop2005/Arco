@@ -46,6 +46,7 @@ import { createResidentStore } from './core/roster.js';
 import { setupResidentArchive } from './ui/residentarchive.js';
 import { setupPuzzle } from './ui/puzzle.js';
 import { setupScoreTab } from './ui/scoretab.js';
+import { setupResults } from './ui/results.js';
 import { layoutOf } from './core/puzzleplay.js';
 
 const query = (selector) => document.querySelector(selector);
@@ -551,11 +552,25 @@ function screenOfResident(id) {
   const rect = canvas.getBoundingClientRect();
   return [rect.left + ((point.x + 1) / 2) * rect.width, rect.top + ((1 - point.y) / 2) * rect.height];
 }
-setupScoreTab(app, residents, {
-  recordOf: (id) => residents.list().find((record) => record.id === id) || null,
+const recordOf = (id) => residents.list().find((record) => record.id === id) || null;
+setupScoreTab(app, residents, { recordOf, nameOf: residentPanel.nameOf, screenOf: screenOfResident });
+
+// Submit opens the results sheet for a valid layout
+const results = setupResults(app, {
+  recordOf,
   nameOf: residentPanel.nameOf,
-  screenOf: screenOfResident,
+  portrait: residentPanel.portrait,
+  showPar: puzzle.showPar,
+  hidePar: puzzle.hidePar,
+  stats: () => [],
 });
+puzzle.submit.addEventListener('click', () => {
+  const report = residents.report();
+  if (!app.game || !report || !report.valid || report.puzzle !== app.puzzle) return;
+  residentPanel.cancel();
+  results.open(report, app.game);
+});
+puzzle.onGame(() => results.close());
 
 const generatePanel = setupGenerate(query('#generateForm'), query('#skipAnimation'), generateStructure);
 // Budget: Build's cap and the module count follow the control

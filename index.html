@@ -342,6 +342,31 @@
 
   <div class="title-block" id="titleBlock" aria-hidden="true"></div>
 
+  <!-- Results sheet after Submit -->
+  <section class="results" id="results" role="dialog" aria-labelledby="resultsTitle" hidden>
+    <div class="results-head">
+      <h2 class="results-title" id="resultsTitle" data-copy="resultsTitle"></h2>
+      <button type="button" class="plain" id="resultsClose" data-copy="resultsClose"></button>
+    </div>
+    <div class="results-score">
+      <strong class="results-points" id="resultsPoints"></strong>
+      <span class="results-percent" id="resultsPercent"></span>
+    </div>
+    <dl class="results-stats" id="resultsStats" hidden></dl>
+    <ul class="results-residents" id="resultsResidents"></ul>
+    <pre class="results-share" id="resultsShare"></pre>
+    <div class="button-grid">
+      <button type="button" class="primary" id="resultsCopy" data-copy="resultsShare"></button>
+      <button type="button" class="plain" id="resultsPar" data-copy="resultsShowPar"></button>
+    </div>
+    <p class="status" id="resultsStatus" role="status"></p>
+  </section>
+  <div class="assembly par-bar" id="parBar" hidden>
+    <span class="assembly-count" id="parText"></span>
+    <button type="button" class="plain" id="parResults" data-copy="resultsTitle"></button>
+    <button type="button" class="plain" id="parBack" data-copy="resultsHidePar"></button>
+  </div>
+
   <details class="legend" id="legend" open>
     <summary data-copy="legendTitle"></summary>
     <dl>

@@ -91,6 +91,8 @@ export function setupScoreTab(app, residents, hooks) {
     const report = residents.report();
     const puzzle = app.puzzle;
     tab.hidden = !puzzle;
+    // The par layout on show never moves the player's counter
+    if (app.showingPar) return;
     if (!puzzle) {
       shownPuzzle = null;
       last = null;
